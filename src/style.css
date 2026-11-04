@@ -411,3 +411,24 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .cat-add .btn { flex: none; }
 .key-status { margin: 0 2px; }
 .key-status code { font-family: ui-monospace, Menlo, monospace; background: var(--surface-2); padding: 2px 6px; border-radius: 6px; }
+
+/* 최소 마진 */
+.margin-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border-radius: 12px; padding: 8px 10px 8px 14px; margin: -2px 0 10px; }
+.margin-line p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.margin-line .btn { flex: none; }
+.menu-card.by-margin { border-color: var(--ok); }
+.mc-badge { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--ok); background: var(--ok-soft); padding: 2px 8px; border-radius: 999px; }
+.stats .good b, .stats .good p, .stats .good small { color: var(--ok); }
+.ok-notice { background: var(--ok-soft); color: var(--ok); }
+.notice p { margin: 0; }
+.suggest-title { margin-top: 6px !important; font-weight: 700; }
+.suggest { margin: 2px 0 0; padding-left: 18px; }
+.sum-margin { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); text-align: right; }
+.margin-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: 12px; }
+.margin-list li { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.margin-list li:last-child { border-bottom: 0; }
+.margin-form .margin-list label { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; color: var(--ink); }
+.mname { font-weight: 600; }
+.minput { display: flex; align-items: center; gap: 6px; }
+.minput input { width: 120px; text-align: right; }
+.mdate { display: block; text-align: right; margin-top: 2px; }

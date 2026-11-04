@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { itemAmount, netUnitPrice, purchaseTotal, guessPack, sanitizeItem, sanitizePurchase, sanitizeMenu, sanitizeCostTarget, sanitizeCategories, migrate, mergeLegacy, normalizeDate, parseTarget, DEFAULT_CATEGORIES, DATA_VERSION } from '../../src/lib/model.js';
+import { sanitizeMinMargins, parseMargin, itemAmount, netUnitPrice, purchaseTotal, guessPack, sanitizeItem, sanitizePurchase, sanitizeMenu, sanitizeCostTarget, sanitizeCategories, migrate, mergeLegacy, normalizeDate, parseTarget, DEFAULT_CATEGORIES, DATA_VERSION } from '../../src/lib/model.js';
 
 beforeAll(() => {
   vi.useFakeTimers();
@@ -106,7 +106,7 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(d.menus).toEqual([]);
   });
   it('밖에서 들어온 데이터는 현재 버전 표시가 있어도 전부 검사, 앱이 저장한 데이터만 빠르게 통과', () => {
-    const forged = { version: DATA_VERSION, purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }], menus: [], menuCategories: [], categories: ['a'], costTarget: { history: [{ value: 25, at: '2026-11-04' }] } };
+    const forged = { version: DATA_VERSION, purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }], menus: [], menuCategories: [], minMargins: {}, categories: ['a'], costTarget: { history: [{ value: 25, at: '2026-11-04' }] } };
     expect(migrate(forged).purchases[0].date).toBe('2026-11-04');
     expect(migrate(forged).purchases[0].items[0].qty).toBe(0);
     expect(migrate(forged, { trusted: true })).toBe(forged);
@@ -138,6 +138,23 @@ describe('저장 형식 변환 (migrate)', () => {
     const d = migrate({ menuCategories: ['커피', ' 커피 ', '전체', ''], menus: [{ name: 'a', category: '와인' }, { name: 'b', category: '미분류' }] });
     expect(d.menuCategories).toEqual(['커피', '와인']);
     expect(d.menus.map((m) => m.category)).toEqual(['와인', '']);
+  });
+  it('v3 데이터: 최소 마진 기록이 없으면 빈 상태로 시작', () => {
+    const d = migrate({ version: 3, menuCategories: ['위스키'], menus: [] }, { trusted: true });
+    expect(d.version).toBe(DATA_VERSION);
+    expect(d.minMargins).toEqual({});
+  });
+  it('최소 마진 기록 정리: 없는 분류·잘못된 값 정리', () => {
+    expect(sanitizeMinMargins({ 위스키: [{ value: '12000.4', at: '2026-11-04' }, null], 없는분류: [{ value: 1 }], 칵테일: [] }, ['위스키', '칵테일'])).toEqual({
+      위스키: [{ value: 12000, at: '2026-11-04' }],
+    });
+    expect(sanitizeMinMargins(null, ['위스키'])).toEqual({});
+  });
+  it('최소 마진 입력 검사', () => {
+    expect(parseMargin('')).toBe(0);
+    expect(parseMargin('12000')).toBe(12000);
+    expect(() => parseMargin('-1')).toThrow();
+    expect(() => parseMargin('abc')).toThrow();
   });
   it('이미 정리된 데이터는 다시 넣어도 같다', () => {
     const once = migrate({ purchases: [{ id: 'a', date: '2026-10-28', vendor: 'x', createdAt: 1, items: [{ id: 'i', name: 'y', qty: 1, unitPrice: 10, amount: 10 }] }] });

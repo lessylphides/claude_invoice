@@ -1,6 +1,7 @@
 // 데이터 보관: localStorage → IndexedDB 옮기기, 큰 데이터, 새로고침 후 유지, 백업 알림
 import { test, expect } from '@playwright/test';
 import { openApp, openManualEntry, purchase, item, readSaved, waitSaved, sheet } from './helpers.js';
+import { DATA_VERSION } from '../../src/lib/model.js';
 
 const many = (n) => ({
   purchases: Array.from({ length: n }, (_, i) => purchase(`p${i}`, `2026-10-${String((i % 28) + 1).padStart(2, '0')}`, `가게${i % 3}`, [item(`품목${i % 7}`, '기타', 1000 + i)])),
@@ -8,7 +9,7 @@ const many = (n) => ({
 
 test('예전(localStorage) 데이터를 IndexedDB 로 옮기고 예전 것은 지운다', async ({ page }) => {
   await openApp(page, { data: many(3) });
-  await waitSaved(page, (d) => d?.purchases?.length === 3 && d.version === 3);
+  await waitSaved(page, (d) => d?.purchases?.length === 3 && d.version === DATA_VERSION);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('maeip.data.v1'))).toBeNull();
   await page.reload();
   await page.locator('[data-act=prev]').click();

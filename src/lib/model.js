@@ -17,10 +17,12 @@
 //                       | { id, type:'manual', name, cost } ] }              // 영수증에 없는 재료: 1잔당 원가
 // costTarget = { history: [{ value, at:'YYYY-MM-DD', note? }] }  마지막 항목이 현재 목표 원가율
 // menuCategories = ['커피', '위스키', ...]  원가 탭의 메뉴 분류 (이 순서대로 보여줌)
+// minMargins = { '위스키': [{ value: 12000, at:'YYYY-MM-DD' }, ...] }  분류별 최소 마진 금액(한 잔에 최소 남길 돈) 변경 기록.
+//              마지막 항목이 현재 값, 0 이면 설정 안 함(원가율로만 판정)
 
 import { isYmd, todayStr, uid } from './format.js';
 
-export const DATA_VERSION = 3; // 3: 메뉴 분류(menuCategories, menu.category) 추가
+export const DATA_VERSION = 4; // 3: 메뉴 분류(menuCategories, menu.category), 4: 분류별 최소 마진(minMargins)
 
 export const DEFAULT_MENU_CATEGORIES = ['커피', '위스키', '칵테일', '맥주', '티', '디저트'];
 export const UNCATEGORIZED = '미분류';
@@ -182,6 +184,7 @@ export function migrate(raw, { trusted = false } = {}) {
     Array.isArray(d.menus) &&
     Array.isArray(d.categories) &&
     Array.isArray(d.menuCategories) &&
+    d.minMargins && typeof d.minMargins === 'object' &&
     Array.isArray(d.costTarget?.history) &&
     d.costTarget.history.length
   )
@@ -196,8 +199,30 @@ export function migrate(raw, { trusted = false } = {}) {
     categories: sanitizeCategories(d.categories),
     menus,
     menuCategories,
+    minMargins: sanitizeMinMargins(d.minMargins, menuCategories),
     costTarget: sanitizeCostTarget(d.costTarget),
   };
+}
+
+/** 분류별 최소 마진 기록 정리: 있는 분류만, 0 이상 정수, 날짜 확인. 기록이 비면 그 분류는 뺌 */
+export function sanitizeMinMargins(raw, categories) {
+  const out = {};
+  const src = raw && typeof raw === 'object' ? raw : {};
+  for (const cat of categories) {
+    const hist = (Array.isArray(src[cat]) ? src[cat] : [])
+      .filter((h) => h && typeof h === 'object')
+      .map((h) => ({ value: Math.round(nonNeg(h.value)), at: isYmd(h.at) ? h.at : todayStr() }));
+    if (hist.length) out[cat] = hist;
+  }
+  return out;
+}
+
+/** 최소 마진 금액 입력 검사: 빈칸은 0(설정 안 함) */
+export function parseMargin(value) {
+  if (value === '' || value == null) return 0;
+  const v = Math.round(Number(value));
+  if (!Number.isFinite(v) || v < 0) throw new Error('최소 마진은 0원 이상이어야 합니다.');
+  return v;
 }
 
 /** 목표 원가율 값 검사 (사용자 입력) */

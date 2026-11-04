@@ -3,7 +3,7 @@
 
 import { dotDate, esc, normKey, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
-import { menuCost, priceForTarget, summarizeMenus } from '../lib/cost.js';
+import { menuCost, priceForTarget, priceForMargin, judgeMenu, summarizeMenus } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
 import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -26,6 +26,21 @@ function currentFilter() {
   return '전체';
 }
 
+/** 목표 원가율 아래: 분류별 최소 마진 요약 (분류를 고르고 있으면 그 분류 값) */
+function marginLine(filter) {
+  const cats = store.menuCategories;
+  let text;
+  if (cats.includes(filter)) {
+    const v = store.minMarginOf(filter);
+    const last = store.minMarginLast(filter);
+    text = v ? `${esc(filter)} 최소 마진 <b>${won(v)}</b> <span class="muted">· ${dotDate(last.at)}</span>` : `${esc(filter)}: 최소 마진 없음 (원가율로만 판정)`;
+  } else {
+    const set = cats.filter((c) => store.minMarginOf(c));
+    text = set.length ? `최소 마진: ${set.map((c) => `${esc(c)} <b>${num(store.minMarginOf(c))}</b>`).join(' · ')}` : '분류별 최소 마진: 설정 안 함';
+  }
+  return `<section class="margin-line"><p>${text}</p><button class="btn ghost small-btn" data-cost="margins">최소 마진</button></section>`;
+}
+
 function filterChips(filter) {
   const cats = store.menuCategories;
   const count = (f) => filterMenus(store.menus, f, cats).length;
@@ -42,9 +57,9 @@ export function renderCostTab() {
   const target = store.costTarget;
   const filter = currentFilter();
   const menus = filterMenus(store.menus, filter, store.menuCategories);
-  const { rows, over, avg } = summarizeMenus(menus, store.index, target.value);
+  const { rows, over, byMargin, avg } = summarizeMenus(menus, store.index, target.value, store.minMargins);
   const scale = Math.max(50, target.value * 2);
-  const cards = (list) => list.map(({ m, c }) => menuCard(m, c, target.value, scale)).join('');
+  const cards = (list) => list.map(({ m, c, j }) => menuCard(m, c, j, target.value, scale)).join('');
 
   let body;
   if (!store.menus.length)
@@ -54,7 +69,7 @@ export function renderCostTab() {
   else
     body = `<p class="cost-summary">${filter === '전체' ? '' : `${esc(filter)} · `}메뉴 ${rows.length}개 · ${
       over ? `<b class="warn">⚠ 목표 초과 ${over}개</b>` : '<b class="ok">모두 목표 이내</b>'
-    } · 평균 ${pct(avg)}</p>
+    }${byMargin ? ` · <b class="ok">마진 기준 충족 ${byMargin}개</b>` : ''} · 평균 ${pct(avg)}</p>
       ${
         filter === '전체'
           ? groupRowsByCategory(rows, store.menuCategories)
@@ -77,6 +92,7 @@ export function renderCostTab() {
       </div>
       <button class="btn ghost" data-cost="target">변경</button>
     </section>
+    ${marginLine(filter)}
 
     ${filterChips(filter)}
     ${body}
@@ -86,20 +102,21 @@ export function renderCostTab() {
     </div>`;
 }
 
-function menuCard(m, c, target, scale) {
-  const overT = c.rate != null && c.rate > target;
+function menuCard(m, c, j, target, scale) {
+  const over = j.status === 'over';
   const w = c.rate == null ? 0 : Math.min(100, (c.rate / scale) * 100);
   const delta = Math.round(c.delta);
   return `
-    <button class="menu-card ${overT ? 'over' : ''}" data-cost-open="${m.id}">
+    <button class="menu-card ${over ? 'over' : ''} ${j.status === 'margin' ? 'by-margin' : ''}" data-cost-open="${m.id}">
       <span class="mc-top">
-        <span class="mc-name">${overT ? '⚠ ' : ''}${esc(m.name)}</span>
+        <span class="mc-name">${over ? '⚠ ' : ''}${esc(m.name)}</span>
         <span class="mc-rate">${c.rate == null ? '<small>계산 불가</small>' : pct(c.rate)}</span>
       </span>
       <span class="mc-sub">
-        판매 ${num(m.price)} · 원가 ${num(c.cost)}${c.missing ? ' <em class="warn">(일부 재료 미계산)</em>' : ''}
+        판매 ${num(m.price)} · 원가 ${num(c.cost)} · 마진 ${num(j.margin)}${c.missing ? ' <em class="warn">(일부 재료 미계산)</em>' : ''}
         ${delta ? `<em class="${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '▲' : '▼'}${num(Math.abs(delta))}</em>` : ''}
       </span>
+      ${j.status === 'margin' ? `<span class="mc-badge">✔ 마진 기준 충족 (최소 ${num(j.minMargin)}원)</span>` : ''}
       <span class="mc-bar" aria-hidden="true"><i style="width:${w}%"></i><b style="left:${(target / scale) * 100}%"></b></span>
     </button>`;
 }
@@ -115,6 +132,7 @@ export function handleCostClick(e) {
     openMenuEditor({ category: store.menuCategories.includes(f) ? f : '' });
   } else if (t.dataset.cost === 'target') openTargetSheet();
   else if (t.dataset.cost === 'edit-cats') openCategoryEditor();
+  else if (t.dataset.cost === 'margins') openMarginSheet();
   return true;
 }
 
@@ -169,16 +187,17 @@ function openMenuDetail(id) {
       if (!m) return close();
       const c = costOf(m);
       const target = store.costTarget.value;
-      const overT = c.rate != null && c.rate > target;
+      const j = judgeMenu(c, m.price, target, store.minMarginOf(m.category));
+      const overT = j.status === 'over';
       body.innerHTML = `
         <h2 class="detail-name">${esc(m.name)}</h2>
         <div class="stats">
           <div><p>판매가</p><b>${won(m.price)}</b></div>
           <div><p>원가</p><b>${won(c.cost)}</b></div>
-          <div class="${overT ? 'over' : ''}"><p>원가율</p><b>${pct(c.rate)}</b><small>목표 ${target}%</small></div>
-          <div><p>마진</p><b>${won(m.price - c.cost)}</b></div>
+          <div class="${c.rate != null && c.rate > target ? 'over' : ''}"><p>원가율</p><b>${pct(c.rate)}</b><small>목표 ${target}%</small></div>
+          <div class="${j.status === 'margin' ? 'good' : ''}"><p>마진</p><b>${won(j.margin)}</b>${j.minMargin ? `<small>최소 ${num(j.minMargin)}</small>` : ''}</div>
         </div>
-        ${overT ? `<p class="notice">목표 원가율 ${target}%를 넘었습니다. 목표에 맞추려면 판매가 약 ${won(priceForTarget(c.cost, target))} 이상이 필요합니다.</p>` : ''}
+        ${detailNotice(m, c, j, target)}
         <h3 class="sub">재료별 원가</h3>
         <ul class="ing-list">${c.parts.map((p) => ingLi(p, c.cost)).join('')}</ul>
         <p class="muted small">매입 품목 재료는 가장 최근 매입 단가(쿠폰·할인 반영)로 계산합니다. ▲▼는 직전 매입 대비 변화입니다.</p>
@@ -213,6 +232,74 @@ function ingLi(p, total) {
     </span>
     <span class="iamt">${p.cost == null ? '-' : won(p.cost)}${d ? `<em class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'}${num(Math.abs(d))}</em>` : ''}<span class="chev">📈</span></span>
   </button></li>`;
+}
+
+function detailNotice(m, c, j, target) {
+  if (j.status === 'margin')
+    return `<p class="notice ok-notice">원가율은 목표(${target}%)보다 높지만, 한 잔 마진 <b>${won(j.margin)}</b>이 ${esc(m.category)} 최소 마진 ${won(j.minMargin)} 이상이라 합격입니다.</p>`;
+  if (j.status !== 'over') return '';
+  const byRate = priceForTarget(c.cost, target);
+  const lines = [`원가율 ${target}% 기준: <b>${won(byRate)}</b> 이상`];
+  if (j.minMargin) lines.push(`최소 마진 ${won(j.minMargin)} 기준: <b>${won(priceForMargin(c.cost, j.minMargin))}</b> 이상`);
+  return `<div class="notice">
+    <p>${j.minMargin ? `목표 원가율 ${target}%를 넘었고, 최소 마진 ${won(j.minMargin)}도 못 채웁니다.` : `목표 원가율 ${target}%를 넘었습니다.${m.category ? ` (${esc(m.category)}은 최소 마진이 없어 원가율로만 판정)` : ''}`}</p>
+    <p class="suggest-title">추천 판매가</p>
+    <ul class="suggest">${lines.map((l) => `<li>${l}</li>`).join('')}</ul>
+  </div>`;
+}
+
+// ───────────────────────── 분류별 최소 마진 ─────────────────────────
+
+function openMarginSheet() {
+  openSheet({
+    title: '분류별 최소 마진',
+    live: true,
+    render(body, close) {
+      const cats = store.menuCategories;
+      const hist = cats
+        .flatMap((c) => (store.minMargins[c] ?? []).map((h, i) => ({ c, i, ...h })))
+        .sort((a, b) => b.at.localeCompare(a.at) || b.i - a.i) // 같은 날이면 나중에 바꾼 것이 위
+        .slice(0, 30);
+      body.innerHTML = `
+        <p class="muted small">한 잔(한 조각)에 최소 이만큼은 남겨야 하는 금액입니다. 원가율이 목표를 넘어도 이 금액 이상 남으면 '마진 기준 충족'으로 봅니다.
+          비싼 위스키·와인처럼 원가율로만 가격을 정하기 어려운 분류에 쓰세요. 비워 두면 원가율로만 판정합니다.</p>
+        ${
+          cats.length
+            ? `<form class="editor margin-form" novalidate>
+          <ul class="margin-list">${cats
+            .map((c) => {
+              const v = store.minMarginOf(c);
+              const last = store.minMarginLast(c);
+              return `<li><label><span class="mname">${esc(c)}</span>
+                <span class="minput"><input name="${esc(c)}" type="number" inputmode="numeric" min="0" step="100" placeholder="없음" value="${v ?? ''}" aria-label="${esc(c)} 최소 마진(원)"><span>원</span></span></label>
+                <span class="muted small mdate">${last ? `${dotDate(last.at)} ${last.value ? '설정' : '해제'}` : '설정 안 함'}</span></li>`;
+            })
+            .join('')}</ul>
+          <div class="actions"><button type="button" class="btn ghost cancel">닫기</button><button class="btn primary" type="submit">저장</button></div>
+        </form>`
+            : '<p class="empty-msg">먼저 메뉴 분류를 만들어 주세요.</p>'
+        }
+        ${
+          hist.length
+            ? `<h3 class="sub">변경 기록</h3><ul class="target-hist">${hist
+                .map((h) => `<li><b>${esc(h.c)} ${h.value ? won(h.value) : '해제'}</b><span>${dotDate(h.at)}</span></li>`)
+                .join('')}</ul>`
+            : ''
+        }`;
+      const form = body.querySelector('.margin-form');
+      body.querySelector('.cancel')?.addEventListener('click', close);
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const values = Object.fromEntries(cats.map((c) => [c, form.elements[c].value]));
+        try {
+          const changed = store.setMinMargins(values);
+          toast(changed.length ? `${changed.join(', ')} 최소 마진을 저장했습니다.` : '바뀐 값이 없습니다.');
+        } catch (err) {
+          toast(err.message);
+        }
+      });
+    },
+  });
 }
 
 // ───────────────────────── 메뉴 등록/수정 ─────────────────────────
@@ -258,7 +345,12 @@ function openMenuEditor(menu) {
       const updateSum = () => {
         const c = costOf({ ...m, price: Number(form.elements.price.value) || 0 });
         const t = store.costTarget.value;
-        sumEl.innerHTML = `${won(c.cost)} · <span class="${c.rate != null && c.rate > t ? 'warn' : ''}">${pct(c.rate)}</span>`;
+        const price = Number(form.elements.price.value) || 0;
+        const cat = form.elements.category?.value ?? m.category;
+        const j = judgeMenu(c, price, t, store.minMarginOf(cat));
+        sumEl.innerHTML = `${won(c.cost)} · <span class="${j.status === 'over' ? 'warn' : j.status === 'margin' ? 'ok' : ''}">${pct(c.rate)}</span>${
+          price ? `<small class="sum-margin">마진 ${won(j.margin)}${j.status === 'margin' ? ' ✔' : ''}</small>` : ''
+        }`;
         ingsEl.querySelectorAll('.ing-edit').forEach((row) => {
           const p = c.parts[+row.dataset.idx];
           const info = row.querySelector('.ing-info');
@@ -367,6 +459,7 @@ function openMenuEditor(menu) {
         }),
       );
       form.elements.price.addEventListener('input', updateSum);
+      form.querySelector('.cat-pick')?.addEventListener('change', updateSum); // 분류마다 최소 마진이 다름
       body.querySelector('.cancel').addEventListener('click', close);
       form.addEventListener('submit', (e) => {
         e.preventDefault();

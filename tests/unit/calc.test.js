@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildItemIndex } from '../../src/lib/itemIndex.js';
 import { groupByVendor, groupByCategory, paySummary, aggregateItems, pricePoints, priceStats } from '../../src/lib/aggregate.js';
-import { ingredientCost, menuCost, priceForTarget, summarizeMenus } from '../../src/lib/cost.js';
+import { ingredientCost, menuCost, priceForTarget, priceForMargin, currentMinMargin, judgeMenu, summarizeMenus } from '../../src/lib/cost.js';
 
 const it_ = (name, unitPrice, extra = {}) => {
   const qty = extra.qty ?? 1;
@@ -113,5 +113,42 @@ describe('원가 계산', () => {
     expect(s.rows.map((r) => r.m.id)).toEqual(['b', 'a', 'c']);
     expect(s.over).toBe(1);
     expect(s.avg).toBeCloseTo((((17990 / 7) / 8000) * 100 + (((39790 * 30) / 700) / 12000) * 100) / 2, 6);
+  });
+});
+
+describe('최소 마진', () => {
+  const margins = { 위스키: [{ value: 10000, at: '2026-10-01' }, { value: 12000, at: '2026-11-04' }], 디저트: [{ value: 3000, at: '2026-10-01' }, { value: 0, at: '2026-11-04' }] };
+  it('분류의 현재 값 (마지막 기록, 0 이면 설정 안 함)', () => {
+    expect(currentMinMargin(margins, '위스키')).toBe(12000);
+    expect(currentMinMargin(margins, '디저트')).toBeNull();
+    expect(currentMinMargin(margins, '칵테일')).toBeNull();
+    expect(currentMinMargin(margins, '')).toBeNull();
+  });
+  it('판정: 원가율 합격 / 마진 기준 합격 / 초과 / 계산 불가', () => {
+    const c = (cost, rate, missing = 0) => ({ cost, rate, missing });
+    expect(judgeMenu(c(1705, 9.5), 18000, 25, 12000)).toMatchObject({ status: 'rate', margin: 16295 });
+    expect(judgeMenu(c(15000, 55.6), 27000, 25, 12000)).toMatchObject({ status: 'margin', margin: 12000 });
+    expect(judgeMenu(c(15000, 57.7), 26000, 25, 12000)).toMatchObject({ status: 'over', margin: 11000 });
+    expect(judgeMenu(c(15000, 55.6), 27000, 25, null).status).toBe('over'); // 최소 마진 없으면 원가율로만
+    expect(judgeMenu(c(15000, 55.6, 1), 27000, 25, 12000).status).toBe('over'); // 재료가 빠졌으면 마진 판정 안 함
+    expect(judgeMenu(c(0, null), 9000, 25, 12000).status).toBe('unknown');
+  });
+  it('추천 판매가', () => {
+    expect(priceForMargin(15000, 12000)).toBe(27000);
+    expect(priceForMargin(15050, 12000)).toBe(27100);
+    expect(priceForTarget(15000, 25)).toBe(60000);
+  });
+  it('요약: ⚠ 수와 마진 기준 충족 수를 따로 셈', () => {
+    const idx = buildItemIndex([p_('w', '2026-10-01', 'x', [it_('고급위스키700ML', 350000, { packSize: 700, packUnit: 'ml' })])]);
+    const ing = [{ type: 'item', itemName: '고급위스키700ML', use: 30 }]; // 원가 15,000원
+    const menus = [
+      { id: 'a', price: 27000, category: '위스키', ingredients: ing }, // 마진 12,000 → 충족
+      { id: 'b', price: 26000, category: '위스키', ingredients: ing }, // 마진 11,000 → ⚠
+      { id: 'c', price: 27000, category: '칵테일', ingredients: ing }, // 칵테일은 최소 마진 없음 → ⚠
+    ];
+    const s = summarizeMenus(menus, idx, 25, margins);
+    expect(s.rows.map((r) => [r.m.id, r.j.status])).toEqual([['b', 'over'], ['a', 'margin'], ['c', 'over']]);
+    expect(s.over).toBe(2);
+    expect(s.byMargin).toBe(1);
   });
 });

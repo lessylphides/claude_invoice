@@ -2,7 +2,8 @@
 // 매입 내역의 '가장 최근 매입 단가(할인 반영)'로 자동 계산하므로, 새 영수증이 들어오면 원가율도 바로 바뀝니다.
 
 import { esc, normKey, num, shortDate, uid, won } from './format.js';
-import { store, netUnitPrice, guessPack, PACK_UNITS } from './store.js';
+import { store, netUnitPrice, guessPack } from './store.js';
+import { unitSelectHTML } from './units.js';
 import { openSheet, toast } from './sheet.js';
 
 let hooks = { openTrend: () => {} };
@@ -228,7 +229,6 @@ function ingLi(p, total) {
 
 function openMenuEditor(menu) {
   const m = structuredClone({ name: '', price: '', ingredients: [], ...menu });
-  if (!m.ingredients.length) m.ingredients.push(blankItemIng());
   const isEdit = !!(menu.id && store.getMenu(menu.id));
 
   openSheet({
@@ -241,8 +241,6 @@ function openMenuEditor(menu) {
             <label>판매가 (원)<input name="price" type="number" inputmode="numeric" required placeholder="12000" value="${m.price || ''}"></label>
           </div>
           <h3 class="sub">재료 <span class="muted small">— 한 잔(한 조각)에 들어가는 양</span></h3>
-          <datalist id="item-names">${store.itemNames().map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
-          <datalist id="unit-list">${PACK_UNITS.map((u) => `<option value="${u}">`).join('')}</datalist>
           <div class="ings"></div>
           <div class="btn-row">
             <button type="button" class="btn ghost" data-add="item">+ 매입 품목 재료</button>
@@ -278,7 +276,8 @@ function openMenuEditor(menu) {
       };
 
       const draw = () => {
-        ingsEl.innerHTML = m.ingredients
+        ingsEl.innerHTML = m.ingredients.length ? '' : '<p class="muted small ings-empty">아래 버튼으로 재료를 추가하세요. 매입 품목은 목록에서 고르면 됩니다.</p>';
+        ingsEl.innerHTML += m.ingredients
           .map((g, idx) =>
             g.type === 'manual'
               ? `<div class="ing-edit" data-idx="${idx}">
@@ -289,10 +288,10 @@ function openMenuEditor(menu) {
                   const spec = g.itemName ? store.itemSpec(g.itemName) : null;
                   const u = g.unit || spec?.packUnit || '';
                   return `<div class="ing-edit" data-idx="${idx}">
-                   <div class="row-name"><input data-f="itemName" list="item-names" placeholder="매입 품목 검색 (예: 몽키숄더)" value="${esc(g.itemName)}"><button type="button" class="icon-btn del" aria-label="재료 삭제">✕</button></div>
+                   <div class="row-name"><button type="button" class="pick-btn ${g.itemName ? '' : 'empty'}" data-pick>${g.itemName ? esc(g.itemName) : '매입 품목 선택'}<span aria-hidden="true">▾</span></button><button type="button" class="icon-btn del" aria-label="재료 삭제">✕</button></div>
                    <div class="ing-row">
                      <span>1개 용량</span><input data-f="packSize" type="number" inputmode="decimal" step="any" placeholder="${spec ? spec.packSize : '700'}" value="${g.packSize || ''}">
-                     <input data-f="unit" list="unit-list" class="unit" placeholder="${esc(spec?.packUnit || 'ml')}" value="${esc(g.unit)}">
+                     ${unitSelectHTML('data-f="unit"', g.unit, spec?.packUnit ? `${spec.packUnit}` : '단위')}
                      <span>중</span><input data-f="use" type="number" inputmode="decimal" step="any" placeholder="30" value="${g.use || ''}">
                      <span class="unit-echo">${esc(u)}</span>
                    </div>
@@ -311,31 +310,61 @@ function openMenuEditor(menu) {
         if (!f) return;
         const row = e.target.closest('.ing-edit');
         const g = m.ingredients[+row.dataset.idx];
+        if (f === 'unit') return; // 단위는 change 에서 처리
         g[f] = ['packSize', 'use', 'cost'].includes(f) ? Number(e.target.value) || 0 : e.target.value;
-        if (f === 'unit') row.querySelector('.unit-echo').textContent = g.unit || store.itemSpec(g.itemName)?.packUnit || '';
         updateSum();
       });
       // 품목을 고르면: 매입 기록에 용량이 있으면 그걸 쓰고(빈칸 유지), 없으면 이름의 용량(700ML, 2L)으로 채움
-      ingsEl.addEventListener('change', (e) => {
-        if (e.target.dataset.f !== 'itemName') return;
-        const g = m.ingredients[+e.target.closest('.ing-edit').dataset.idx];
-        if (!g.packSize && !store.itemSpec(g.itemName)) {
-          const guess = guessPack(g.itemName);
-          if (guess) Object.assign(g, { packSize: guess.packSize, unit: guess.packUnit });
+      const applyItem = (g, name) => {
+        g.itemName = name;
+        if (!store.itemSpec(name)) {
+          const guess = guessPack(name);
+          g.packSize = guess ? guess.packSize : 0;
+          g.unit = guess ? guess.packUnit : '';
+        } else {
+          g.packSize = 0;
+          g.unit = '';
         }
-        // 다시 그리는 중 입력칸이 사라지며 생기는 change 와 겹치지 않도록 한 박자 뒤에 다시 그림
-        setTimeout(draw);
+      };
+      ingsEl.addEventListener('change', (e) => {
+        if (e.target.dataset.f !== 'unit') return;
+        const row = e.target.closest('.ing-edit');
+        const g = m.ingredients[+row.dataset.idx];
+        g.unit = e.target.value;
+        row.querySelector('.unit-echo').textContent = g.unit || store.itemSpec(g.itemName)?.packUnit || '';
+        updateSum();
       });
-      ingsEl.addEventListener('click', (e) => {
-        if (!e.target.closest('.del')) return;
-        m.ingredients.splice(+e.target.closest('.ing-edit').dataset.idx, 1);
-        draw();
+      ingsEl.addEventListener('click', async (e) => {
+        const row = e.target.closest('.ing-edit');
+        if (!row) return;
+        const g = m.ingredients[+row.dataset.idx];
+        if (e.target.closest('.del')) {
+          m.ingredients.splice(+row.dataset.idx, 1);
+          draw();
+        } else if (e.target.closest('[data-pick]')) {
+          const name = await pickItem(g.itemName);
+          if (name) {
+            applyItem(g, name);
+            draw();
+          }
+        }
       });
       body.querySelectorAll('[data-add]').forEach((b) =>
-        b.addEventListener('click', () => {
-          m.ingredients.push(b.dataset.add === 'manual' ? { id: uid(), type: 'manual', name: '', cost: 0 } : blankItemIng());
+        b.addEventListener('click', async () => {
+          if (b.dataset.add === 'manual') {
+            m.ingredients.push({ id: uid(), type: 'manual', name: '', cost: 0 });
+            draw();
+            ingsEl.lastElementChild.querySelector('input').focus();
+            return;
+          }
+          // 매입 품목 재료: 바로 품목 목록을 열고, 고르면 재료 줄을 추가
+          const name = await pickItem('');
+          if (!name) return;
+          const g = blankItemIng();
+          applyItem(g, name);
+          m.ingredients.push(g);
           draw();
-          ingsEl.lastElementChild.querySelector('input').focus();
+          ingsEl.lastElementChild.querySelector('[data-f=use]')?.focus();
         }),
       );
       form.elements.price.addEventListener('input', updateSum);
@@ -358,4 +387,65 @@ function openMenuEditor(menu) {
 
 function blankItemIng() {
   return { id: uid(), type: 'item', itemName: '', packSize: 0, unit: '', use: 0 };
+}
+
+// ───────────────────────── 매입 품목 고르기 ─────────────────────────
+
+/** 매입된 품목 목록을 분류별로 보여주고 하나를 고르게 함. 고른 품목 이름(취소하면 null) */
+function pickItem(current) {
+  const map = new Map();
+  for (const p of [...store.purchases].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt))
+    for (const i of p.items) {
+      const k = normKey(i.name);
+      if (!k || map.has(k) || (Number(i.amount) || 0) <= 0) continue;
+      map.set(k, { name: i.name, category: i.category || '기타', price: netUnitPrice(i), date: p.date, spec: store.itemSpec(i.name) });
+    }
+  const items = [...map.values()];
+  const cats = [...new Set(store.categories.concat(items.map((i) => i.category)))].filter((c) => items.some((i) => i.category === c));
+
+  return new Promise((resolve) => {
+    let picked = null;
+    let q = '';
+    openSheet({
+      title: '매입 품목 선택',
+      onClose: () => resolve(picked),
+      render(body, close) {
+        body.innerHTML = `
+          <input class="pick-search" type="search" placeholder="이름으로 찾기 (선택 사항)" aria-label="품목 검색">
+          <div class="pick-list"></div>`;
+        const list = body.querySelector('.pick-list');
+        const drawList = () => {
+          const k = normKey(q);
+          const hit = items.filter((i) => !k || normKey(i.name).includes(k));
+          list.innerHTML = hit.length
+            ? cats
+                .map((c) => {
+                  const rows = hit.filter((i) => i.category === c);
+                  if (!rows.length) return '';
+                  return `<h3 class="sub">${esc(c)}</h3><ul class="pick-ul">${rows
+                    .map(
+                      (i) => `<li><button type="button" class="pick-item ${normKey(i.name) === normKey(current) ? 'cur' : ''}" data-name="${esc(i.name)}">
+                        <span class="iname">${esc(i.name)}<small>${i.spec ? `${num(i.spec.packSize)}${esc(i.spec.packUnit)} · ` : ''}최근 ${num(i.price)}원 · ${shortDate(i.date)}</small></span>
+                        <span aria-hidden="true">›</span>
+                      </button></li>`,
+                    )
+                    .join('')}</ul>`;
+                })
+                .join('')
+            : `<p class="empty-msg">${items.length ? '찾는 품목이 없습니다.' : '아직 매입 기록이 없습니다.<br>먼저 매입 탭에서 영수증을 입력해 주세요.'}</p>`;
+        };
+        drawList();
+        body.querySelector('.pick-search').addEventListener('input', (e) => {
+          q = e.target.value;
+          drawList();
+        });
+        list.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-name]');
+          if (!b) return;
+          picked = b.dataset.name;
+          close();
+        });
+      },
+    });
+  });
 }

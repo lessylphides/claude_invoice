@@ -13,7 +13,7 @@ function niceStep(range) {
 
 /**
  * @param {HTMLElement} host
- * @param {{date:string, price:number, vendor:string, qty:number, unit:string}[]} points 날짜순 정렬
+ * @param {{date:string, price:number, listPrice?:number, discount?:number, vendor:string, qty:number, unit:string}[]} points 날짜순 정렬
  */
 export function renderTrendChart(host, points) {
   host.innerHTML = '';
@@ -80,7 +80,9 @@ export function renderTrendChart(host, points) {
     active.setAttribute('cx', cx);
     active.setAttribute('cy', cy);
     active.setAttribute('visibility', 'visible');
-    tip.innerHTML = `<b>${num(p.price)}원</b>${p.unit ? ` / ${esc(p.unit)}` : ''}<br><span>${shortDate(p.date)} · ${esc(p.vendor)}</span>`;
+    tip.innerHTML = `<b>${num(p.price)}원</b>${p.unit ? ` / ${esc(p.unit)}` : ''}${
+      p.discount ? `<br><span>정가 ${num(p.listPrice)} · 할인 -${num(p.discount)}</span>` : ''
+    }<br><span>${shortDate(p.date)} · ${esc(p.vendor)}</span>`;
     tip.hidden = false;
     const left = (cx / W) * rect.width;
     tip.style.left = `${Math.min(Math.max(left, 70), rect.width - 70)}px`;

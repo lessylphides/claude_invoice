@@ -46,14 +46,15 @@ function buildSchema(categories) {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['name', 'category', 'qty', 'unit', 'unitPrice', 'amount'],
+          required: ['name', 'category', 'qty', 'unit', 'unitPrice', 'discount', 'amount'],
           properties: {
             name: { type: 'string' },
             category: { type: 'string', enum: categories },
             qty: { type: 'number' },
             unit: { type: 'string', description: 'kg, 개, 박스, 봉 등. 없으면 빈 문자열' },
-            unitPrice: { type: 'number', description: '단가(원)' },
-            amount: { type: 'number', description: '공급가액+세액 합계 금액(원)' },
+            unitPrice: { type: 'number', description: '할인 전 정가 단가(원)' },
+            discount: { type: 'number', description: '이 품목에 붙은 쿠폰·할인 금액의 합(원, 양수). 없으면 0' },
+            amount: { type: 'number', description: '할인을 뺀 실제 지불 금액(원) = qty×unitPrice - discount. 부가세 포함' },
           },
         },
       },
@@ -65,15 +66,22 @@ function buildSchema(categories) {
 const SYSTEM = `당신은 한국 식당·소상공인의 매입 장부 입력을 돕는 도우미입니다.
 사진 속 구매 영수증, 거래명세서, 세금계산서를 읽어 매입 내역을 정확히 추출합니다.
 - 금액은 원 단위 숫자만 (쉼표·'원' 제외). 품목별 amount 는 부가세 포함 실제 지불 금액으로 적고, 거래명세서에 공급가액과 세액이 따로 있으면 합산합니다.
-- 할인·봉투값 등은 별도 품목으로 넣되 할인은 음수 금액으로 적습니다.
+- 특정 상품에 대한 쿠폰·할인 줄(예: 상품 바로 아래의 "*** CPN", "할인", "쿠폰" 줄, 또는 할인 줄에 상품명이 적힌 경우)은 별도 품목으로 만들지 말고, 해당 상품의 discount 에 양수로 더하고 그 상품의 amount 에서 뺍니다. unitPrice 는 할인 전 정가로 둡니다.
+- 어느 상품에도 속하지 않는 할인(영수증 전체 할인 등)과 봉투값 등만 별도 품목으로 넣고, 할인은 음수 금액으로 적습니다.
+- 같은 상품이 여러 줄로 나뉘어 있어도 문서에 적힌 대로 줄마다 따로 적습니다.
+- 품목 amount 의 합이 문서의 최종 합계와 같은지 확인합니다.
 - 수량이나 단가가 없으면 qty=1, unitPrice=amount 로 둡니다.
 - 품목명은 문서에 적힌 그대로 쓰되 규격(예: 1kg, 20입)은 unit 이나 품목명 뒤에 유지합니다.
 - 각 품목을 주어진 분류 중 가장 알맞은 것으로 분류합니다.
 - 읽을 수 없는 값은 추측하지 말고 빈 문자열 또는 0 으로 둡니다.`;
 
-export async function extractReceipt(file, { apiKey, model, categories, knownVendors = [] }) {
+/**
+ * @param {File|File[]} files  여러 장이면 '영수증 한 장을 나눠 찍은 사진들'로 보고 한 건으로 인식
+ */
+export async function extractReceipt(files, { apiKey, model, categories, knownVendors = [] }) {
   if (!apiKey) throw new Error('설정에서 Claude API 키를 먼저 입력해 주세요.');
-  const data = await fileToJpegBase64(file);
+  files = Array.isArray(files) ? files : [files];
+  const images = await Promise.all(files.map((f) => fileToJpegBase64(f)));
 
   // 키는 이 기기 브라우저에만 저장되며 Anthropic API 로만 전송됩니다.
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 2 });
@@ -81,7 +89,11 @@ export async function extractReceipt(file, { apiKey, model, categories, knownVen
   const prompt = `오늘 날짜: ${todayStr()} (연도가 생략된 문서는 오늘 기준 가장 가까운 과거 날짜로 판단)
 분류 목록: ${categories.join(', ')}
 ${knownVendors.length ? `기존 거래처(같은 곳이면 이 표기를 그대로 사용): ${knownVendors.slice(0, 60).join(', ')}` : ''}
-이 사진의 매입 내역을 추출해 주세요.`;
+${
+    images.length > 1
+      ? `위 사진 ${images.length}장은 영수증(또는 거래명세서) 한 장을 위에서부터 순서대로 나눠 찍은 것입니다. 하나로 이어서 한 건의 매입 내역으로 추출하세요. 사진끼리 겹쳐 찍힌 줄은 한 번만 넣습니다. 상호·날짜·합계는 어느 사진에 있든 찾아서 채웁니다.`
+      : '이 사진의 매입 내역을 추출해 주세요.'
+  }`;
 
   const usesFallback = !model.startsWith('claude-haiku');
   let res;
@@ -96,7 +108,10 @@ ${knownVendors.length ? `기존 거래처(같은 곳이면 이 표기를 그대�
         {
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+            ...images.flatMap((data, i) => [
+              ...(images.length > 1 ? [{ type: 'text', text: `사진 ${i + 1}/${images.length}` }] : []),
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+            ]),
             { type: 'text', text: prompt },
           ],
         },

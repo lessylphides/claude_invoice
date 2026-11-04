@@ -1,6 +1,6 @@
 import './style.css';
 import { compact, dateLabel, esc, normKey, num, pad, shortDate, todayStr, won } from './format.js';
-import { store, purchaseTotal, MODELS } from './store.js';
+import { store, purchaseTotal, netUnitPrice, MODELS } from './store.js';
 import { openSheet, showBusy, toast } from './sheet.js';
 import { openEditor, draftFromOcr } from './editor.js';
 import { extractReceipt } from './ocr.js';
@@ -79,9 +79,10 @@ function aggregateItems(entries) {
   const map = new Map();
   for (const { item, purchase } of entries) {
     const k = normKey(item.name);
-    const a = map.get(k) || { name: item.name, qty: 0, unit: item.unit, amount: 0, vendors: new Set(), count: 0 };
+    const a = map.get(k) || { name: item.name, qty: 0, unit: item.unit, amount: 0, discount: 0, vendors: new Set(), count: 0 };
     a.qty += Number(item.qty) || 0;
     a.amount += Number(item.amount) || 0;
+    a.discount += Number(item.discount) || 0;
     a.vendors.add(purchase.vendor);
     a.count++;
     map.set(k, a);
@@ -169,7 +170,9 @@ function barRow(g, total, key, expandable = true) {
 
 function itemAggLi(a) {
   return `<li><button class="item-btn" data-trend="${esc(a.name)}">
-    <span class="iname">${esc(a.name)}<small>${a.qty ? ` ${num(a.qty)}${esc(a.unit || '')}` : ''} · ${[...a.vendors].map(esc).join(', ')}</small></span>
+    <span class="iname">${esc(a.name)}<small>${a.qty ? ` ${num(a.qty)}${esc(a.unit || '')}` : ''} · ${[...a.vendors].map(esc).join(', ')}</small>${
+      a.discount ? `<span class="disc">└ 할인 -${num(a.discount)}원</span>` : ''
+    }</span>
     <span class="iamt">${won(a.amount)}<span class="chev">📈</span></span>
   </button></li>`;
 }
@@ -297,9 +300,12 @@ function dayByCategory(ps) {
 
 function itemLi(item, vendor, showVendor = false) {
   const qty = Number(item.qty) || 0;
+  const disc = Number(item.discount) || 0;
   return `<li><button class="item-btn" data-trend="${esc(item.name)}" data-vendor="${esc(vendor)}">
-    <span class="iname">${esc(item.name)}<small>${showVendor ? `${esc(vendor)} · ` : `${esc(item.category)} · `}${qty ? `${num(qty)}${esc(item.unit)} × ${num(item.unitPrice)}원` : ''}</small></span>
-    <span class="iamt">${won(item.amount)}<span class="chev">📈</span></span>
+    <span class="iname">${esc(item.name)}<small>${showVendor ? `${esc(vendor)} · ` : `${esc(item.category)} · `}${qty ? `${num(qty)}${esc(item.unit)} × ${num(item.unitPrice)}원` : ''}</small>${
+      disc ? `<span class="disc">└ 쿠폰·할인 -${num(disc)}원</span>` : ''
+    }</span>
+    <span class="iamt">${disc ? `<s>${num(item.amount + disc)}</s>` : ''}${won(item.amount)}<span class="chev">📈</span></span>
   </button></li>`;
 }
 
@@ -311,9 +317,18 @@ function priceHistory(name) {
   for (const p of store.purchases)
     for (const i of p.items) {
       if (normKey(i.name) !== k) continue;
-      const qty = Number(i.qty) || 0;
-      const price = Number(i.unitPrice) || (qty ? Math.round(i.amount / qty) : Number(i.amount) || 0);
-      pts.push({ date: p.date, price, vendor: p.vendor, qty, unit: i.unit, amount: Number(i.amount) || 0 });
+      // 그래프는 할인을 반영한 실제 매입 단가, 정가·할인은 함께 보관해 표/툴팁에 표시
+      const discount = Number(i.discount) || 0;
+      pts.push({
+        date: p.date,
+        price: netUnitPrice(i),
+        listPrice: Number(i.unitPrice) || 0,
+        discount,
+        vendor: p.vendor,
+        qty: Number(i.qty) || 0,
+        unit: i.unit,
+        amount: Number(i.amount) || 0,
+      });
     }
   return pts.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -352,13 +367,13 @@ function openTrend(name, vendor = null) {
           <div><p>최고</p><b>${prices.length ? won(Math.max(...prices)) : '-'}</b></div>
         </div>
         <div class="chart-host"></div>
-        <p class="muted small center">그래프를 누르면 날짜별 단가를 볼 수 있습니다 · 단가 기준(수량 1당)</p>
+        <p class="muted small center">그래프를 누르면 날짜별 단가를 볼 수 있습니다 · 쿠폰·할인을 뺀 실제 매입 단가(수량 1당) 기준</p>
         <table class="hist">
           <thead><tr><th>날짜</th><th>거래처</th><th>수량</th><th>단가</th><th>금액</th></tr></thead>
           <tbody>${[...pts]
             .reverse()
             .map(
-              (p) => `<tr><td><button class="link" data-date="${p.date}">${shortDate(p.date)}</button></td><td>${esc(p.vendor)}</td><td>${p.qty ? num(p.qty) + esc(p.unit || '') : ''}</td><td>${num(p.price)}</td><td>${num(p.amount)}</td></tr>`,
+              (p) => `<tr><td><button class="link" data-date="${p.date}">${shortDate(p.date)}</button></td><td>${esc(p.vendor)}</td><td>${p.qty ? num(p.qty) + esc(p.unit || '') : ''}</td><td>${num(p.price)}${p.discount ? `<small class="disc">정가 ${num(p.listPrice)}<br>-${num(p.discount)}</small>` : ''}</td><td>${num(p.amount)}</td></tr>`,
             )
             .join('')}</tbody>
         </table>`;
@@ -393,37 +408,70 @@ function startCapture(source, date = null) {
   input.click();
 }
 
+/** 여러 장을 골랐을 때: 영수증 한 장을 나눠 찍은 것인지, 각각 다른 영수증인지 묻기 */
+function askMerge(count) {
+  return new Promise((resolve) => {
+    let answer = null;
+    openSheet({
+      title: `사진 ${count}장을 골랐습니다`,
+      onClose: () => resolve(answer),
+      render(body, close) {
+        body.innerHTML = `
+          <div class="menu">
+            <button class="menu-btn" data-merge="merge"><span>🧾</span>영수증 한 장이에요<small>긴 영수증을 나눠 찍은 사진 → 한 건으로 합쳐 인식</small></button>
+            <button class="menu-btn" data-merge="separate"><span>🗂</span>각각 다른 영수증이에요<small>사진마다 한 건씩 따로 인식</small></button>
+          </div>
+          <p class="muted small menu-note">한 장으로 합칠 때는 영수증 위쪽부터 순서대로 골라 주세요.</p>`;
+        body.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-merge]');
+          if (!b) return;
+          answer = b.dataset.merge;
+          close();
+        });
+      },
+    });
+  });
+}
+
 async function handleFiles(files) {
   if (!files.length) return;
   const { apiKey, model } = store.settings;
   const fallbackDate = captureDate || view.selectedDate || todayStr();
 
+  let groups = files.map((f) => [f]);
+  if (files.length > 1) {
+    const how = await askMerge(files.length);
+    if (!how) return;
+    if (how === 'merge') groups = [files];
+  }
+
   if (!apiKey) {
     toast('API 키가 없어 자동 인식 없이 직접 입력합니다. (설정에서 키 입력)', 3500);
-    for (const f of files) await openEditor({ date: fallbackDate }, { imageFile: f });
+    for (const g of groups) await openEditor({ date: fallbackDate }, { imageFiles: g });
     return;
   }
 
-  const busy = showBusy(`영수증 인식 중… (0/${files.length})`);
+  const label = groups.length > 1 ? (n) => `영수증 인식 중… (${n}/${groups.length})` : () => `영수증 인식 중… (사진 ${files.length}장)`;
+  const busy = showBusy(label(0));
   let done = 0;
   const results = await Promise.allSettled(
-    files.map((f) =>
-      extractReceipt(f, { apiKey, model, categories: store.categories, knownVendors: store.vendorNames() }).finally(() =>
-        busy.update(`영수증 인식 중… (${++done}/${files.length})`),
+    groups.map((g) =>
+      extractReceipt(g, { apiKey, model, categories: store.categories, knownVendors: store.vendorNames() }).finally(() =>
+        busy.update(label(++done)),
       ),
     ),
   );
   busy.done();
 
   let lastSaved = null;
-  for (let i = 0; i < files.length; i++) {
+  for (let i = 0; i < groups.length; i++) {
     const r = results[i];
     let saved;
     if (r.status === 'fulfilled') {
       const { draft, note } = draftFromOcr(r.value, fallbackDate);
-      saved = await openEditor(draft, { imageFile: files[i], note });
+      saved = await openEditor(draft, { imageFiles: groups[i], note });
     } else {
-      saved = await openEditor({ date: fallbackDate }, { imageFile: files[i], note: `자동 인식 실패: ${r.reason?.message || r.reason}` });
+      saved = await openEditor({ date: fallbackDate }, { imageFiles: groups[i], note: `자동 인식 실패: ${r.reason?.message || r.reason}` });
     }
     if (saved) lastSaved = saved;
   }
@@ -522,10 +570,10 @@ function openSettings() {
 }
 
 function exportCsv() {
-  const rows = [['날짜', '거래처', '결제구분', '세금계산서발행', '품목', '분류', '수량', '단위', '단가', '금액']];
+  const rows = [['날짜', '거래처', '결제구분', '세금계산서발행', '품목', '분류', '수량', '단위', '정가단가', '할인', '금액']];
   for (const p of [...monthPurchases()].sort((a, b) => a.date.localeCompare(b.date)))
     for (const i of p.items)
-      rows.push([p.date, p.vendor, PAY_LABEL[p.payType], p.payType === 'tax' ? (p.taxIssued ? '발행' : '미발행') : '', i.name, i.category, i.qty, i.unit, i.unitPrice, i.amount]);
+      rows.push([p.date, p.vendor, PAY_LABEL[p.payType], p.payType === 'tax' ? (p.taxIssued ? '발행' : '미발행') : '', i.name, i.category, i.qty, i.unit, i.unitPrice, i.discount || 0, i.amount]);
   const csv = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   download(`매입_${monthKey()}.csv`, '﻿' + csv, 'text/csv');
 }

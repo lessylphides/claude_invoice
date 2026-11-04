@@ -325,7 +325,7 @@ function itemLi(item, vendor, showVendor = false) {
   const qty = Number(item.qty) || 0;
   const disc = Number(item.discount) || 0;
   return `<li><button class="item-btn" data-trend="${esc(item.name)}" data-vendor="${esc(vendor)}">
-    <span class="iname">${esc(item.name)}<small>${showVendor ? `${esc(vendor)} · ` : `${esc(item.category)} · `}${qty ? `${num(qty)}${esc(item.unit)} × ${num(item.unitPrice)}원` : ''}</small>${
+    <span class="iname">${esc(item.name)}<small>${showVendor ? `${esc(vendor)} · ` : `${esc(item.category)} · `}${qty ? `${num(qty)}${esc(item.unit)}${item.packSize ? `(${num(item.packSize)}${esc(item.packUnit)})` : ''} × ${num(item.unitPrice)}원` : ''}</small>${
       disc ? `<span class="disc">└ 쿠폰·할인 -${num(disc)}원</span>` : ''
     }</span>
     <span class="iamt">${disc ? `<s>${num(item.amount + disc)}</s>` : ''}${won(item.amount)}<span class="chev">📈</span></span>
@@ -593,10 +593,10 @@ function openSettings() {
 }
 
 function exportCsv() {
-  const rows = [['날짜', '거래처', '결제구분', '세금계산서발행', '품목', '분류', '수량', '단위', '정가단가', '할인', '금액']];
+  const rows = [['날짜', '거래처', '결제구분', '세금계산서발행', '품목', '분류', '수량', '단위', '1개용량', '용량단위', '정가단가', '할인', '금액']];
   for (const p of [...monthPurchases()].sort((a, b) => a.date.localeCompare(b.date)))
     for (const i of p.items)
-      rows.push([p.date, p.vendor, PAY_LABEL[p.payType], p.payType === 'tax' ? (p.taxIssued ? '발행' : '미발행') : '', i.name, i.category, i.qty, i.unit, i.unitPrice, i.discount || 0, i.amount]);
+      rows.push([p.date, p.vendor, PAY_LABEL[p.payType], p.payType === 'tax' ? (p.taxIssued ? '발행' : '미발행') : '', i.name, i.category, i.qty, i.unit, i.packSize || '', i.packUnit || '', i.unitPrice, i.discount || 0, i.amount]);
   const csv = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   download(`매입_${monthKey()}.csv`, '﻿' + csv, 'text/csv');
 }

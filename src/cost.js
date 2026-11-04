@@ -2,7 +2,7 @@
 // 매입 내역의 '가장 최근 매입 단가(할인 반영)'로 자동 계산하므로, 새 영수증이 들어오면 원가율도 바로 바뀝니다.
 
 import { esc, normKey, num, shortDate, uid, won } from './format.js';
-import { store, netUnitPrice } from './store.js';
+import { store, netUnitPrice, guessPack, PACK_UNITS } from './store.js';
 import { openSheet, toast } from './sheet.js';
 
 let hooks = { openTrend: () => {} };
@@ -10,7 +10,6 @@ export function initCost(h) {
   hooks = { ...hooks, ...h };
 }
 
-const UNITS = ['ml', 'g', '개', '조각', '잔', '병', '캔', '봉'];
 
 // ───────────────────────── 계산 ─────────────────────────
 
@@ -20,7 +19,12 @@ function itemPurchases(itemName) {
   const rows = [];
   for (const p of store.purchases)
     for (const i of p.items)
-      if (normKey(i.name) === k) rows.push({ date: p.date, createdAt: p.createdAt, vendor: p.vendor, unitPrice: netUnitPrice(i), discount: Number(i.discount) || 0 });
+      if (normKey(i.name) === k)
+        rows.push({
+          date: p.date, createdAt: p.createdAt, vendor: p.vendor,
+          unitPrice: netUnitPrice(i), discount: Number(i.discount) || 0,
+          packSize: Number(i.packSize) || 0, packUnit: i.packUnit || '',
+        });
   return rows.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 }
 
@@ -29,9 +33,14 @@ function ingredientCost(g) {
   if (g.type === 'manual') return { cost: Number(g.cost) || 0, prevCost: Number(g.cost) || 0, source: null };
   const hist = itemPurchases(g.itemName);
   if (!hist.length) return { cost: null, reason: '매입 기록 없음' };
-  if (!g.packSize || !g.use) return { cost: null, reason: '용량·사용량 미입력', source: hist[0] };
-  const per = (price) => (price * g.use) / g.packSize;
-  return { cost: per(hist[0].unitPrice), prevCost: per((hist[1] || hist[0]).unitPrice), source: hist[0], prev: hist[1] };
+  // 1개 용량: 메뉴에 직접 적은 값 → 그 매입 건의 용량 → 같은 품목의 최근 용량 기록 순으로 사용
+  const spec = store.itemSpec(g.itemName);
+  const packOf = (row) => Number(g.packSize) || row.packSize || spec?.packSize || 0;
+  const unit = g.unit || hist[0].packUnit || spec?.packUnit || '';
+  if (!packOf(hist[0]) || !g.use) return { cost: null, reason: !g.use ? '사용량 미입력' : '1개 용량 미입력', source: hist[0], pack: packOf(hist[0]), unit };
+  const per = (row) => (row.unitPrice * g.use) / packOf(row);
+  const prevRow = hist[1] && packOf(hist[1]) ? hist[1] : hist[0];
+  return { cost: per(hist[0]), prevCost: per(prevRow), source: hist[0], prev: hist[1], pack: packOf(hist[0]), unit, packFromItem: !Number(g.packSize) };
 }
 
 export function menuCost(m) {
@@ -47,17 +56,6 @@ export function menuCost(m) {
   });
   const rate = m.price ? (cost / m.price) * 100 : null;
   return { cost, prevCost, delta: cost - prevCost, rate, missing, parts };
-}
-
-/** 품목 이름에서 용량 추정: '몽키숄더700ML' → 700 ml, '휘핑크림 2L' → 2000 ml, '블루베리510G' → 510 g */
-function guessPack(name) {
-  const all = [...String(name).matchAll(/(\d+(?:\.\d+)?)\s*(ml|l|kg|g)(?![a-z])/gi)];
-  if (!all.length) return null;
-  const [, n, u] = all.at(-1);
-  const v = Number(n), unit = u.toLowerCase();
-  if (unit === 'l') return { packSize: v * 1000, unit: 'ml' };
-  if (unit === 'kg') return { packSize: v * 1000, unit: 'g' };
-  return { packSize: v, unit };
 }
 
 const pct = (v) => (v == null ? '-' : `${(Math.round(v * 10) / 10).toFixed(1)}%`);
@@ -217,7 +215,7 @@ function ingLi(p, total) {
   const d = p.prev && p.cost != null ? Math.round(p.cost - p.prevCost) : 0;
   return `<li><button class="item-btn" data-ing-trend="${esc(g.itemName)}">
     <span class="iname">${esc(g.itemName)}
-      <small>${g.packSize ? `${num(g.packSize)}${esc(g.unit)} 중 ${num(g.use)}${esc(g.unit)}` : ''}${
+      <small>${p.pack ? `${num(p.pack)}${esc(p.unit)} 중 ${num(g.use)}${esc(p.unit)}` : ''}${
         p.source ? ` · 최근 ${num(p.source.unitPrice)}원 (${shortDate(p.source.date)} ${esc(p.source.vendor)})` : ''
       }</small>
       ${p.cost == null ? `<small class="warn">${esc(p.reason)}</small>` : ''}
@@ -244,7 +242,7 @@ function openMenuEditor(menu) {
           </div>
           <h3 class="sub">재료 <span class="muted small">— 한 잔(한 조각)에 들어가는 양</span></h3>
           <datalist id="item-names">${store.itemNames().map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
-          <datalist id="unit-list">${UNITS.map((u) => `<option value="${u}">`).join('')}</datalist>
+          <datalist id="unit-list">${PACK_UNITS.map((u) => `<option value="${u}">`).join('')}</datalist>
           <div class="ings"></div>
           <div class="btn-row">
             <button type="button" class="btn ghost" data-add="item">+ 매입 품목 재료</button>
@@ -287,16 +285,21 @@ function openMenuEditor(menu) {
                    <div class="row-name"><input data-f="name" placeholder="재료 이름 (예: 시럽, 라임)" value="${esc(g.name)}"><button type="button" class="icon-btn del" aria-label="재료 삭제">✕</button></div>
                    <div class="ing-row"><span>1잔당 원가</span><input data-f="cost" type="number" inputmode="numeric" placeholder="원" value="${g.cost || ''}"><span>원</span></div>
                  </div>`
-              : `<div class="ing-edit" data-idx="${idx}">
+              : (() => {
+                  const spec = g.itemName ? store.itemSpec(g.itemName) : null;
+                  const u = g.unit || spec?.packUnit || '';
+                  return `<div class="ing-edit" data-idx="${idx}">
                    <div class="row-name"><input data-f="itemName" list="item-names" placeholder="매입 품목 검색 (예: 몽키숄더)" value="${esc(g.itemName)}"><button type="button" class="icon-btn del" aria-label="재료 삭제">✕</button></div>
                    <div class="ing-row">
-                     <span>1개 용량</span><input data-f="packSize" type="number" inputmode="decimal" step="any" placeholder="700" value="${g.packSize || ''}">
-                     <input data-f="unit" list="unit-list" class="unit" placeholder="ml" value="${esc(g.unit)}">
+                     <span>1개 용량</span><input data-f="packSize" type="number" inputmode="decimal" step="any" placeholder="${spec ? spec.packSize : '700'}" value="${g.packSize || ''}">
+                     <input data-f="unit" list="unit-list" class="unit" placeholder="${esc(spec?.packUnit || 'ml')}" value="${esc(g.unit)}">
                      <span>중</span><input data-f="use" type="number" inputmode="decimal" step="any" placeholder="30" value="${g.use || ''}">
-                     <span class="unit-echo">${esc(g.unit)}</span>
+                     <span class="unit-echo">${esc(u)}</span>
                    </div>
+                   ${spec && !g.packSize ? `<p class="muted small spec-note">1개 용량은 매입 기록(${num(spec.packSize)}${esc(spec.packUnit)})을 사용합니다. 매입 기록에서 바꾸면 여기도 따라 바뀝니다.</p>` : ''}
                    <p class="ing-info muted small"></p>
-                 </div>`,
+                 </div>`;
+                })(),
           )
           .join('');
         updateSum();
@@ -309,18 +312,19 @@ function openMenuEditor(menu) {
         const row = e.target.closest('.ing-edit');
         const g = m.ingredients[+row.dataset.idx];
         g[f] = ['packSize', 'use', 'cost'].includes(f) ? Number(e.target.value) || 0 : e.target.value;
-        if (f === 'unit') row.querySelector('.unit-echo').textContent = g.unit;
+        if (f === 'unit') row.querySelector('.unit-echo').textContent = g.unit || store.itemSpec(g.itemName)?.packUnit || '';
         updateSum();
       });
-      // 품목을 고르면 이름의 용량(700ML, 2L, 510G)으로 1개 용량을 미리 채움
+      // 품목을 고르면: 매입 기록에 용량이 있으면 그걸 쓰고(빈칸 유지), 없으면 이름의 용량(700ML, 2L)으로 채움
       ingsEl.addEventListener('change', (e) => {
         if (e.target.dataset.f !== 'itemName') return;
         const g = m.ingredients[+e.target.closest('.ing-edit').dataset.idx];
-        const guess = guessPack(g.itemName);
-        if (guess && !g.packSize) {
-          Object.assign(g, guess);
-          draw();
+        if (!g.packSize && !store.itemSpec(g.itemName)) {
+          const guess = guessPack(g.itemName);
+          if (guess) Object.assign(g, { packSize: guess.packSize, unit: guess.packUnit });
         }
+        // 다시 그리는 중 입력칸이 사라지며 생기는 change 와 겹치지 않도록 한 박자 뒤에 다시 그림
+        setTimeout(draw);
       });
       ingsEl.addEventListener('click', (e) => {
         if (!e.target.closest('.del')) return;
@@ -353,5 +357,5 @@ function openMenuEditor(menu) {
 }
 
 function blankItemIng() {
-  return { id: uid(), type: 'item', itemName: '', packSize: 0, unit: 'ml', use: 0 };
+  return { id: uid(), type: 'item', itemName: '', packSize: 0, unit: '', use: 0 };
 }

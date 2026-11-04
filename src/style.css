@@ -279,7 +279,7 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 .disc-label { color: var(--ok); font-weight: 600; white-space: nowrap; }
 .row-disc input { width: 110px; flex: none; padding: 6px 8px; font-size: 14px; }
 .disc-net { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
-.add-disc { align-self: flex-start; font-size: 12.5px; margin-left: 4px; }
+.add-disc { font-size: 12.5px; }
 .photo img + img { margin-top: 4px; }
 
 /* 하단 탭 (매입 | 원가) */
@@ -328,8 +328,17 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 .ing-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
 .ing-row span { white-space: nowrap; }
 .ing-row input { padding: 8px 6px; font-size: 15px; width: auto; flex: 1 1 60px; }
-.ing-row input.unit { flex: 0 1 56px; }
+.ing-row input.unit { flex: 0 0 64px; }
 .ing-info { margin: 0 2px; }
 .ing-info b { color: var(--ink); }
 .btn-row { display: flex; gap: 8px; }
 .btn-row .btn { flex: 1; font-size: 14px; padding: 10px 8px; }
+
+/* 품목 1개 용량 */
+.row-spec { display: flex; align-items: center; gap: 6px; padding-left: 4px; font-size: 13px; flex-wrap: wrap; }
+.spec-label { color: var(--ink-2); white-space: nowrap; }
+.row-spec input { width: 84px; flex: none; padding: 6px 8px; font-size: 14px; }
+.row-spec input.unit { width: 64px; }
+.spec-tag { font-style: normal; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; }
+.row-spec .add-disc { margin-left: auto; }
+.spec-note { margin: 0 2px; }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compact, won, normKey, isYmd, pct, pctShort, dateLabel, shortDate, esc } from '../../src/lib/format.js';
+import { maskKey, compact, won, normKey, isYmd, pct, pctShort, dateLabel, shortDate, esc } from '../../src/lib/format.js';
 
 describe('표시 형식', () => {
   it('달력 칸 축약 금액', () => {
@@ -30,6 +30,11 @@ describe('표시 형식', () => {
     expect(normKey('주식회사 싱싱농산')).toBe(normKey('㈜싱싱농산'));
     expect(normKey('양파 20kg')).toBe(normKey('양파20KG'));
     expect(normKey('KS 케틀핑크 칩')).toBe('ks케틀핑크칩');
+  });
+  it('API 키 가리기', () => {
+    expect(maskKey('sk-ant-api03-ABCDEFGHIJKLMNOP-a1b2')).toBe('sk-ant-api03-…a1b2');
+    expect(maskKey('short')).toBe('shor…');
+    expect(maskKey('')).toBe('');
   });
   it('HTML 이스케이프', () => expect(esc(`<b a="1">'&`)).toBe('&lt;b a=&quot;1&quot;&gt;&#39;&amp;'));
 });

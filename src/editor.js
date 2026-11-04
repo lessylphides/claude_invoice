@@ -3,6 +3,7 @@
 import { esc, num, won, todayStr, uid } from './format.js';
 import { store, purchaseTotal } from './store.js';
 import { openSheet, toast } from './sheet.js';
+import { payChoiceHTML } from './payui.js';
 
 /**
  * @param {object} draft 초기값 (purchase 형식, id 가 있으면 수정)
@@ -39,9 +40,7 @@ export function openEditor(draft, { imageFile, note } = {}) {
             <datalist id="vendor-list">${store.vendorNames().map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
             <fieldset class="pay">
               <legend>결제 구분</legend>
-              <label class="chk"><input type="checkbox" name="tax" ${p.payType === 'tax' ? 'checked' : ''}> 세금계산서</label>
-              <label class="chk"><input type="checkbox" name="card" ${p.payType === 'card' ? 'checked' : ''}> 카드</label>
-              <label class="chk issued" ${p.payType === 'tax' ? '' : 'hidden'}><input type="checkbox" name="taxIssued" ${p.taxIssued ? 'checked' : ''}> 발행 받음</label>
+              <div class="pay-slot"></div>
             </fieldset>
             <h3 class="sub">품목</h3>
             <div class="row-nums item-head" aria-hidden="true"><span>분류</span><span>수량</span><span>단위</span><span>단가</span><span>금액</span></div>
@@ -116,15 +115,18 @@ export function openEditor(draft, { imageFile, note } = {}) {
           itemsEl.lastElementChild.querySelector('input').focus();
         });
 
-        const tax = form.elements.tax, card = form.elements.card;
-        const issuedLabel = body.querySelector('.issued');
-        tax.addEventListener('change', () => {
-          if (tax.checked) card.checked = false;
-          issuedLabel.hidden = !tax.checked;
-        });
-        card.addEventListener('change', () => {
-          if (card.checked) tax.checked = false;
-          issuedLabel.hidden = !tax.checked;
+        // 결제 구분: 세금계산서를 고르면 그 안쪽에 '발행 받음'이 나타남
+        const paySlot = body.querySelector('.pay-slot');
+        const drawPay = () => (paySlot.innerHTML = payChoiceHTML({ payType: p.payType, issued: p.taxIssued }));
+        drawPay();
+        paySlot.addEventListener('change', (e) => {
+          const kind = e.target.dataset.pay;
+          if (kind === 'tax' || kind === 'card') {
+            p.payType = e.target.checked ? kind : '';
+            if (p.payType !== 'tax') p.taxIssued = false;
+          } else if (kind === 'issued') p.taxIssued = e.target.checked;
+          drawPay();
+          paySlot.querySelector(`[data-pay="${kind}"]`)?.focus();
         });
 
         body.querySelector('.cancel').addEventListener('click', close);
@@ -133,8 +135,6 @@ export function openEditor(draft, { imageFile, note } = {}) {
           p.date = form.elements.date.value;
           p.vendor = form.elements.vendor.value.trim();
           p.memo = form.elements.memo.value;
-          p.payType = tax.checked ? 'tax' : card.checked ? 'card' : '';
-          p.taxIssued = tax.checked && form.elements.taxIssued.checked;
           if (!p.date) return toast('날짜를 입력해 주세요.');
           if (!p.vendor) return toast('거래처를 입력해 주세요.');
           p.items = p.items.filter((i) => String(i.name || '').trim() || Number(i.amount));

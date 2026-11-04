@@ -5,6 +5,7 @@ import { openSheet, showBusy, toast } from './sheet.js';
 import { openEditor, draftFromOcr } from './editor.js';
 import { extractReceipt } from './ocr.js';
 import { renderTrendChart } from './chart.js';
+import { payChoiceHTML, payBreakdownHTML } from './payui.js';
 
 const app = document.getElementById('app');
 const now = new Date();
@@ -183,14 +184,7 @@ function summaryBody(mp, total, pay) {
 function payPanel(pay, total) {
   const pv = [...pay.pendingVendors.values()].sort((a, b) => b.total - a.total);
   return `
-    <div class="pay-grid">
-      <div class="pay-card"><p>세금계산서</p><b>${won(pay.tax)}</b></div>
-      <div class="pay-card ok"><p>✔ 발행 받음</p><b>${won(pay.taxIssued)}</b></div>
-      <div class="pay-card warn"><p>⚠ 미발행</p><b>${won(pay.taxPending)}</b></div>
-      <div class="pay-card"><p>카드</p><b>${won(pay.card)}</b></div>
-      <div class="pay-card muted-card"><p>미지정</p><b>${won(pay.none)}</b></div>
-      <div class="pay-card muted-card"><p>합계</p><b>${won(total)}</b></div>
-    </div>
+    ${payBreakdownHTML(pay, { total })}
     ${
       pv.length
         ? `<h3 class="sub">세금계산서 미발행 거래처</h3>
@@ -220,13 +214,7 @@ function openDay(date) {
       const pay = paySummary(ps);
       body.innerHTML = `
         <div class="day-total"><span>이날 매입 합계</span><strong>${won(total)}</strong></div>
-        ${
-          pay.tax
-            ? `<div class="day-pay"><span>세금계산서 ${won(pay.tax)}</span><span class="ok">발행 ${won(pay.taxIssued)}</span><span class="warn">미발행 ${won(pay.taxPending)}</span>${pay.card ? `<span>카드 ${won(pay.card)}</span>` : ''}</div>`
-            : pay.card
-              ? `<div class="day-pay"><span>카드 ${won(pay.card)}</span></div>`
-              : ''
-        }
+        ${ps.length ? `<div class="day-pay">${payBreakdownHTML(pay, { compact: true })}</div>` : ''}
         <div class="seg" role="tablist">
           <button role="tab" aria-selected="${mode === 'vendor'}" data-mode="vendor">매입처별</button>
           <button role="tab" aria-selected="${mode === 'category'}" data-mode="category">항목별</button>
@@ -282,17 +270,7 @@ function dayByVendor(ps) {
           <h3>${esc(g.name)}</h3>
           <strong>${won(g.total)}</strong>
         </header>
-        <div class="pay-checks">
-          <label class="chk"><input type="checkbox" data-pay="tax" data-ids="${ids}" ${payType === 'tax' ? 'checked' : ''}> 세금계산서</label>
-          <label class="chk"><input type="checkbox" data-pay="card" data-ids="${ids}" ${payType === 'card' ? 'checked' : ''}> 카드</label>
-          ${
-            payType === 'tax'
-              ? `<label class="chk issued ${issued ? 'ok' : 'warn'}"><input type="checkbox" data-pay="issued" data-ids="${ids}" ${issued ? 'checked' : ''}> ${issued ? '발행 받음' : '미발행'}</label>`
-              : payType === 'mixed'
-                ? '<span class="muted small">영수증마다 결제 구분이 다릅니다</span>'
-                : ''
-          }
-        </div>
+        <div class="pay-checks">${payChoiceHTML({ payType, issued, attrs: `data-ids="${ids}"` })}</div>
         <ul class="item-list">${g.items.map(({ item }) => itemLi(item, g.name)).join('')}</ul>
         <footer class="receipts">
           ${g.purchases

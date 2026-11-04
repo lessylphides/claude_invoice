@@ -106,7 +106,7 @@ test('설정: API 키·모델·분류 목록 저장', async ({ page }) => {
   await openApp(page);
   await page.locator('[data-act=settings]').click();
   const s = sheet(page);
-  await s.locator('[name=apiKey]').fill('  sk-ant-abc  ');
+  await s.locator('[name=apiKey]').fill('  sk-ant-abc  ');  // 앞뒤 공백은 지움
   await s.locator('[name=model]').selectOption('claude-sonnet-5-5');
   await s.locator('[name=cats]').fill('주류\n\n안주\n주류');
   await s.locator('button[type=submit]').click();

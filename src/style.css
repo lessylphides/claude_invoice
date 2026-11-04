@@ -409,3 +409,5 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .cat-count { min-width: 30px; text-align: right; }
 .cat-add { display: flex; gap: 8px; }
 .cat-add .btn { flex: none; }
+.key-status { margin: 0 2px; }
+.key-status code { font-family: ui-monospace, Menlo, monospace; background: var(--surface-2); padding: 2px 6px; border-radius: 6px; }

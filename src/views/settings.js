@@ -1,5 +1,5 @@
 // 설정: Claude API 키·모델, 분류 목록, CSV 내보내기, 백업/복원
-import { dotDate, esc, num, todayStr } from '../lib/format.js';
+import { dotDate, esc, maskKey, num, todayStr } from '../lib/format.js';
 import { purchasesCsv } from '../lib/csv.js';
 import { daysBetween } from '../lib/backup.js';
 import { download } from '../ui/download.js';
@@ -26,8 +26,13 @@ export function openSettings() {
       body.innerHTML = `
         <form class="settings">
           <h3 class="sub">영수증 자동 인식 (Claude API)</h3>
-          <label>API 키<input name="apiKey" type="password" autocomplete="off" placeholder="sk-ant-..." value="${esc(s.apiKey)}"></label>
-          <p class="muted small">키는 이 기기의 브라우저에만 저장되고 Anthropic API 로만 전송됩니다. 키는 console.anthropic.com 에서 발급받을 수 있습니다.</p>
+          <p class="key-status small">${
+            s.apiKey ? `저장된 키: <code>${esc(maskKey(s.apiKey))}</code>` : '<b class="warn">저장된 키 없음</b> — 영수증 자동 인식을 쓰려면 키를 넣어 주세요.'
+          }</p>
+          <label>${s.apiKey ? '새 키로 바꾸기 (비워 두면 그대로)' : 'API 키'}<input name="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-api03-..."></label>
+          ${s.apiKey ? '<button type="button" class="btn ghost danger-text" data-act="clear-key">이 기기에서 키 지우기</button>' : ''}
+          <p class="muted small">키는 <b>이 기기에만</b> 저장되고 Anthropic API 로만 전송됩니다(앱 코드·주소에는 없음). 키는 platform.claude.com 에서 발급합니다.</p>
+          <p class="muted small">안전하게 쓰려면 Console 에서 <b>자동 충전 끄기</b>, <b>월 사용 한도</b> 정하기, <b>이 앱 전용 키</b>를 쓰세요. 휴대폰을 잃어버리면 Console 에서 키를 바로 삭제하세요.</p>
           <label>인식 모델<select name="model">${MODELS.map((m) => `<option value="${m.id}" ${m.id === s.model ? 'selected' : ''}>${m.label}</option>`).join('')}</select></label>
 
           <h3 class="sub">항목(분류) 목록</h3>
@@ -49,9 +54,17 @@ export function openSettings() {
       const form = body.querySelector('form');
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        store.saveSettings({ apiKey: form.elements.apiKey.value.trim(), model: form.elements.model.value });
+        const newKey = form.elements.apiKey.value.trim();
+        // 새 키를 적었을 때만 바꿈 (저장된 키는 화면에 다시 넣지 않음)
+        store.saveSettings({ ...(newKey ? { apiKey: newKey } : {}), model: form.elements.model.value });
         store.setCategories(form.elements.cats.value.split('\n'));
         toast('설정을 저장했습니다.');
+        close();
+      });
+      body.querySelector('[data-act=clear-key]')?.addEventListener('click', () => {
+        if (!confirm('이 기기에서 API 키를 지울까요? 영수증 자동 인식이 꺼집니다. (Console 의 키 자체는 지워지지 않습니다)')) return;
+        store.saveSettings({ apiKey: '' });
+        toast('이 기기에서 키를 지웠습니다.');
         close();
       });
       body.querySelector('[data-act=csv]').addEventListener('click', () => download(`매입_${monthKey()}.csv`, purchasesCsv(monthPurchases()), 'text/csv'));

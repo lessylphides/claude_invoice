@@ -71,3 +71,11 @@ export const pctShort = (v) => pct(v).replace('.0%', '%');
 
 /** '2026-11-04' → '2026.11.04' */
 export const dotDate = (d) => String(d).replaceAll('-', '.');
+
+/** API 키를 화면에 보여줄 때 앞·끝 몇 글자만: 'sk-ant-api03-…a1b2' */
+export function maskKey(k) {
+  const s = String(k ?? '');
+  if (!s) return '';
+  if (s.length <= 16) return `${s.slice(0, 4)}…`;
+  return `${s.slice(0, 13)}…${s.slice(-4)}`;
+}

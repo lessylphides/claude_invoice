@@ -11,6 +11,14 @@ function readTab() {
   }
 }
 
+function readCostFilter() {
+  try {
+    return localStorage.getItem('maeip.costFilter') || '전체';
+  } catch {
+    return '전체';
+  }
+}
+
 export const view = {
   year: now.getFullYear(),
   month: now.getMonth() + 1, // 1-12
@@ -18,7 +26,16 @@ export const view = {
   expanded: new Set(), // 월 요약에서 펼친 줄
   selectedDate: null, // 열려 있는 날짜 상세
   tab: readTab(), // purchase | cost
+  costFilter: readCostFilter(), // 원가 탭 분류 칩: '전체' | 분류 이름 | '미분류'
 };
+
+export function setCostFilter(f) {
+  view.costFilter = f;
+  try {
+    localStorage.setItem('maeip.costFilter', f);
+  } catch {}
+  rerender();
+}
 
 let renderFn = () => {};
 export const setRenderer = (fn) => (renderFn = fn);

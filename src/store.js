@@ -4,6 +4,7 @@
 import { normKey, todayStr } from './lib/format.js';
 import { migrate, mergeLegacy, sanitizePurchase, sanitizeMenu, sanitizeCategories, parseTarget } from './lib/model.js';
 import { buildItemIndex } from './lib/itemIndex.js';
+import { applyCategoryEdit } from './lib/menuCategories.js';
 import * as persist from './persist.js';
 
 const SETTINGS_KEY = 'maeip.settings.v1';
@@ -195,6 +196,22 @@ export const store = {
   removeMenu(id) {
     data.menus = data.menus.filter((m) => m.id !== id);
     commit();
+  },
+  /** 원가 탭 메뉴 분류 (보여줄 순서대로) */
+  get menuCategories() {
+    return data.menuCategories;
+  },
+  /**
+   * 분류 편집 저장 (추가·이름 바꾸기·삭제·순서). 지운 분류의 메뉴는 미분류로.
+   * @param {Array<{orig: string|null, name: string}>} entries
+   * @returns {number} 미분류로 옮겨진 메뉴 수
+   */
+  saveMenuCategories(entries) {
+    const r = applyCategoryEdit(data.menus, entries, data.menuCategories);
+    data.menuCategories = r.categories;
+    data.menus = r.menus;
+    commit();
+    return r.moved;
   },
   /** 현재 목표 원가율 {value, at, note?} */
   get costTarget() {

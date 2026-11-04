@@ -8,7 +8,7 @@ const many = (n) => ({
 
 test('예전(localStorage) 데이터를 IndexedDB 로 옮기고 예전 것은 지운다', async ({ page }) => {
   await openApp(page, { data: many(3) });
-  await waitSaved(page, (d) => d?.purchases?.length === 3 && d.version === 2);
+  await waitSaved(page, (d) => d?.purchases?.length === 3 && d.version === 3);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('maeip.data.v1'))).toBeNull();
   await page.reload();
   await page.locator('[data-act=prev]').click();

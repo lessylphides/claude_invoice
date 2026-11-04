@@ -12,14 +12,19 @@
 //             packSize, packUnit }], // 수량 1개의 용량, 예: 700 'ml' / 7 '개'. 원가 계산에 사용
 //   memo, createdAt
 // }
-// menu = { id, name, price(판매가), createdAt,
+// menu = { id, name, price(판매가), category(메뉴 분류, ''=미분류), createdAt,
 //          ingredients: [ { id, type:'item', itemName, packSize, unit, use }   // 매입 품목: 1개(packSize) 중 use 만큼
 //                       | { id, type:'manual', name, cost } ] }              // 영수증에 없는 재료: 1잔당 원가
 // costTarget = { history: [{ value, at:'YYYY-MM-DD', note? }] }  마지막 항목이 현재 목표 원가율
+// menuCategories = ['커피', '위스키', ...]  원가 탭의 메뉴 분류 (이 순서대로 보여줌)
 
 import { isYmd, todayStr, uid } from './format.js';
 
-export const DATA_VERSION = 2;
+export const DATA_VERSION = 3; // 3: 메뉴 분류(menuCategories, menu.category) 추가
+
+export const DEFAULT_MENU_CATEGORIES = ['커피', '위스키', '칵테일', '맥주', '티', '디저트'];
+export const UNCATEGORIZED = '미분류';
+const RESERVED_MENU_CATEGORIES = ['전체', UNCATEGORIZED];
 
 export const DEFAULT_CATEGORIES = ['채소·과일', '육류', '수산물', '곡물·가공식품', '유제품·계란', '양념·소스', '주류·음료', '포장·소모품', '공산품·비품', '기타'];
 
@@ -133,6 +138,7 @@ export function sanitizeMenu(raw) {
     id: m.id || uid(),
     name: str(m.name) || '(이름 없음)',
     price: Math.round(nonNeg(m.price)),
+    category: RESERVED_MENU_CATEGORIES.includes(str(m.category)) ? '' : str(m.category),
     ingredients: list(m.ingredients).map(sanitizeIngredient).filter((g) => g.type === 'manual' || g.itemName),
     createdAt: toNum(m.createdAt) || Date.now(),
   };
@@ -145,6 +151,11 @@ export function sanitizeCostTarget(ct) {
     .map((h) => ({ value: Math.round(toNum(h?.value) * 10) / 10, at: isYmd(h?.at) ? h.at : todayStr(), ...(h?.note ? { note: String(h.note) } : {}) }))
     .filter((h) => validTarget(h.value));
   return { history: history.length ? history : [{ value: DEFAULT_TARGET, at: todayStr(), note: '기본값' }] };
+}
+
+/** 메뉴 분류 목록: 앞뒤 공백·빈 이름·중복·예약어(전체, 미분류) 제거. 비워 둘 수도 있음 */
+export function sanitizeMenuCategories(names) {
+  return [...new Set((Array.isArray(names) ? names : []).map(str).filter((n) => n && !RESERVED_MENU_CATEGORIES.includes(n)))];
 }
 
 export function sanitizeCategories(list) {
@@ -164,13 +175,27 @@ export function migrate(raw, { trusted = false } = {}) {
   const d = raw && typeof raw === 'object' ? raw : {};
   // 이 앱이 직접 저장한 현재 형식이면 품목 하나하나를 다시 정리하지 않음 (시작을 빠르게).
   // 백업 파일처럼 밖에서 들어온 데이터(trusted=false)는 항상 전부 검사.
-  if (trusted && d.version === DATA_VERSION && Array.isArray(d.purchases) && Array.isArray(d.menus) && Array.isArray(d.categories) && Array.isArray(d.costTarget?.history) && d.costTarget.history.length)
+  if (
+    trusted &&
+    d.version === DATA_VERSION &&
+    Array.isArray(d.purchases) &&
+    Array.isArray(d.menus) &&
+    Array.isArray(d.categories) &&
+    Array.isArray(d.menuCategories) &&
+    Array.isArray(d.costTarget?.history) &&
+    d.costTarget.history.length
+  )
     return d;
+  const menus = list(d.menus).map(sanitizeMenu);
+  // v2 이하: 메뉴 분류가 없으면 기본 분류로 시작. 메뉴에 적힌 분류가 목록에 없으면 목록 끝에 더함
+  const menuCategories = sanitizeMenuCategories(Array.isArray(d.menuCategories) ? d.menuCategories : DEFAULT_MENU_CATEGORIES);
+  for (const m of menus) if (m.category && !menuCategories.includes(m.category)) menuCategories.push(m.category);
   return {
     version: DATA_VERSION,
     purchases: list(d.purchases).map(sanitizePurchase),
     categories: sanitizeCategories(d.categories),
-    menus: list(d.menus).map(sanitizeMenu),
+    menus,
+    menuCategories,
     costTarget: sanitizeCostTarget(d.costTarget),
   };
 }

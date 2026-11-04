@@ -6,6 +6,7 @@ import { openEditor, draftFromOcr } from './editor.js';
 import { extractReceipt } from './ocr.js';
 import { renderTrendChart } from './chart.js';
 import { payChoiceHTML, payBreakdownHTML } from './payui.js';
+import { initCost, renderCostTab, handleCostClick } from './cost.js';
 
 const app = document.getElementById('app');
 const now = new Date();
@@ -15,6 +16,7 @@ const view = {
   summary: 'vendor', // vendor | category | pay
   expanded: new Set(),
   selectedDate: null,
+  tab: readTab(), // purchase | cost
 };
 
 const PAY_LABEL = { tax: '세금계산서', card: '카드', '': '미지정' };
@@ -92,7 +94,27 @@ function aggregateItems(entries) {
 
 // ───────────────────────── 메인 화면 ─────────────────────────
 
+function readTab() {
+  try {
+    return localStorage.getItem('maeip.tab') === 'cost' ? 'cost' : 'purchase';
+  } catch {
+    return 'purchase';
+  }
+}
+
+function tabBar() {
+  return `<nav class="tabbar" aria-label="화면 전환">
+    ${[['purchase', '🧾', '매입'], ['cost', '📊', '원가']]
+      .map(([k, i, l]) => `<button data-tab="${k}" aria-current="${view.tab === k ? 'page' : 'false'}"><span>${i}</span>${l}</button>`)
+      .join('')}
+  </nav>`;
+}
+
 function render() {
+  if (view.tab === 'cost') {
+    app.innerHTML = renderCostTab() + tabBar();
+    return;
+  }
   const mp = monthPurchases();
   const total = mp.reduce((s, p) => s + purchaseTotal(p), 0);
   const pay = paySummary(mp);
@@ -128,6 +150,7 @@ function render() {
     <div class="fab-wrap">
       <button class="fab" data-act="capture" aria-label="영수증 촬영">📷<span>영수증 촬영</span></button>
     </div>
+    ${tabBar()}
   `;
 }
 
@@ -589,6 +612,16 @@ function download(name, content, type) {
 // ───────────────────────── 이벤트 ─────────────────────────
 
 app.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) {
+    view.tab = tab.dataset.tab;
+    try {
+      localStorage.setItem('maeip.tab', view.tab);
+    } catch {}
+    window.scrollTo(0, 0);
+    return render();
+  }
+  if (handleCostClick(e)) return;
   const t = e.target.closest('[data-act],[data-date],[data-summary],[data-expand],[data-trend]');
   if (!t) return;
   if (t.dataset.date) return openDay(t.dataset.date);
@@ -634,6 +667,7 @@ app.addEventListener('touchend', (e) => {
   app.querySelector(`[data-act=${dx < 0 ? 'next' : 'prev'}]`).click();
 });
 
+initCost({ openTrend: (name) => openTrend(name) });
 store.subscribe(render);
 render();
 

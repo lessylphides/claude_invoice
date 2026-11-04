@@ -146,3 +146,20 @@ test('메뉴에 용량을 직접 적으면 매입 기록보다 우선한다', as
   // 17,990 / 14 = 1,285원 → 25.7%
   await expect(page.locator('.mc-rate')).toHaveText('25.7%');
 });
+
+test('계산할 수 있는 재료가 없으면 0% 가 아니라 "계산 불가"로 보이고 평균에서 빠진다', async ({ page }) => {
+  await openApp(page, { data: data(), tab: 'cost' });
+  await addMenu(page, '몽키숄더 한 잔', 12000, [{ item: '몽키숄더700ML', use: 30 }]);
+  // 사용량을 0 으로 두면 이 재료는 계산할 수 없음
+  await page.locator('[data-cost=add]').click();
+  const form = page.locator('.menu-editor');
+  await form.locator('[name=name]').fill('바스크 (용량 없음)');
+  await form.locator('[name=price]').fill('8000');
+  await form.locator('[data-add=item]').click();
+  await sheet(page).locator('.pick-item[data-name="바스크치즈케이크"]').click();
+  await form.locator('.ing-edit').last().locator('[data-f=use]').fill('0');
+  await form.locator('button[type=submit]').click();
+  const card = page.locator('.menu-card', { hasText: '용량 없음' });
+  await expect(card.locator('.mc-rate')).toHaveText('계산 불가');
+  await expect(page.locator('.cost-summary')).toContainText('평균 14.2%');
+});

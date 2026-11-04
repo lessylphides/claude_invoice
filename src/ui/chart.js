@@ -1,6 +1,6 @@
 // 가격 추이 꺾은선 차트 (단일 시리즈, 인라인 SVG, 탭/호버 툴팁)
 
-import { esc, num, shortDate } from './format.js';
+import { esc, num, shortDate } from '../lib/format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 

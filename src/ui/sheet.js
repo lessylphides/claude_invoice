@@ -1,6 +1,6 @@
 // 하단 시트(모달) 스택 + 토스트
 
-import { store } from './store.js';
+import { store } from '../store.js';
 
 const stack = [];
 

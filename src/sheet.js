@@ -87,24 +87,38 @@ export function showBusy(msg) {
 }
 
 // ── 아이폰 키보드 대응 ──
-// 키보드가 올라오면 화면에 실제로 보이는 영역(visualViewport)이 줄어듭니다.
-// 시트를 그 영역에 맞춰 두면, 칸을 옮길 때마다(숫자 키패드 ↔ 글자 키보드) 시트가 위아래로 튀지 않고
-// 시트 안에서만 스크롤됩니다.
+// 키보드가 올라와 있는 동안에만 시트를 '실제로 보이는 영역(visualViewport)'에 맞춥니다.
+// 입력이 끝나면(포커스가 빠지면) 무조건 원래 전체 높이로 되돌립니다.
+// (아이폰은 키보드가 내려갈 때 크기 변경 신호를 빠뜨리는 경우가 있어, 신호에만 의존하면 시트가 작게 남습니다.)
 const vv = window.visualViewport;
 if (vv) {
   const root = document.documentElement.style;
-  let raf = 0;
-  const sync = () => {
-    cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      root.setProperty('--vv-top', `${vv.offsetTop}px`);
-      root.setProperty('--vv-h', `${vv.height}px`);
-      // 입력 중인 칸이 키보드에 가리지 않게 시트 안에서만 살짝 스크롤
-      const el = document.activeElement;
-      if (el && el.closest?.('.sheet-body') && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) el.scrollIntoView({ block: 'nearest' });
-    });
+  const editing = () => {
+    const el = document.activeElement;
+    return !!(el && el.closest?.('.sheet-body') && /^(INPUT|TEXTAREA)$/.test(el.tagName) && !/^(checkbox|radio|button|submit)$/.test(el.type));
   };
-  vv.addEventListener('resize', sync);
-  vv.addEventListener('scroll', sync);
-  sync();
+  const reset = () => {
+    root.removeProperty('--vv-top');
+    root.removeProperty('--vv-h');
+  };
+  const apply = () => {
+    // 키보드가 보이는 상황: 입력 중이고, 보이는 높이가 창 높이보다 눈에 띄게 작을 때
+    if (editing() && vv.height < window.innerHeight - 80) {
+      root.setProperty('--vv-top', `${Math.max(0, vv.offsetTop)}px`);
+      root.setProperty('--vv-h', `${vv.height}px`);
+      const el = document.activeElement;
+      el.scrollIntoView({ block: 'nearest' });
+    } else reset();
+  };
+  let raf = 0;
+  const schedule = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(apply);
+  };
+  vv.addEventListener('resize', schedule);
+  vv.addEventListener('scroll', schedule);
+  window.addEventListener('orientationchange', () => setTimeout(apply, 300));
+  document.addEventListener('focusin', () => [50, 300].forEach((t) => setTimeout(apply, t)));
+  // 칸에서 칸으로 옮길 때는 잠깐 포커스가 비므로, 조금 기다렸다가 확인 후 되돌림
+  document.addEventListener('focusout', () => [120, 400, 800].forEach((t) => setTimeout(apply, t)));
 }

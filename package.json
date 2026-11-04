@@ -1,0 +1,28 @@
+{
+  "name": "maeip-calendar",
+  "version": "1.0.0",
+  "description": "캘린더 형식 매입 물품 정리 앱 (영수증·거래명세서 촬영 자동 입력)",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lessylphides/claude_invoice.git"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/lessylphides/claude_invoice/issues"
+  },
+  "homepage": "https://github.com/lessylphides/claude_invoice#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5"
+  },
+  "private": true,
+  "type": "module"
+}

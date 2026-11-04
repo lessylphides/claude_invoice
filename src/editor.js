@@ -1,7 +1,7 @@
 // 매입 내역 입력/수정 폼 (촬영 인식 결과 검토 포함)
 
 import { esc, num, won, todayStr, uid } from './format.js';
-import { store, purchaseTotal } from './store.js';
+import { store, purchaseTotal, guessPack, PACK_UNITS } from './store.js';
 import { openSheet, toast } from './sheet.js';
 import { payChoiceHTML } from './payui.js';
 
@@ -50,6 +50,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
             </fieldset>
             <h3 class="sub">품목</h3>
             <div class="row-nums item-head" aria-hidden="true"><span>분류</span><span>수량</span><span>단위</span><span>단가</span><span>금액</span></div>
+            <datalist id="pack-units">${PACK_UNITS.map((u) => `<option value="${u}">`).join('')}</datalist>
             <div class="items"></div>
             <button type="button" class="btn ghost add-item">+ 품목 추가</button>
             <label>메모<input name="memo" value="${esc(p.memo)}" placeholder="선택"></label>
@@ -83,6 +84,13 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
                 <input data-f="unitPrice" type="number" inputmode="numeric" placeholder="단가" value="${it.unitPrice ?? ''}" aria-label="단가">
                 <input data-f="amount" type="number" inputmode="numeric" placeholder="금액" value="${it.amount ?? ''}" aria-label="금액(할인 후)">
               </div>
+              <div class="row-spec">
+                <span class="spec-label">1개 용량</span>
+                <input data-f="packSize" type="number" inputmode="decimal" step="any" min="0" placeholder="예: 700" value="${it.packSize || ''}" aria-label="1개 용량">
+                <input data-f="packUnit" list="pack-units" class="unit" placeholder="ml" value="${esc(it.packUnit || '')}" aria-label="용량 단위">
+                ${it._specFrom === 'history' ? '<em class="spec-tag">이전 기록</em>' : ''}
+                ${Number(it.discount) || it._showDisc ? '' : '<button type="button" class="link add-disc">+ 쿠폰·할인</button>'}
+              </div>
               ${
                 Number(it.discount) || it._showDisc
                   ? `<div class="row-disc">
@@ -91,7 +99,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
                        <span class="disc-net">정가 ${num((Number(it.qty) || 0) * (Number(it.unitPrice) || 0))}원</span>
                        <button type="button" class="link danger rm-disc">빼기</button>
                      </div>`
-                  : '<button type="button" class="link add-disc">+ 쿠폰·할인</button>'
+                  : ''
               }
             </div>`,
             )
@@ -105,8 +113,12 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           if (!f) return;
           const row = e.target.closest('.item-edit');
           const it = p.items[+row.dataset.idx];
-          const numeric = ['qty', 'unitPrice', 'amount', 'discount'].includes(f);
+          const numeric = ['qty', 'unitPrice', 'amount', 'discount', 'packSize'].includes(f);
           it[f] = numeric ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value;
+          if (f === 'packSize' || f === 'packUnit') {
+            it._specFrom = '';
+            row.querySelector('.spec-tag')?.remove();
+          }
           if (f === 'qty' || f === 'unitPrice' || f === 'discount') {
             // 금액 = 수량 × 정가 단가 - 할인
             const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
@@ -120,7 +132,11 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           updateSum();
         });
         itemsEl.addEventListener('change', (e) => {
-          if (e.target.dataset.f === 'category') p.items[+e.target.closest('.item-edit').dataset.idx].category = e.target.value;
+          const it = p.items[+e.target.closest('.item-edit')?.dataset.idx];
+          if (!it) return;
+          if (e.target.dataset.f === 'category') it.category = e.target.value;
+          // 품목명을 입력하면 같은 품목의 이전 용량 기록(없으면 이름의 700ML 등)으로 용량을 채움
+          if (e.target.dataset.f === 'name' && !Number(it.packSize) && fillSpec(it)) setTimeout(drawItems);
         });
         itemsEl.addEventListener('click', (e) => {
           const row = e.target.closest('.item-edit');
@@ -184,7 +200,22 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
 }
 
 function blankItem() {
-  return { id: uid(), name: '', category: '기타', qty: 1, unit: '', unitPrice: '', discount: 0, amount: '' };
+  return { id: uid(), name: '', category: '기타', qty: 1, unit: '', unitPrice: '', discount: 0, amount: '', packSize: '', packUnit: '' };
+}
+
+/** 이전 매입 기록의 용량 → 이름에서 추정한 용량 순으로 채움. 채웠으면 true */
+function fillSpec(it) {
+  const prev = store.itemSpec(it.name);
+  if (prev) {
+    Object.assign(it, prev, { _specFrom: 'history' });
+    return true;
+  }
+  const g = guessPack(it.name);
+  if (g) {
+    Object.assign(it, g, { _specFrom: '' });
+    return true;
+  }
+  return false;
 }
 
 /** Claude 인식 결과(JSON) → purchase 초안 */
@@ -203,8 +234,16 @@ export function draftFromOcr(r, fallbackDate) {
       unitPrice,
       discount,
       amount: i.amount || qty * unitPrice - discount,
+      packSize: Number(i.packSize) || 0,
+      packUnit: Number(i.packSize) ? i.packUnit || '' : '',
     };
   });
+  // 같은 품목을 전에 산 적이 있으면 그때 확인한 용량을 우선 사용 (없으면 인식값, 그것도 없으면 이름에서 추정)
+  for (const it of items) {
+    const prev = store.itemSpec(it.name);
+    if (prev) Object.assign(it, prev, { _specFrom: 'history' });
+    else if (!it.packSize) fillSpec(it);
+  }
   if (!items.length && r.total) items.push({ id: uid(), name: '합계', category: '기타', qty: 1, unit: '', unitPrice: r.total, amount: r.total });
 
   const notes = [];

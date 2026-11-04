@@ -85,3 +85,26 @@ export function showBusy(msg) {
   document.body.append(el);
   return { update: (m) => (p.textContent = m), done: () => el.remove() };
 }
+
+// ── 아이폰 키보드 대응 ──
+// 키보드가 올라오면 화면에 실제로 보이는 영역(visualViewport)이 줄어듭니다.
+// 시트를 그 영역에 맞춰 두면, 칸을 옮길 때마다(숫자 키패드 ↔ 글자 키보드) 시트가 위아래로 튀지 않고
+// 시트 안에서만 스크롤됩니다.
+const vv = window.visualViewport;
+if (vv) {
+  const root = document.documentElement.style;
+  let raf = 0;
+  const sync = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      root.setProperty('--vv-top', `${vv.offsetTop}px`);
+      root.setProperty('--vv-h', `${vv.height}px`);
+      // 입력 중인 칸이 키보드에 가리지 않게 시트 안에서만 살짝 스크롤
+      const el = document.activeElement;
+      if (el && el.closest?.('.sheet-body') && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) el.scrollIntoView({ block: 'nearest' });
+    });
+  };
+  vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync);
+  sync();
+}

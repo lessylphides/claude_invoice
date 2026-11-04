@@ -49,17 +49,20 @@ export async function openApp(page, { data, settings, tab } = {}) {
  */
 export async function mockClaude(page, respond) {
   const requests = [];
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
   await page.route('https://api.anthropic.com/**', async (route) => {
+    // WebKit(아이폰 Safari 엔진)은 실제 요청 전에 CORS 확인(OPTIONS)을 먼저 보냄 → 허용으로 응답
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     const body = JSON.parse(route.request().postData());
     requests.push(body);
     const out = await respond(body, requests.length);
     if (out && out.status) {
-      return route.fulfill({ status: out.status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(out.body) });
+      return route.fulfill({ status: out.status, contentType: 'application/json', headers: cors, body: JSON.stringify(out.body) });
     }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      headers: { 'access-control-allow-origin': '*' },
+      headers: cors,
       body: JSON.stringify({
         id: `msg_${requests.length}`, type: 'message', role: 'assistant', model: body.model,
         stop_reason: 'end_turn', stop_details: null, usage: { input_tokens: 1, output_tokens: 1 },

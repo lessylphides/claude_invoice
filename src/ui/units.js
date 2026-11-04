@@ -1,6 +1,6 @@
 // 용량 단위 선택 (타이핑 없이 고르기)
-import { esc } from './format.js';
-import { PACK_UNITS } from './store.js';
+import { esc } from '../lib/format.js';
+import { PACK_UNITS } from '../lib/model.js';
 
 /**
  * @param {string} attrs   select 에 붙일 속성 (예: 'data-f="packUnit"')

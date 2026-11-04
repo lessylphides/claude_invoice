@@ -1,8 +1,16 @@
 // 하단 시트(모달) 스택 + 토스트
 
-import { store } from './store.js';
+import { store } from '../store.js';
+import { esc } from '../lib/format.js';
 
 const stack = [];
+
+// 맨 위 시트만 조작할 수 있게: 뒤쪽 화면과 아래 시트는 inert(누를 수 없고 화면 읽기에서도 숨김)
+function updateInert() {
+  const app = document.getElementById('app');
+  if (app) app.inert = stack.length > 0;
+  stack.forEach((e, i) => (e.wrap.inert = i < stack.length - 1));
+}
 
 /**
  * @param {{title:string, render:(body:HTMLElement, close:()=>void, redraw:()=>void)=>void, live?:boolean, onClose?:()=>void}} opts
@@ -13,7 +21,7 @@ export function openSheet({ title, render, live = false, onClose }) {
   wrap.className = 'sheet-wrap';
   wrap.innerHTML = `
     <div class="sheet-backdrop"></div>
-    <section class="sheet" role="dialog" aria-modal="true" aria-label="${title.replace(/"/g, '&quot;')}">
+    <section class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
       <header class="sheet-head">
         <h2></h2>
         <button class="icon-btn close" aria-label="닫기">✕</button>
@@ -26,6 +34,7 @@ export function openSheet({ title, render, live = false, onClose }) {
   document.body.classList.add('no-scroll');
 
   let unsub = null;
+  const opener = document.activeElement; // 닫으면 포커스를 돌려줄 곳
   const entry = { wrap };
   const close = () => {
     if (!wrap.isConnected) return;
@@ -33,10 +42,13 @@ export function openSheet({ title, render, live = false, onClose }) {
     wrap.remove();
     stack.splice(stack.indexOf(entry), 1);
     if (!stack.length) document.body.classList.remove('no-scroll');
+    updateInert();
+    if (opener?.isConnected && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
     onClose?.();
   };
   entry.close = close;
   stack.push(entry);
+  updateInert();
 
   wrap.querySelector('.sheet-backdrop').addEventListener('click', close);
   wrap.querySelector('.close').addEventListener('click', close);
@@ -52,6 +64,8 @@ export function openSheet({ title, render, live = false, onClose }) {
   };
   draw();
   if (live) unsub = store.subscribe(draw);
+  // 시트 안으로 포커스 이동 (그리는 중 이미 입력칸에 포커스를 줬으면 그대로)
+  if (!wrap.contains(document.activeElement)) wrap.querySelector('.sheet').focus({ preventScroll: true });
   requestAnimationFrame(() => wrap.classList.add('open'));
   return close;
 }
@@ -67,6 +81,7 @@ document.addEventListener('keydown', (e) => {
 export function toast(msg, ms = 2600) {
   const el = document.createElement('div');
   el.className = 'toast';
+  el.setAttribute('role', 'status');
   el.textContent = msg;
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('show'));
@@ -79,6 +94,8 @@ export function toast(msg, ms = 2600) {
 export function showBusy(msg) {
   const el = document.createElement('div');
   el.className = 'busy';
+  el.setAttribute('role', 'alert');
+  el.setAttribute('aria-busy', 'true');
   el.innerHTML = `<div class="busy-box"><div class="spinner"></div><p></p></div>`;
   const p = el.querySelector('p');
   p.textContent = msg;

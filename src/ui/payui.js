@@ -1,7 +1,7 @@
 // 결제 구분 UI (세금계산서 / 카드)
 // '발행 받음'은 세금계산서에 딸린 하위 선택지이므로, 항상 세금계산서 상자 안쪽에 들여써서 보여줍니다.
 
-import { won } from './format.js';
+import { won } from '../lib/format.js';
 
 /**
  * 결제 구분 선택 상자

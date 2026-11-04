@@ -1,76 +1,23 @@
 // 원가 탭: 메뉴별 1잔(1조각) 원가와 원가율
 // 매입 내역의 '가장 최근 매입 단가(할인 반영)'로 자동 계산하므로, 새 영수증이 들어오면 원가율도 바로 바뀝니다.
 
-import { esc, normKey, num, shortDate, uid, won } from './format.js';
-import { store, netUnitPrice, guessPack } from './store.js';
-import { unitSelectHTML } from './units.js';
-import { openSheet, toast } from './sheet.js';
-
-let hooks = { openTrend: () => {} };
-export function initCost(h) {
-  hooks = { ...hooks, ...h };
-}
+import { dotDate, esc, normKey, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
+import { guessPack } from '../lib/model.js';
+import { menuCost, priceForTarget, summarizeMenus } from '../lib/cost.js';
+import { unitSelectHTML } from '../ui/units.js';
+import { openSheet, toast } from '../ui/sheet.js';
+import { store } from '../store.js';
+import { openTrend } from './trend.js';
 
 
-// ───────────────────────── 계산 ─────────────────────────
-
-/** 품목 이름으로 매입 기록 찾기 (최근 순) */
-function itemPurchases(itemName) {
-  const k = normKey(itemName);
-  const rows = [];
-  for (const p of store.purchases)
-    for (const i of p.items)
-      if (normKey(i.name) === k)
-        rows.push({
-          date: p.date, createdAt: p.createdAt, vendor: p.vendor,
-          unitPrice: netUnitPrice(i), discount: Number(i.discount) || 0,
-          packSize: Number(i.packSize) || 0, packUnit: i.packUnit || '',
-        });
-  return rows.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-}
-
-/** 재료 1개의 1잔당 원가. cost=null 이면 계산 불가(사유 reason) */
-function ingredientCost(g) {
-  if (g.type === 'manual') return { cost: Number(g.cost) || 0, prevCost: Number(g.cost) || 0, source: null };
-  const hist = itemPurchases(g.itemName);
-  if (!hist.length) return { cost: null, reason: '매입 기록 없음' };
-  // 1개 용량: 메뉴에 직접 적은 값 → 그 매입 건의 용량 → 같은 품목의 최근 용량 기록 순으로 사용
-  const spec = store.itemSpec(g.itemName);
-  const packOf = (row) => Number(g.packSize) || row.packSize || spec?.packSize || 0;
-  const unit = g.unit || hist[0].packUnit || spec?.packUnit || '';
-  if (!packOf(hist[0]) || !g.use) return { cost: null, reason: !g.use ? '사용량 미입력' : '1개 용량 미입력', source: hist[0], pack: packOf(hist[0]), unit };
-  const per = (row) => (row.unitPrice * g.use) / packOf(row);
-  const prevRow = hist[1] && packOf(hist[1]) ? hist[1] : hist[0];
-  return { cost: per(hist[0]), prevCost: per(prevRow), source: hist[0], prev: hist[1], pack: packOf(hist[0]), unit, packFromItem: !Number(g.packSize) };
-}
-
-export function menuCost(m) {
-  let cost = 0, prevCost = 0, missing = 0;
-  const parts = m.ingredients.map((g) => {
-    const r = ingredientCost(g);
-    if (r.cost == null) missing++;
-    else {
-      cost += r.cost;
-      prevCost += r.prevCost;
-    }
-    return { g, ...r };
-  });
-  const rate = m.price ? (cost / m.price) * 100 : null;
-  return { cost, prevCost, delta: cost - prevCost, rate, missing, parts };
-}
-
-const pct = (v) => (v == null ? '-' : `${(Math.round(v * 10) / 10).toFixed(1)}%`);
-const dot = (d) => d.replaceAll('-', '.');
+const costOf = (m) => menuCost(m, store.index);
+const specOf = (name) => store.index.spec(name);
 
 // ───────────────────────── 원가 탭 화면 ─────────────────────────
 
 export function renderCostTab() {
   const target = store.costTarget;
-  const rows = store.menus.map((m) => ({ m, c: menuCost(m) }));
-  rows.sort((a, b) => (b.c.rate ?? -1) - (a.c.rate ?? -1));
-  const over = rows.filter((r) => r.c.rate != null && r.c.rate > target.value).length;
-  const valid = rows.filter((r) => r.c.rate != null);
-  const avg = valid.length ? valid.reduce((s, r) => s + r.c.rate, 0) / valid.length : null;
+  const { rows, over, avg } = summarizeMenus(store.menus, store.index, target.value);
   const scale = Math.max(50, target.value * 2);
 
   return `
@@ -82,8 +29,8 @@ export function renderCostTab() {
     <section class="hero target-card">
       <div>
         <p class="hero-label">목표 원가율</p>
-        <p class="hero-num">${pct(target.value).replace('.0%', '%')}</p>
-        <p class="hero-sub">${dot(target.at)} ${target.note === '기본값' ? '기본값으로 설정' : '변경'}</p>
+        <p class="hero-num">${pctShort(target.value)}</p>
+        <p class="hero-sub">${dotDate(target.at)} ${target.note === '기본값' ? '기본값으로 설정' : '변경'}</p>
       </div>
       <button class="btn ghost" data-cost="target">변경</button>
     </section>
@@ -109,7 +56,7 @@ function menuCard(m, c, target, scale) {
     <button class="menu-card ${overT ? 'over' : ''}" data-cost-open="${m.id}">
       <span class="mc-top">
         <span class="mc-name">${overT ? '⚠ ' : ''}${esc(m.name)}</span>
-        <span class="mc-rate">${c.missing && c.rate == null ? '<small>계산 불가</small>' : pct(c.rate)}</span>
+        <span class="mc-rate">${c.rate == null ? '<small>계산 불가</small>' : pct(c.rate)}</span>
       </span>
       <span class="mc-sub">
         판매 ${num(m.price)} · 원가 ${num(c.cost)}${c.missing ? ' <em class="warn">(일부 재료 미계산)</em>' : ''}
@@ -148,7 +95,7 @@ function openTargetSheet() {
         <h3 class="sub">변경 기록</h3>
         <ul class="target-hist">${hist
           .map(
-            (h, i) => `<li class="${i === 0 ? 'cur' : ''}"><b>${pct(h.value).replace('.0%', '%')}</b><span>${dot(h.at)}${h.note ? ` · ${esc(h.note)}` : ''}${i === 0 ? ' · 현재' : ''}</span></li>`,
+            (h, i) => `<li class="${i === 0 ? 'cur' : ''}"><b>${pctShort(h.value)}</b><span>${dotDate(h.at)}${h.note ? ` · ${esc(h.note)}` : ''}${i === 0 ? ' · 현재' : ''}</span></li>`,
           )
           .join('')}</ul>`;
       const form = body.querySelector('form');
@@ -177,7 +124,7 @@ function openMenuDetail(id) {
     render(body, close) {
       const m = store.getMenu(id);
       if (!m) return close();
-      const c = menuCost(m);
+      const c = costOf(m);
       const target = store.costTarget.value;
       const overT = c.rate != null && c.rate > target;
       body.innerHTML = `
@@ -188,7 +135,7 @@ function openMenuDetail(id) {
           <div class="${overT ? 'over' : ''}"><p>원가율</p><b>${pct(c.rate)}</b><small>목표 ${target}%</small></div>
           <div><p>마진</p><b>${won(m.price - c.cost)}</b></div>
         </div>
-        ${overT ? `<p class="notice">목표 원가율 ${target}%를 넘었습니다. 목표에 맞추려면 판매가 약 ${won(Math.ceil(c.cost / (target / 100) / 100) * 100)} 이상이 필요합니다.</p>` : ''}
+        ${overT ? `<p class="notice">목표 원가율 ${target}%를 넘었습니다. 목표에 맞추려면 판매가 약 ${won(priceForTarget(c.cost, target))} 이상이 필요합니다.</p>` : ''}
         <h3 class="sub">재료별 원가</h3>
         <ul class="ing-list">${c.parts.map((p) => ingLi(p, c.cost)).join('')}</ul>
         <p class="muted small">매입 품목 재료는 가장 최근 매입 단가(쿠폰·할인 반영)로 계산합니다. ▲▼는 직전 매입 대비 변화입니다.</p>
@@ -196,7 +143,7 @@ function openMenuDetail(id) {
           <button class="btn ghost danger-text" data-del>삭제</button>
           <button class="btn primary" data-edit>수정</button>
         </div>`;
-      body.querySelectorAll('[data-ing-trend]').forEach((b) => b.addEventListener('click', () => hooks.openTrend(b.dataset.ingTrend)));
+      body.querySelectorAll('[data-ing-trend]').forEach((b) => b.addEventListener('click', () => openTrend(b.dataset.ingTrend)));
       body.querySelector('[data-edit]').addEventListener('click', () => openMenuEditor(m));
       body.querySelector('[data-del]').addEventListener('click', () => {
         if (confirm(`'${m.name}' 메뉴를 삭제할까요?`)) {
@@ -217,7 +164,7 @@ function ingLi(p, total) {
   return `<li><button class="item-btn" data-ing-trend="${esc(g.itemName)}">
     <span class="iname">${esc(g.itemName)}
       <small>${p.pack ? `${num(p.pack)}${esc(p.unit)} 중 ${num(g.use)}${esc(p.unit)}` : ''}${
-        p.source ? ` · 최근 ${num(p.source.unitPrice)}원 (${shortDate(p.source.date)} ${esc(p.source.vendor)})` : ''
+        p.source ? ` · 최근 ${num(p.source.price)}원 (${shortDate(p.source.date)} ${esc(p.source.vendor)})` : ''
       }</small>
       ${p.cost == null ? `<small class="warn">${esc(p.reason)}</small>` : ''}
     </span>
@@ -257,7 +204,7 @@ function openMenuEditor(menu) {
       const sumEl = body.querySelector('.sum');
 
       const updateSum = () => {
-        const c = menuCost({ ...m, price: Number(form.elements.price.value) || 0 });
+        const c = costOf({ ...m, price: Number(form.elements.price.value) || 0 });
         const t = store.costTarget.value;
         sumEl.innerHTML = `${won(c.cost)} · <span class="${c.rate != null && c.rate > t ? 'warn' : ''}">${pct(c.rate)}</span>`;
         ingsEl.querySelectorAll('.ing-edit').forEach((row) => {
@@ -268,7 +215,7 @@ function openMenuEditor(menu) {
             p.g.type === 'manual'
               ? ''
               : p.source
-                ? `최근 매입 ${num(p.source.unitPrice)}원 · ${shortDate(p.source.date)} ${esc(p.source.vendor)}${p.cost != null ? ` → <b>1잔 ${won(p.cost)}</b>` : ''}`
+                ? `최근 매입 ${num(p.source.price)}원 · ${shortDate(p.source.date)} ${esc(p.source.vendor)}${p.cost != null ? ` → <b>1잔 ${won(p.cost)}</b>` : ''}`
                 : p.g.itemName
                   ? '<span class="warn">이 이름의 매입 기록이 없습니다. 목록에서 골라 주세요.</span>'
                   : '';
@@ -285,7 +232,7 @@ function openMenuEditor(menu) {
                    <div class="ing-row"><span>1잔당 원가</span><input data-f="cost" type="number" inputmode="numeric" placeholder="원" value="${g.cost || ''}"><span>원</span></div>
                  </div>`
               : (() => {
-                  const spec = g.itemName ? store.itemSpec(g.itemName) : null;
+                  const spec = g.itemName ? specOf(g.itemName) : null;
                   const u = g.unit || spec?.packUnit || '';
                   return `<div class="ing-edit" data-idx="${idx}">
                    <div class="row-name"><button type="button" class="pick-btn ${g.itemName ? '' : 'empty'}" data-pick>${g.itemName ? esc(g.itemName) : '매입 품목 선택'}<span aria-hidden="true">▾</span></button><button type="button" class="icon-btn del" aria-label="재료 삭제">✕</button></div>
@@ -317,7 +264,7 @@ function openMenuEditor(menu) {
       // 품목을 고르면: 매입 기록에 용량이 있으면 그걸 쓰고(빈칸 유지), 없으면 이름의 용량(700ML, 2L)으로 채움
       const applyItem = (g, name) => {
         g.itemName = name;
-        if (!store.itemSpec(name)) {
+        if (!specOf(name)) {
           const guess = guessPack(name);
           g.packSize = guess ? guess.packSize : 0;
           g.unit = guess ? guess.packUnit : '';
@@ -331,7 +278,7 @@ function openMenuEditor(menu) {
         const row = e.target.closest('.ing-edit');
         const g = m.ingredients[+row.dataset.idx];
         g.unit = e.target.value;
-        row.querySelector('.unit-echo').textContent = g.unit || store.itemSpec(g.itemName)?.packUnit || '';
+        row.querySelector('.unit-echo').textContent = g.unit || specOf(g.itemName)?.packUnit || '';
         updateSum();
       });
       ingsEl.addEventListener('click', async (e) => {
@@ -393,14 +340,7 @@ function blankItemIng() {
 
 /** 매입된 품목 목록을 분류별로 보여주고 하나를 고르게 함. 고른 품목 이름(취소하면 null) */
 function pickItem(current) {
-  const map = new Map();
-  for (const p of [...store.purchases].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt))
-    for (const i of p.items) {
-      const k = normKey(i.name);
-      if (!k || map.has(k) || (Number(i.amount) || 0) <= 0) continue;
-      map.set(k, { name: i.name, category: i.category || '기타', price: netUnitPrice(i), date: p.date, spec: store.itemSpec(i.name) });
-    }
-  const items = [...map.values()];
+  const items = store.index.pickList();
   const cats = [...new Set(store.categories.concat(items.map((i) => i.category)))].filter((c) => items.some((i) => i.category === c));
 
   return new Promise((resolve) => {

@@ -1,7 +1,7 @@
 // 영수증·거래명세서 사진 → Claude API(비전 + 구조화 출력)로 매입 내역 추출
 
 import Anthropic from '@anthropic-ai/sdk';
-import { todayStr } from './format.js';
+import { todayStr } from './lib/format.js';
 
 /** 사진을 긴 변 1568px 이하 JPEG(base64)로 줄임 – 전송량을 줄이고 인식 품질은 유지 */
 export async function fileToJpegBase64(file, maxSide = 1568) {

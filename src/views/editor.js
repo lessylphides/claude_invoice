@@ -1,10 +1,14 @@
 // 매입 내역 입력/수정 폼 (촬영 인식 결과 검토 포함)
 
-import { esc, num, won, todayStr, uid } from './format.js';
-import { store, purchaseTotal, guessPack } from './store.js';
-import { openSheet, toast } from './sheet.js';
-import { payChoiceHTML } from './payui.js';
-import { unitSelectHTML } from './units.js';
+import { esc, num, won, todayStr, uid } from '../lib/format.js';
+import { purchaseTotal, itemAmount } from '../lib/model.js';
+import { fillSpec } from '../lib/draft.js';
+import { openSheet, toast } from '../ui/sheet.js';
+import { payChoiceHTML } from '../ui/payui.js';
+import { unitSelectHTML } from '../ui/units.js';
+import { store } from '../store.js';
+
+const specOf = (name) => store.index.spec(name);
 
 /**
  * @param {object} draft 초기값 (purchase 형식, id 가 있으면 수정)
@@ -120,14 +124,14 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
             row.querySelector('.spec-tag')?.remove();
           }
           if (f === 'qty' || f === 'unitPrice' || f === 'discount') {
-            // 금액 = 수량 × 정가 단가 - 할인
-            const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
-            if (gross) {
-              it.amount = Math.round(gross - (Number(it.discount) || 0));
-              row.querySelector('[data-f=amount]').value = it.amount;
+            // 금액 = 수량 × 정가 단가 - 할인 (수량·단가가 없으면 적어 둔 금액 유지)
+            const a = itemAmount(it.qty, it.unitPrice, it.discount);
+            if (a != null) {
+              it.amount = a;
+              row.querySelector('[data-f=amount]').value = a;
             }
             const net = row.querySelector('.disc-net');
-            if (net) net.textContent = `정가 ${num(gross)}원`;
+            if (net) net.textContent = `정가 ${num(itemAmount(it.qty, it.unitPrice) ?? 0)}원`;
           }
           updateSum();
         });
@@ -137,7 +141,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           if (e.target.dataset.f === 'category') it.category = e.target.value;
           // 품목명을 입력하면 같은 품목의 이전 용량 기록(없으면 이름의 700ML 등)으로 용량을 채움
           // (목록을 다시 그리지 않고 그 줄의 용량 칸만 바꿔서, 다음 칸으로 넘어갈 때 포커스가 끊기지 않게 함)
-          if (e.target.dataset.f === 'name' && !Number(it.packSize) && fillSpec(it)) {
+          if (e.target.dataset.f === 'name' && !Number(it.packSize) && fillSpec(it, specOf)) {
             const row = e.target.closest('.item-edit');
             row.querySelector('[data-f=packSize]').value = it.packSize || '';
             row.querySelector('[data-f=packUnit]').outerHTML = unitSelectHTML('data-f="packUnit"', it.packUnit || '');
@@ -159,9 +163,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
             drawItems();
             itemsEl.querySelector(`[data-idx="${idx}"] [data-f=discount]`).focus();
           } else if (e.target.closest('.rm-disc')) {
-            const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
-            if (gross) it.amount = Math.round(gross);
-            else it.amount = (Number(it.amount) || 0) + (Number(it.discount) || 0);
+            it.amount = itemAmount(it.qty, it.unitPrice) ?? (Number(it.amount) || 0) + (Number(it.discount) || 0);
             it.discount = 0;
             it._showDisc = false;
             drawItems();
@@ -208,64 +210,4 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
 
 function blankItem() {
   return { id: uid(), name: '', category: '기타', qty: 1, unit: '', unitPrice: '', discount: 0, amount: '', packSize: '', packUnit: '' };
-}
-
-/** 이전 매입 기록의 용량 → 이름에서 추정한 용량 순으로 채움. 채웠으면 true */
-function fillSpec(it) {
-  const prev = store.itemSpec(it.name);
-  if (prev) {
-    Object.assign(it, prev, { _specFrom: 'history' });
-    return true;
-  }
-  const g = guessPack(it.name);
-  if (g) {
-    Object.assign(it, g, { _specFrom: '' });
-    return true;
-  }
-  return false;
-}
-
-/** Claude 인식 결과(JSON) → purchase 초안 */
-export function draftFromOcr(r, fallbackDate) {
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? r.date : fallbackDate;
-  const items = (r.items || []).map((i) => {
-    const qty = i.qty || 1;
-    const discount = Math.max(0, Math.round(Number(i.discount) || 0));
-    const unitPrice = i.unitPrice || Math.round(((Number(i.amount) || 0) + discount) / qty);
-    return {
-      id: uid(),
-      name: i.name,
-      category: i.category,
-      qty,
-      unit: i.unit || '',
-      unitPrice,
-      discount,
-      amount: i.amount || qty * unitPrice - discount,
-      packSize: Number(i.packSize) || 0,
-      packUnit: Number(i.packSize) ? i.packUnit || '' : '',
-    };
-  });
-  // 같은 품목을 전에 산 적이 있으면 그때 확인한 용량을 우선 사용 (없으면 인식값, 그것도 없으면 이름에서 추정)
-  for (const it of items) {
-    const prev = store.itemSpec(it.name);
-    if (prev) Object.assign(it, prev, { _specFrom: 'history' });
-    else if (!it.packSize) fillSpec(it);
-  }
-  if (!items.length && r.total) items.push({ id: uid(), name: '합계', category: '기타', qty: 1, unit: '', unitPrice: r.total, amount: r.total });
-
-  const notes = [];
-  if (validDate !== r.date) notes.push('날짜를 읽지 못해 선택한 날짜로 넣었습니다.');
-  const sum = items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  if (r.total && Math.abs(sum - r.total) > 1) notes.push(`품목 합계(${num(sum)}원)와 문서 합계(${num(r.total)}원)가 다릅니다. 확인해 주세요.`);
-
-  return {
-    draft: {
-      date: validDate,
-      vendor: r.vendor || '',
-      payType: r.paymentHint === 'card' ? 'card' : r.paymentHint === 'tax' || r.documentType === '세금계산서' ? 'tax' : '',
-      taxIssued: r.documentType === '세금계산서',
-      items,
-    },
-    note: notes.join(' '),
-  };
 }

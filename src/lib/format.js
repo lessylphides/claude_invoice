@@ -23,11 +23,21 @@ export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 /** 거래처·품목 이름을 묶기 위한 키 (공백, (주), 주식회사 등 제거) */
-export const normKey = (s) =>
-  String(s || '')
-    .replace(/\(주\)|㈜|\(유\)|주식회사|유한회사/g, '')
-    .replace(/[\s·.,\-_/()[\]]+/g, '')
-    .toLowerCase();
+// 같은 이름이 수만 번 반복되므로(품목 수백 종 × 매입 수천 건) 결과를 기억해 둠
+const normCache = new Map();
+export function normKey(s) {
+  const raw = String(s || '');
+  let k = normCache.get(raw);
+  if (k === undefined) {
+    k = raw
+      .replace(/\(주\)|㈜|\(유\)|주식회사|유한회사/g, '')
+      .replace(/[\s·.,\-_/()[\]]+/g, '')
+      .toLowerCase();
+    if (normCache.size > 20000) normCache.clear();
+    normCache.set(raw, k);
+  }
+  return k;
+}
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -44,3 +54,20 @@ export const shortDate = (dateStr) => {
 
 export const uid = () =>
   (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`);
+
+/** 'YYYY-MM-DD' 형식인지 (실제로 있는 날짜인지까지 확인) */
+export function isYmd(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+/** 원가율 등 퍼센트: 소수 첫째 자리까지 (예: 14.2%) */
+export const pct = (v) => (v == null || !Number.isFinite(v) ? '-' : `${(Math.round(v * 10) / 10).toFixed(1)}%`);
+
+/** 25.0% → 25%, 14.2% → 14.2% */
+export const pctShort = (v) => pct(v).replace('.0%', '%');
+
+/** '2026-11-04' → '2026.11.04' */
+export const dotDate = (d) => String(d).replaceAll('-', '.');

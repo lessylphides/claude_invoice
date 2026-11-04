@@ -2,7 +2,7 @@
 // 데이터 형식·계산 규칙은 lib/model.js, 품목 색인은 lib/itemIndex.js 에 있습니다.
 
 import { normKey, todayStr } from './lib/format.js';
-import { migrate, sanitizePurchase, sanitizeMenu, sanitizeCategories, parseTarget } from './lib/model.js';
+import { migrate, mergeLegacy, sanitizePurchase, sanitizeMenu, sanitizeCategories, parseTarget } from './lib/model.js';
 import { buildItemIndex } from './lib/itemIndex.js';
 import * as persist from './persist.js';
 
@@ -44,9 +44,24 @@ let inflight = null;
 let again = false;
 let dropLegacy = false; // 예전 localStorage 데이터를 옮긴 직후 첫 저장이 끝나면 지움
 let warned = false;
+
+// 같은 저장소를 쓰는 다른 창(탭)이 저장하면, 이 창의 데이터는 낡은 것이 됨.
+// 낡은 데이터로 덮어쓰면 다른 창의 입력이 사라지므로, 이 창은 저장을 멈추고 새로 불러오기를 안내합니다.
+const tabId = Math.random().toString(36).slice(2);
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('maeip') : null;
+let stale = false;
+channel?.addEventListener('message', (e) => {
+  if (e.data?.type === 'saved' && e.data.from !== tabId && !stale) {
+    stale = true;
+    notify();
+  }
+});
 
 function persistNow() {
+  if (stale) {
+    alert('다른 창에서 데이터가 바뀌어 이 창의 변경은 저장하지 않았습니다. 화면 위의 [새로 불러오기]를 눌러 주세요.');
+    return Promise.resolve();
+  }
   if (inflight) {
     again = true;
     return inflight;
@@ -56,7 +71,7 @@ function persistNow() {
     .then(() => {
       dropLegacy = false;
       warned = false;
-      channel?.postMessage('saved');
+      channel?.postMessage({ type: 'saved', from: tabId });
     })
     .catch((err) => {
       if (!warned) {
@@ -80,27 +95,22 @@ function commit() {
   notify();
 }
 
-/** 앱 시작: 저장된 데이터를 읽어 옴 (예전 localStorage 데이터는 옮김) */
+/**
+ * 앱 시작: 저장된 데이터를 읽어 옴.
+ * - 예전 localStorage 데이터만 있으면 옮김
+ * - 둘 다 있으면(예전 버전 창이 옮긴 뒤에 쓴 경우) 빠진 내역만 합침
+ * 읽지 못하면 reject → 화면에 오류와 다시 시도를 보여줌 (빈 장부로 시작하지 않음)
+ */
 export const ready = (async () => {
-  const { raw, migrated } = await persist.load();
-  data = migrate(raw, { trusted: true });
-  if (migrated) {
+  const { raw, legacy } = await persist.load();
+  data = migrate(raw ?? legacy, { trusted: true });
+  if (raw && legacy) data = mergeLegacy(data, migrate(legacy)).data;
+  if (legacy) {
     dropLegacy = true;
     persistNow();
   }
   persist.requestPersistence();
 })();
-
-// 다른 탭(또는 홈 화면 앱과 같은 저장소를 쓰는 창)에서 저장하면 다시 읽어 옴
-channel?.addEventListener('message', async (e) => {
-  if (e.data !== 'saved' || inflight) return;
-  const { raw } = await persist.load();
-  if (!raw) return;
-  data = migrate(raw, { trusted: true });
-  index = null;
-  notify();
-});
-
 const upsertInto = (list, clean) => {
   const i = list.findIndex((x) => x.id === clean.id);
   if (i >= 0) list[i] = clean;
@@ -206,9 +216,9 @@ export const store = {
     settings = { ...settings, ...patch };
     if (!writeJSON(SETTINGS_KEY, settings)) alert('설정 저장에 실패했습니다. 개인정보 보호 모드인지 확인하세요.');
   },
-  /** 진행 중인 저장이 끝날 때까지 기다림 */
-  async flush() {
-    while (inflight) await inflight;
+  /** 다른 창에서 저장해서 이 창의 데이터가 낡았는지 */
+  get stale() {
+    return stale;
   },
 
   // ── 백업 ──

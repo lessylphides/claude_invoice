@@ -86,8 +86,10 @@ test('메뉴 상세: 재료별 원가, 목표 판매가 안내, 수정·삭제, 
   await expect(s.locator('.stats')).toContainText('2,570원');
   await expect(s.locator('.notice')).toContainText('판매가 약 10,300원 이상');
   await expect(s.locator('.ing-list small').first()).toContainText('7개 중 1개');
+  await expect(s.locator('.ing-list small').first()).toContainText('최근 17,990원 (26.10.28 (주)코스트코코리아 양재점)');
 
   await s.locator('[data-edit]').click();
+  await expect(page.locator('.menu-editor .ing-info')).toContainText('최근 매입 17,990원');
   await page.locator('.menu-editor [name=price]').fill('11000');
   await page.locator('.menu-editor button[type=submit]').click();
   await expect(s.locator('.notice')).toHaveCount(0);

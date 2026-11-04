@@ -48,7 +48,7 @@ export function draftFromOcr(r, fallbackDate, specOf = () => null) {
     // 같은 품목을 전에 산 적이 있으면 그때 확인한 용량을 우선 (없으면 인식값, 그것도 없으면 이름에서 추정)
     const prev = specOf(it.name);
     if (prev) Object.assign(it, prev, { _specFrom: 'history' });
-    else if (!it.packSize) fillSpec(it, specOf);
+    else if (!it.packSize) Object.assign(it, guessPack(it.name) ?? {});
     return it;
   });
   if (!items.length && r.total) items.push({ id: uid(), name: '합계', category: '기타', qty: 1, unit: '', unitPrice: r.total, discount: 0, amount: r.total, packSize: 0, packUnit: '' });

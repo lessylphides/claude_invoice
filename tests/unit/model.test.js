@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { itemAmount, netUnitPrice, purchaseTotal, guessPack, sanitizeItem, sanitizePurchase, sanitizeMenu, sanitizeCostTarget, sanitizeCategories, migrate, parseTarget, DEFAULT_CATEGORIES, DATA_VERSION } from '../../src/lib/model.js';
+import { itemAmount, netUnitPrice, purchaseTotal, guessPack, sanitizeItem, sanitizePurchase, sanitizeMenu, sanitizeCostTarget, sanitizeCategories, migrate, mergeLegacy, normalizeDate, parseTarget, DEFAULT_CATEGORIES, DATA_VERSION } from '../../src/lib/model.js';
 
 beforeAll(() => {
   vi.useFakeTimers();
@@ -52,11 +52,19 @@ describe('형식 정리', () => {
     expect(sanitizeItem({ name: 'x', qty: 1, unitPrice: 0, amount: -3000 }).amount).toBe(-3000);
     expect(sanitizeItem({}).name).toBe('(품목명 없음)');
   });
-  it('영수증: 결제 구분이 세금계산서가 아니면 발행 여부는 항상 false, 잘못된 날짜는 오늘로', () => {
+  it('없는 날짜는 그달 마지막 날로(그달 합계 유지), 알아볼 수 없으면 오늘로', () => {
+    expect(normalizeDate('2026-02-30')).toBe('2026-02-28');
+    expect(normalizeDate('2028-02-31')).toBe('2028-02-29');
+    expect(normalizeDate('2026-04-31')).toBe('2026-04-30');
+    expect(normalizeDate('2026-13-01')).toBe('2026-11-04');
+    expect(normalizeDate('어제')).toBe('2026-11-04');
+    expect(normalizeDate('2026-10-28')).toBe('2026-10-28');
+  });
+  it('영수증: 결제 구분이 세금계산서가 아니면 발행 여부는 항상 false, 없는 날짜는 그달 말일로', () => {
     expect(sanitizePurchase({ payType: 'card', taxIssued: true }).taxIssued).toBe(false);
     expect(sanitizePurchase({ payType: 'tax', taxIssued: 1 }).taxIssued).toBe(true);
     expect(sanitizePurchase({ payType: 'cash' }).payType).toBe('');
-    expect(sanitizePurchase({ date: '2026-02-30' }).date).toBe('2026-11-04');
+    expect(sanitizePurchase({ date: '2026-02-30' }).date).toBe('2026-02-28');
     expect(sanitizePurchase({ date: '2026-10-28' }).date).toBe('2026-10-28');
     expect(sanitizePurchase({ vendor: '  ' }).vendor).toBe('(거래처 미상)');
   });
@@ -102,6 +110,23 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(migrate(forged).purchases[0].date).toBe('2026-11-04');
     expect(migrate(forged).purchases[0].items[0].qty).toBe(0);
     expect(migrate(forged, { trusted: true })).toBe(forged);
+  });
+  it('깨진 항목(null 등)이 있어도 멈추지 않고 그 항목만 버린다', () => {
+    const d = migrate({ purchases: [null, 'x', { id: 'a', date: '2026-10-28', vendor: 'v', items: [null, { name: 'i', qty: 1, unitPrice: 5, amount: 5 }] }], menus: [null, { id: 'm', name: 'n', price: 1, ingredients: [null] }] });
+    expect(d.purchases).toHaveLength(1);
+    expect(d.purchases[0].items).toHaveLength(1);
+    expect(d.menus).toHaveLength(1);
+    expect(d.menus[0].ingredients).toEqual([]);
+    expect(() => sanitizePurchase(null)).not.toThrow();
+  });
+  it('예전 저장소에 남은 내역 합치기: 없는 영수증·메뉴만 더함', () => {
+    const cur = migrate({ purchases: [{ id: 'a', date: '2026-10-01', vendor: 'v', items: [] }], menus: [{ id: 'm1', name: 'x', price: 1 }] });
+    const old = migrate({ purchases: [{ id: 'a', date: '2026-09-01', vendor: 'OLD', items: [] }, { id: 'b', date: '2026-10-02', vendor: 'new', items: [] }], menus: [{ id: 'm2', name: 'y', price: 1 }] });
+    const { data, added } = mergeLegacy(cur, old);
+    expect(added).toBe(2);
+    expect(data.purchases.map((p) => [p.id, p.vendor])).toEqual([['a', 'v'], ['b', 'new']]); // 같은 id 는 현재 것을 유지
+    expect(data.menus.map((m) => m.id)).toEqual(['m1', 'm2']);
+    expect(mergeLegacy(cur, cur)).toEqual({ data: cur, added: 0 });
   });
   it('이미 정리된 데이터는 다시 넣어도 같다', () => {
     const once = migrate({ purchases: [{ id: 'a', date: '2026-10-28', vendor: 'x', createdAt: 1, items: [{ id: 'i', name: 'y', qty: 1, unitPrice: 10, amount: 10 }] }] });

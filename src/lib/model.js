@@ -34,6 +34,25 @@ const toNum = (v) => {
 };
 const nonNeg = (v) => Math.max(0, toNum(v));
 const str = (v) => String(v ?? '').trim();
+const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const list = (v) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : []); // null 등 깨진 항목은 버림
+
+/**
+ * 날짜 정리: 올바른 날짜는 그대로, '2026-02-30' 처럼 모양은 맞는데 없는 날은 그달 마지막 날로
+ * (그달 합계에 그대로 남도록), 알아볼 수 없으면 오늘.
+ */
+export function normalizeDate(s) {
+  if (isYmd(s)) return s;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? ''));
+  if (m) {
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    if (mo >= 1 && mo <= 12 && d >= 1) {
+      const last = new Date(y, mo, 0).getDate();
+      return `${m[1]}-${m[2]}-${String(Math.min(d, last)).padStart(2, '0')}`;
+    }
+  }
+  return todayStr();
+}
 
 /** 수량×정가-할인 (수량이나 단가가 없으면 null: 금액을 직접 적은 경우) */
 export function itemAmount(qty, unitPrice, discount = 0) {
@@ -65,7 +84,8 @@ export function guessPack(name) {
   return { packSize: v, packUnit: unit };
 }
 
-export function sanitizeItem(i = {}) {
+export function sanitizeItem(raw) {
+  const i = obj(raw);
   const qty = toNum(i.qty);
   const unitPrice = toNum(i.unitPrice);
   const discount = Math.round(nonNeg(i.discount));
@@ -86,31 +106,34 @@ export function sanitizeItem(i = {}) {
   };
 }
 
-export function sanitizePurchase(p = {}) {
+export function sanitizePurchase(raw) {
+  const p = obj(raw);
   const payType = p.payType === 'tax' || p.payType === 'card' ? p.payType : '';
   return {
     id: p.id || uid(),
-    date: isYmd(p.date) ? p.date : todayStr(),
+    date: normalizeDate(p.date),
     vendor: str(p.vendor) || '(거래처 미상)',
     payType,
     taxIssued: payType === 'tax' && !!p.taxIssued,
-    items: (Array.isArray(p.items) ? p.items : []).map(sanitizeItem),
+    items: list(p.items).map(sanitizeItem),
     memo: String(p.memo ?? ''),
     createdAt: toNum(p.createdAt) || Date.now(),
   };
 }
 
-export function sanitizeIngredient(g = {}) {
+export function sanitizeIngredient(raw) {
+  const g = obj(raw);
   if (g.type === 'manual') return { id: g.id || uid(), type: 'manual', name: str(g.name) || '기타 재료', cost: nonNeg(g.cost) };
   return { id: g.id || uid(), type: 'item', itemName: str(g.itemName), packSize: nonNeg(g.packSize), unit: str(g.unit), use: nonNeg(g.use) };
 }
 
-export function sanitizeMenu(m = {}) {
+export function sanitizeMenu(raw) {
+  const m = obj(raw);
   return {
     id: m.id || uid(),
     name: str(m.name) || '(이름 없음)',
     price: Math.round(nonNeg(m.price)),
-    ingredients: (Array.isArray(m.ingredients) ? m.ingredients : []).map(sanitizeIngredient).filter((g) => g.type === 'manual' || g.itemName),
+    ingredients: list(m.ingredients).map(sanitizeIngredient).filter((g) => g.type === 'manual' || g.itemName),
     createdAt: toNum(m.createdAt) || Date.now(),
   };
 }
@@ -145,9 +168,9 @@ export function migrate(raw, { trusted = false } = {}) {
     return d;
   return {
     version: DATA_VERSION,
-    purchases: (Array.isArray(d.purchases) ? d.purchases : []).map(sanitizePurchase),
+    purchases: list(d.purchases).map(sanitizePurchase),
     categories: sanitizeCategories(d.categories),
-    menus: (Array.isArray(d.menus) ? d.menus : []).map(sanitizeMenu),
+    menus: list(d.menus).map(sanitizeMenu),
     costTarget: sanitizeCostTarget(d.costTarget),
   };
 }
@@ -157,4 +180,21 @@ export function parseTarget(value) {
   const v = Math.round(Number(value) * 10) / 10;
   if (!validTarget(v)) throw new Error('목표 원가율은 0보다 크고 100보다 작아야 합니다.');
   return v;
+}
+
+/**
+ * 예전 저장소(localStorage)에 남은 데이터를 현재 데이터에 합침: 현재에 없는 영수증·메뉴(id 기준)만 더함.
+ * 예전 버전 앱 창(예: 백그라운드에 있던 홈 화면 앱)이 옮긴 뒤에도 예전 저장소에 써 둔 내역을 잃지 않기 위함.
+ * @returns {{data: object, added: number}}
+ */
+export function mergeLegacy(current, legacy) {
+  const have = new Set(current.purchases.map((p) => p.id));
+  const haveMenu = new Set(current.menus.map((m) => m.id));
+  const newPurchases = legacy.purchases.filter((p) => !have.has(p.id));
+  const newMenus = legacy.menus.filter((m) => !haveMenu.has(m.id));
+  if (!newPurchases.length && !newMenus.length) return { data: current, added: 0 };
+  return {
+    data: { ...current, purchases: [...current.purchases, ...newPurchases], menus: [...current.menus, ...newMenus] },
+    added: newPurchases.length + newMenus.length,
+  };
 }

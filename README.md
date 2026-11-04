@@ -35,22 +35,42 @@
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173 (같은 와이파이의 휴대폰에서 IP로 접속 가능)
-npm run build    # dist/ 에 정적 파일 생성
+npm run dev        # http://localhost:5173 (같은 와이파이의 휴대폰에서 IP로 접속 가능)
+npm test           # 계산 로직 단위 테스트 (vitest)
+npm run test:e2e   # 화면 흐름 테스트 (Playwright, 아이폰 13 화면)
+npm run build      # dist/ 에 정적 파일 생성
 ```
 
 - 카메라 촬영과 PWA 설치는 **HTTPS**(또는 localhost)에서만 동작합니다.
-- `main` 브랜치에 푸시하면 `.github/workflows/pages.yml`이 GitHub Pages에 자동으로 배포합니다(저장소 Settings → Pages → Source를 *GitHub Actions*로 설정).
+- PR과 `main`에서 GitHub Actions가 테스트(Chromium + 아이폰과 같은 엔진인 WebKit)를 돌리고, **통과한 `main`만** GitHub Pages에 배포합니다.
+
+## 데이터 보관
+
+- 매입·메뉴 데이터는 기기의 **IndexedDB**에, 설정(API 키 등)은 localStorage에 저장합니다.
+- 예전 버전(localStorage 저장)의 데이터는 처음 열 때 자동으로 옮겨집니다.
+- 저장 형식에는 버전(`version`)이 붙어 있고, 예전 형식·백업 파일은 `src/lib/model.js`의 `migrate`에서 변환합니다.
+- 매입이 10건 이상인데 백업한 적이 없거나 30일이 지나면 매입 탭에 백업 알림이 뜹니다. 아이폰에서는 공유 시트의 '파일에 저장'으로 저장됩니다.
 
 ## 구조
 
 ```
 src/
-  main.js    달력, 월 요약, 날짜 상세, 가격 추이, 촬영 흐름, 설정
-  editor.js  매입 입력/수정 폼, 인식 결과를 초안으로 변환
-  ocr.js     사진 축소 → Claude API(비전 + JSON 스키마 구조화 출력)로 추출
-  store.js   localStorage 저장소, 결제 구분/세금계산서 상태
-  chart.js   가격 추이 SVG 꺾은선 그래프
-  sheet.js   하단 시트, 토스트, 로딩 표시
-public/      manifest, 서비스워커, 아이콘
+  main.js            앱 시작, 탭 전환
+  state.js           보고 있는 달·탭
+  store.js           데이터 저장소 (변경 알림, 저장, 품목 색인)
+  persist.js         IndexedDB 저장·읽기, 예전 데이터 옮기기
+  ocr.js             Claude API 영수증 인식 (처음 인식할 때만 불러옴)
+  lib/               DOM 없는 순수 로직 — 단위 테스트 대상
+    model.js           데이터 형식 정리·버전 변환·금액 규칙
+    itemIndex.js       품목별 매입 기록 색인 (가격 추이·용량·원가)
+    aggregate.js       거래처별·항목별·결제별 집계, 가격 추이
+    cost.js            메뉴 원가·원가율
+    draft.js           인식 결과 → 입력 초안
+    csv.js, backup.js, format.js
+  views/             화면: 매입 탭, 날짜 상세, 가격 추이, 촬영, 입력, 원가, 설정
+  ui/                시트, 그래프, 결제 표시, 단위 선택, 내려받기
+tests/
+  unit/              계산 로직
+  e2e/               화면 흐름, 데이터 보관, 접근성(밝은/어두운 모드), 아이폰 회귀
+public/              manifest, 서비스워커, 아이콘
 ```

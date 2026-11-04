@@ -74,7 +74,7 @@ describe('인식 결과 → 입력 초안', () => {
     expect(items.map((i) => [i.packSize, i.packUnit, i._specFrom ?? null])).toEqual([
       [7, '개', 'history'],
       [750, 'ml', null],
-      [510, 'g', ''],
+      [510, 'g', null],
       [0, '', null],
     ]);
   });

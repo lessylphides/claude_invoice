@@ -164,7 +164,7 @@ function ingLi(p, total) {
   return `<li><button class="item-btn" data-ing-trend="${esc(g.itemName)}">
     <span class="iname">${esc(g.itemName)}
       <small>${p.pack ? `${num(p.pack)}${esc(p.unit)} 중 ${num(g.use)}${esc(p.unit)}` : ''}${
-        p.source ? ` · 최근 ${num(p.source.unitPrice)}원 (${shortDate(p.source.date)} ${esc(p.source.vendor)})` : ''
+        p.source ? ` · 최근 ${num(p.source.price)}원 (${shortDate(p.source.date)} ${esc(p.source.vendor)})` : ''
       }</small>
       ${p.cost == null ? `<small class="warn">${esc(p.reason)}</small>` : ''}
     </span>
@@ -215,7 +215,7 @@ function openMenuEditor(menu) {
             p.g.type === 'manual'
               ? ''
               : p.source
-                ? `최근 매입 ${num(p.source.unitPrice)}원 · ${shortDate(p.source.date)} ${esc(p.source.vendor)}${p.cost != null ? ` → <b>1잔 ${won(p.cost)}</b>` : ''}`
+                ? `최근 매입 ${num(p.source.price)}원 · ${shortDate(p.source.date)} ${esc(p.source.vendor)}${p.cost != null ? ` → <b>1잔 ${won(p.cost)}</b>` : ''}`
                 : p.g.itemName
                   ? '<span class="warn">이 이름의 매입 기록이 없습니다. 목록에서 골라 주세요.</span>'
                   : '';

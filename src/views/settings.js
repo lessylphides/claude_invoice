@@ -15,7 +15,7 @@ function backupLine() {
   const last = store.settings.lastBackupAt;
   if (!last) return '마지막 백업: <b class="warn">아직 없음</b>';
   const days = daysBetween(last, todayStr());
-  return `마지막 백업: <b>${dotDate(last)}</b> (${days ? `${days}일 전` : '오늘'})`;
+  return `마지막 백업: <b>${dotDate(last)}</b> (${days > 0 ? `${days}일 전` : '오늘'})`;
 }
 
 export function openSettings() {
@@ -55,9 +55,9 @@ export function openSettings() {
         close();
       });
       body.querySelector('[data-act=csv]').addEventListener('click', () => download(`매입_${monthKey()}.csv`, purchasesCsv(monthPurchases()), 'text/csv'));
-      body.querySelector('[data-act=backup]').addEventListener('click', () => {
-        backupNow();
-        body.querySelector('.backup-line').innerHTML = backupLine();
+      body.querySelector('[data-act=backup]').addEventListener('click', async () => {
+        await backupNow();
+        if (body.isConnected) body.querySelector('.backup-line').innerHTML = backupLine();
       });
       // 저장 공간 사용량 (브라우저가 알려 주는 경우만)
       storageInfo().then((info) => {

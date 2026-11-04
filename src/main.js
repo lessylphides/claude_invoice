@@ -17,11 +17,32 @@ function tabBar() {
   </nav>`;
 }
 
+function staleBanner() {
+  return store.stale
+    ? `<section class="backup-banner stale-banner" role="alert">
+        <p><b>다른 창에서 데이터가 바뀌었습니다.</b> 이 창의 내용은 낡아서 저장하지 않습니다.</p>
+        <div class="backup-actions"><button class="btn primary small-btn" data-act="reload">새로 불러오기</button></div>
+      </section>`
+    : '';
+}
+
 function render() {
-  app.innerHTML = (view.tab === 'cost' ? renderCostTab() : renderPurchaseTab()) + tabBar();
+  app.innerHTML = staleBanner() + (view.tab === 'cost' ? renderCostTab() : renderPurchaseTab()) + tabBar();
+}
+
+/** 저장된 데이터를 읽지 못했을 때: 빈 장부로 시작하지 않고 다시 시도하게 함 */
+function renderLoadError(err) {
+  app.innerHTML = `
+    <section class="load-error" role="alert">
+      <h1>데이터를 불러오지 못했습니다</h1>
+      <p>${String(err?.message || err).replace(/[<>&]/g, '')}</p>
+      <p class="muted small">입력해 둔 데이터는 지워지지 않았습니다. 앱을 완전히 닫았다가 다시 열거나 아래 버튼을 눌러 주세요.</p>
+      <button class="btn primary" data-act="reload">다시 시도</button>
+    </section>`;
 }
 
 app.addEventListener('click', (e) => {
+  if (e.target.closest('[data-act=reload]')) return location.reload();
   const tab = e.target.closest('[data-tab]');
   if (tab) {
     window.scrollTo(0, 0);
@@ -44,12 +65,15 @@ app.addEventListener('touchend', (e) => {
 
 bindCaptureInputs();
 setRenderer(render);
-ready.then(() => {
-  store.subscribe(render);
-  render();
-  warmIndex();
-  preloadOcr();
-});
+ready.then(
+  () => {
+    store.subscribe(render);
+    render();
+    warmIndex();
+    preloadOcr();
+  },
+  (err) => renderLoadError(err),
+);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});

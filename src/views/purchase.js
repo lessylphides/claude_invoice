@@ -1,7 +1,8 @@
 // 매입 탭: 월 합계, 달력(날짜별 합계), 월 요약(거래처별·항목별·세금계산서·카드)
 import { compact, dotDate, esc, num, pad, todayStr, won } from '../lib/format.js';
 import { backupReminder, addDays, SNOOZE_DAYS } from '../lib/backup.js';
-import { download } from '../ui/download.js';
+import { saveFile } from '../ui/download.js';
+import { toast } from '../ui/sheet.js';
 import { purchaseTotal } from '../lib/model.js';
 import { groupByVendor, groupByCategory, paySummary, aggregateItems } from '../lib/aggregate.js';
 import { payBreakdownHTML } from '../ui/payui.js';
@@ -68,10 +69,12 @@ function backupBanner() {
   </section>`;
 }
 
-/** 전체 백업 파일 저장 (설정 화면과 백업 알림에서 함께 사용) */
-export function backupNow() {
-  download(`매입장부_백업_${todayStr()}.json`, store.exportData(), 'application/json');
+/** 전체 백업 파일 저장 (설정 화면과 백업 알림에서 함께 사용). 저장을 취소하면 백업한 것으로 치지 않음 */
+export async function backupNow() {
+  const r = await saveFile(`매입장부_백업_${todayStr()}.json`, store.exportData(), 'application/json');
+  if (r === 'cancelled') return toast('백업을 취소했습니다.');
   store.markBackedUp();
+  toast(r === 'shared' ? '백업 파일을 저장했습니다.' : '백업 파일을 내려받았습니다. 파일 앱에 있는지 확인해 주세요.', 3500);
 }
 
 function calendarCells(mp) {

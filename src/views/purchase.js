@@ -1,5 +1,7 @@
 // 매입 탭: 월 합계, 달력(날짜별 합계), 월 요약(거래처별·항목별·세금계산서·카드)
-import { compact, esc, num, pad, todayStr, won } from '../lib/format.js';
+import { compact, dotDate, esc, num, pad, todayStr, won } from '../lib/format.js';
+import { backupReminder, addDays, SNOOZE_DAYS } from '../lib/backup.js';
+import { download } from '../ui/download.js';
 import { purchaseTotal } from '../lib/model.js';
 import { groupByVendor, groupByCategory, paySummary, aggregateItems } from '../lib/aggregate.js';
 import { payBreakdownHTML } from '../ui/payui.js';
@@ -32,6 +34,7 @@ export function renderPurchaseTab() {
       <p class="hero-num">${won(total)}</p>
       <p class="hero-sub">${mp.length}건 · 세금계산서 미발행 <b class="${pay.taxPending ? 'warn' : ''}">${won(pay.taxPending)}</b></p>
     </section>
+    ${backupBanner()}
 
     <section class="calendar" aria-label="${view.year}년 ${view.month}월 달력">
       <div class="dow" aria-hidden="true">${['일', '월', '화', '수', '목', '금', '토'].map((d) => `<span>${d}</span>`).join('')}</div>
@@ -50,6 +53,25 @@ export function renderPurchaseTab() {
     <div class="fab-wrap">
       <button class="fab" data-act="capture" aria-label="영수증 촬영">📷<span>영수증 촬영</span></button>
     </div>`;
+}
+
+function backupBanner() {
+  const { lastBackupAt, backupSnoozeUntil } = store.settings;
+  const r = backupReminder({ count: store.purchases.length, lastBackupAt, snoozeUntil: backupSnoozeUntil, today: todayStr() });
+  if (!r) return '';
+  return `<section class="backup-banner" role="status">
+    <p><b>데이터는 이 휴대폰에만 있어요.</b> ${r.days == null ? '아직 백업한 적이 없습니다.' : `마지막 백업 ${dotDate(lastBackupAt)} (${r.days}일 전)`}</p>
+    <div class="backup-actions">
+      <button class="btn ghost small-btn" data-act="backup-later">나중에</button>
+      <button class="btn primary small-btn" data-act="backup-now">지금 백업</button>
+    </div>
+  </section>`;
+}
+
+/** 전체 백업 파일 저장 (설정 화면과 백업 알림에서 함께 사용) */
+export function backupNow() {
+  download(`매입장부_백업_${todayStr()}.json`, store.exportData(), 'application/json');
+  store.markBackedUp();
 }
 
 function calendarCells(mp) {
@@ -145,6 +167,8 @@ export function handlePurchaseClick(e, { openSettings }) {
   else if (t.dataset.act === 'today') goToday();
   else if (t.dataset.act === 'settings') openSettings();
   else if (t.dataset.act === 'capture') openCaptureMenu();
+  else if (t.dataset.act === 'backup-now') backupNow();
+  else if (t.dataset.act === 'backup-later') store.snoozeBackup(addDays(todayStr(), SNOOZE_DAYS));
   else return false;
   return true;
 }

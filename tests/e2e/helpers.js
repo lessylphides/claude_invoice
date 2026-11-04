@@ -90,3 +90,49 @@ export async function openManualEntry(page) {
 }
 
 export const KEY = { apiKey: 'sk-ant-test', model: 'claude-opus-5-5' };
+
+/** 앱이 IndexedDB 에 저장한 데이터 읽기 (없으면 null) */
+export function readSaved(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('maeip', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('kv');
+        req.onsuccess = () => {
+          const db = req.result;
+          const get = db.transaction('kv').objectStore('kv').get('data');
+          get.onsuccess = () => {
+            db.close();
+            resolve(get.result ?? null);
+          };
+          get.onerror = () => resolve(null);
+        };
+        req.onerror = () => resolve(null);
+      }),
+  );
+}
+
+/** 저장이 끝날 때까지 기다림 (조건이 맞을 때까지) */
+export async function waitSaved(page, check) {
+  await expect.poll(async () => check(await readSaved(page)), { timeout: 5000 }).toBe(true);
+}
+
+/** 앱 데이터 전부 지우기 (IndexedDB + 예전 localStorage) */
+export function clearSaved(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        localStorage.removeItem('maeip.data.v1');
+        const req = indexedDB.open('maeip', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const t = db.transaction('kv', 'readwrite');
+          t.objectStore('kv').clear();
+          t.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+        };
+      }),
+  );
+}

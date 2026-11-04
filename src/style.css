@@ -362,3 +362,11 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 .pick-item > span:last-child { color: var(--muted); font-size: 20px; }
 .ings-empty { margin: 0 4px; }
 .sheet-body input, .sheet-body select, .sheet-body textarea { scroll-margin: 16px 0 28px; }
+
+/* 백업 알림 */
+.backup-banner { background: var(--warn-soft); border-radius: var(--radius); padding: 12px 14px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 8px; }
+.backup-banner p { margin: 0; font-size: 14px; color: var(--ink); }
+.backup-banner b { color: var(--warn); }
+.backup-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.small-btn { padding: 8px 14px; font-size: 14px; }
+.backup-line { margin: 4px 2px 0; }

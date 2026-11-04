@@ -1,11 +1,22 @@
 // 설정: Claude API 키·모델, 분류 목록, CSV 내보내기, 백업/복원
-import { esc, todayStr } from '../lib/format.js';
+import { dotDate, esc, num, todayStr } from '../lib/format.js';
 import { purchasesCsv } from '../lib/csv.js';
+import { daysBetween } from '../lib/backup.js';
 import { download } from '../ui/download.js';
 import { openSheet, toast } from '../ui/sheet.js';
+import { storageInfo } from '../persist.js';
 import { store, MODELS } from '../store.js';
 import { monthKey } from '../state.js';
-import { monthPurchases } from './purchase.js';
+import { monthPurchases, backupNow } from './purchase.js';
+
+const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+
+function backupLine() {
+  const last = store.settings.lastBackupAt;
+  if (!last) return '마지막 백업: <b class="warn">아직 없음</b>';
+  const days = daysBetween(last, todayStr());
+  return `마지막 백업: <b>${dotDate(last)}</b> (${days ? `${days}일 전` : '오늘'})`;
+}
 
 export function openSettings() {
   openSheet({
@@ -31,7 +42,9 @@ export function openSettings() {
             <button class="btn ghost" type="button" data-act="restore">백업 파일 불러오기</button>
           </div>
           <input type="file" accept="application/json,.json" hidden class="restore-file">
-          <p class="muted small">데이터는 이 기기에만 저장됩니다. 기기를 바꾸거나 브라우저 데이터를 지우기 전에 백업하세요.</p>
+          <p class="small backup-line">${backupLine()}</p>
+          <p class="muted small storage-line">매입 ${num(store.purchases.length)}건 · 메뉴 ${num(store.menus.length)}개</p>
+          <p class="muted small">데이터는 이 기기에만 저장됩니다. 기기를 바꾸거나 홈 화면 아이콘·브라우저 데이터를 지우기 전에 백업하세요.</p>
         </form>`;
       const form = body.querySelector('form');
       form.addEventListener('submit', (e) => {
@@ -42,7 +55,15 @@ export function openSettings() {
         close();
       });
       body.querySelector('[data-act=csv]').addEventListener('click', () => download(`매입_${monthKey()}.csv`, purchasesCsv(monthPurchases()), 'text/csv'));
-      body.querySelector('[data-act=backup]').addEventListener('click', () => download(`매입장부_백업_${todayStr()}.json`, store.exportData(), 'application/json'));
+      body.querySelector('[data-act=backup]').addEventListener('click', () => {
+        backupNow();
+        body.querySelector('.backup-line').innerHTML = backupLine();
+      });
+      // 저장 공간 사용량 (브라우저가 알려 주는 경우만)
+      storageInfo().then((info) => {
+        if (!info || !body.isConnected) return;
+        body.querySelector('.storage-line').textContent += ` · ${info.backend} ${mb(info.usage)} 사용${info.persisted ? ' · 보호됨' : ''}`;
+      });
       const rf = body.querySelector('.restore-file');
       body.querySelector('[data-act=restore]').addEventListener('click', () => rf.click());
       rf.addEventListener('change', async () => {

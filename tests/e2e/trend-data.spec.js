@@ -1,7 +1,7 @@
 // 가격 추이 그래프, 백업/복원, CSV 내보내기, 설정
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { openApp, purchase, item, sheet, closeSheet } from './helpers.js';
+import { openApp, purchase, item, sheet, closeSheet, readSaved, waitSaved, clearSaved } from './helpers.js';
 
 // 헤드리스 Chromium 은 한글 파일 이름을 'download' 로 바꿔 버리므로, 앱이 요청한 이름을 직접 기록해서 확인
 async function recordDownloadNames(page) {
@@ -65,7 +65,7 @@ test('백업 저장 → 지운 뒤 불러오기 하면 그대로 돌아온다', 
   const json = JSON.parse(await readFile(path, 'utf8'));
   expect(json.purchases).toHaveLength(3);
 
-  await page.evaluate(() => localStorage.removeItem('maeip.data.v1'));
+  await clearSaved(page);
   await page.reload();
   await expect(page.locator('.hero-num')).toHaveText('0원');
 
@@ -110,9 +110,10 @@ test('설정: API 키·모델·분류 목록 저장', async ({ page }) => {
   await s.locator('[name=model]').selectOption('claude-sonnet-5-5');
   await s.locator('[name=cats]').fill('주류\n\n안주\n주류');
   await s.locator('button[type=submit]').click();
-  const saved = await page.evaluate(() => [JSON.parse(localStorage.getItem('maeip.settings.v1')), JSON.parse(localStorage.getItem('maeip.data.v1')).categories]);
-  expect(saved[0]).toMatchObject({ apiKey: 'sk-ant-abc', model: 'claude-sonnet-5-5' });
-  expect(saved[1]).toEqual(['주류', '안주', '기타']); // 빈 줄·중복 제거, '기타'는 항상 포함
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('maeip.settings.v1')));
+  expect(settings).toMatchObject({ apiKey: 'sk-ant-abc', model: 'claude-sonnet-5-5' });
+  // 빈 줄·중복 제거, '기타'는 항상 포함
+  await waitSaved(page, (d) => JSON.stringify(d?.categories) === JSON.stringify(['주류', '안주', '기타']));
 });
 
 test('탭 전환은 새로고침 후에도 유지된다', async ({ page }) => {

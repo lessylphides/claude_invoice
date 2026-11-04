@@ -221,8 +221,7 @@ function openDay(date) {
         </div>
         <div class="day-list">${ps.length ? (mode === 'vendor' ? dayByVendor(ps) : dayByCategory(ps)) : '<p class="empty-msg">이날 매입 내역이 없습니다.</p>'}</div>
         <div class="actions">
-          <button class="btn ghost" data-day-act="manual">+ 직접 입력</button>
-          <button class="btn primary" data-day-act="capture">📷 영수증 촬영</button>
+          <button class="btn primary" data-day-act="add">📷 이 날짜에 매입 추가</button>
         </div>`;
 
       body.querySelectorAll('[data-mode]').forEach((b) =>
@@ -240,8 +239,7 @@ function openDay(date) {
         else if (t.dataset.del) {
           const p = store.get(t.dataset.del);
           if (p && confirm(`${p.vendor} ${won(purchaseTotal(p))} 내역을 삭제할까요?`)) store.remove(p.id);
-        } else if (t.dataset.dayAct === 'manual') openEditor({ date });
-        else if (t.dataset.dayAct === 'capture') startCapture('camera', date);
+        } else if (t.dataset.dayAct === 'add') openCaptureMenu(date);
       });
     },
   });
@@ -441,9 +439,11 @@ function goToMonth(date) {
   }
 }
 
-function openCaptureMenu() {
+/** 촬영 / 앨범 / 직접 입력 선택 메뉴. date 가 있으면 그 날짜 화면에서 연 것 */
+function openCaptureMenu(date = null) {
+  const [, m, d] = (date || '').split('-').map(Number);
   openSheet({
-    title: '매입 내역 추가',
+    title: date ? `${m}월 ${d}일 매입 추가` : '매입 내역 추가',
     render(body, close) {
       body.innerHTML = `
         <div class="menu">
@@ -451,13 +451,14 @@ function openCaptureMenu() {
           <button class="menu-btn" data-src="gallery"><span>🖼</span>앨범에서 선택<small>여러 장을 한 번에 인식</small></button>
           <button class="menu-btn" data-src="manual"><span>✍️</span>직접 입력</button>
         </div>
+        ${date ? `<p class="muted small menu-note">영수증에 날짜가 있으면 그 날짜로, 날짜를 읽지 못하면 ${m}월 ${d}일로 들어갑니다.</p>` : ''}
         ${store.settings.apiKey ? '' : '<p class="notice">자동 인식을 쓰려면 ⚙ 설정에서 Claude API 키를 입력하세요.</p>'}`;
       body.addEventListener('click', (e) => {
         const b = e.target.closest('[data-src]');
         if (!b) return;
         close();
-        if (b.dataset.src === 'manual') openEditor({ date: todayStr() });
-        else startCapture(b.dataset.src);
+        if (b.dataset.src === 'manual') openEditor({ date: date || todayStr() });
+        else startCapture(b.dataset.src, date);
       });
     },
   });

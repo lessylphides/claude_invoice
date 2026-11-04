@@ -269,3 +269,4 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 .pb-subs .ok b { color: var(--ok); }
 .pb-subs .warn b { color: var(--warn); }
 .pb-total { padding: 10px 0 2px; border-top: 2px solid var(--line); font-weight: 700; font-size: 16px; }
+.menu-note { margin: 10px 2px 0; }

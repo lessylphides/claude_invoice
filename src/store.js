@@ -4,7 +4,10 @@
 //   id, date: 'YYYY-MM-DD', vendor,
 //   payType: 'tax' | 'card' | '',   // 세금계산서 / 카드 / 미지정
 //   taxIssued: boolean,              // 세금계산서 발행 받았는지
-//   items: [{ id, name, category, qty, unit, unitPrice, amount }],
+//   items: [{ id, name, category, qty, unit,
+//             unitPrice,   // 할인 전 정가 단가
+//             discount,    // 이 품목에 붙은 쿠폰·할인 금액 (양수)
+//             amount }],   // 실제 지불 금액 = qty×unitPrice - discount
 //   memo, createdAt
 // }
 
@@ -54,8 +57,9 @@ function writeJSON(key, value) {
 function sanitizeItem(i) {
   const qty = Number(i.qty) || 0;
   const unitPrice = Number(i.unitPrice) || 0;
+  const discount = Math.max(0, Math.round(Number(i.discount) || 0));
   let amount = Number(i.amount);
-  if (!Number.isFinite(amount) || amount === 0) amount = qty * unitPrice;
+  if (!Number.isFinite(amount) || amount === 0) amount = qty * unitPrice - discount;
   return {
     id: i.id || uid(),
     name: String(i.name || '').trim() || '(품목명 없음)',
@@ -63,6 +67,7 @@ function sanitizeItem(i) {
     qty,
     unit: String(i.unit || '').trim(),
     unitPrice,
+    discount,
     amount: Math.round(amount),
   };
 }
@@ -165,3 +170,11 @@ export const store = {
 };
 
 export const purchaseTotal = (p) => p.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+/** 할인을 반영한 실제 단가 */
+export function netUnitPrice(i) {
+  const qty = Number(i.qty) || 0;
+  const amount = Number(i.amount) || 0;
+  if (qty) return Math.round(amount / qty);
+  return amount || Number(i.unitPrice) || 0;
+}

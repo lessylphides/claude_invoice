@@ -7,31 +7,37 @@ import { payChoiceHTML } from './payui.js';
 
 /**
  * @param {object} draft 초기값 (purchase 형식, id 가 있으면 수정)
- * @param {{imageFile?:File, note?:string}} opts
+ * @param {{imageFiles?:File[], note?:string}} opts
  * @returns {Promise<object|null>} 저장된 purchase 또는 null(취소)
  */
-export function openEditor(draft, { imageFile, note } = {}) {
+export function openEditor(draft, { imageFiles = [], note } = {}) {
   const isEdit = !!(draft.id && store.get(draft.id));
   const p = structuredClone({
     date: todayStr(), vendor: '', payType: '', taxIssued: false, memo: '', items: [], ...draft,
   });
   if (!p.items.length) p.items.push(blankItem());
   p.items.forEach((i) => (i.id ||= uid()));
-  const imgUrl = imageFile ? URL.createObjectURL(imageFile) : null;
+  const imgUrls = imageFiles.map((f) => URL.createObjectURL(f));
 
   return new Promise((resolve) => {
     let saved = null;
     openSheet({
       title: isEdit ? '매입 내역 수정' : '매입 내역 확인',
       onClose: () => {
-        if (imgUrl) URL.revokeObjectURL(imgUrl);
+        imgUrls.forEach((u) => URL.revokeObjectURL(u));
         resolve(saved);
       },
       render(body, close) {
         const cats = store.categories;
         body.innerHTML = `
           ${note ? `<p class="notice">${esc(note)}</p>` : ''}
-          ${imgUrl ? `<details class="photo"><summary>촬영한 사진 보기</summary><img src="${imgUrl}" alt="촬영한 영수증"></details>` : ''}
+          ${
+            imgUrls.length
+              ? `<details class="photo"><summary>촬영한 사진 보기${imgUrls.length > 1 ? ` (${imgUrls.length}장)` : ''}</summary>${imgUrls
+                  .map((u, i) => `<img src="${u}" alt="영수증 사진 ${i + 1}">`)
+                  .join('')}</details>`
+              : ''
+          }
           <form class="editor" novalidate>
             <div class="row2">
               <label>날짜<input type="date" name="date" required value="${esc(p.date)}"></label>
@@ -75,8 +81,18 @@ export function openEditor(draft, { imageFile, note } = {}) {
                 <input data-f="qty" type="number" inputmode="decimal" step="any" placeholder="수량" value="${it.qty ?? ''}" aria-label="수량">
                 <input data-f="unit" placeholder="단위" value="${esc(it.unit)}" aria-label="단위">
                 <input data-f="unitPrice" type="number" inputmode="numeric" placeholder="단가" value="${it.unitPrice ?? ''}" aria-label="단가">
-                <input data-f="amount" type="number" inputmode="numeric" placeholder="금액" value="${it.amount ?? ''}" aria-label="금액">
+                <input data-f="amount" type="number" inputmode="numeric" placeholder="금액" value="${it.amount ?? ''}" aria-label="금액(할인 후)">
               </div>
+              ${
+                Number(it.discount) || it._showDisc
+                  ? `<div class="row-disc">
+                       <span class="disc-label">└ 할인</span>
+                       <input data-f="discount" type="number" inputmode="numeric" min="0" placeholder="할인액" value="${it.discount || ''}" aria-label="할인 금액">
+                       <span class="disc-net">정가 ${num((Number(it.qty) || 0) * (Number(it.unitPrice) || 0))}원</span>
+                       <button type="button" class="link danger rm-disc">빼기</button>
+                     </div>`
+                  : '<button type="button" class="link add-disc">+ 쿠폰·할인</button>'
+              }
             </div>`,
             )
             .join('');
@@ -89,14 +105,17 @@ export function openEditor(draft, { imageFile, note } = {}) {
           if (!f) return;
           const row = e.target.closest('.item-edit');
           const it = p.items[+row.dataset.idx];
-          const numeric = ['qty', 'unitPrice', 'amount'].includes(f);
+          const numeric = ['qty', 'unitPrice', 'amount', 'discount'].includes(f);
           it[f] = numeric ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value;
-          if (f === 'qty' || f === 'unitPrice') {
-            const a = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
-            if (a) {
-              it.amount = Math.round(a);
+          if (f === 'qty' || f === 'unitPrice' || f === 'discount') {
+            // 금액 = 수량 × 정가 단가 - 할인
+            const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+            if (gross) {
+              it.amount = Math.round(gross - (Number(it.discount) || 0));
               row.querySelector('[data-f=amount]').value = it.amount;
             }
+            const net = row.querySelector('.disc-net');
+            if (net) net.textContent = `정가 ${num(gross)}원`;
           }
           updateSum();
         });
@@ -104,10 +123,26 @@ export function openEditor(draft, { imageFile, note } = {}) {
           if (e.target.dataset.f === 'category') p.items[+e.target.closest('.item-edit').dataset.idx].category = e.target.value;
         });
         itemsEl.addEventListener('click', (e) => {
-          if (!e.target.closest('.del')) return;
-          p.items.splice(+e.target.closest('.item-edit').dataset.idx, 1);
-          if (!p.items.length) p.items.push(blankItem());
-          drawItems();
+          const row = e.target.closest('.item-edit');
+          if (!row) return;
+          const idx = +row.dataset.idx;
+          const it = p.items[idx];
+          if (e.target.closest('.del')) {
+            p.items.splice(idx, 1);
+            if (!p.items.length) p.items.push(blankItem());
+            drawItems();
+          } else if (e.target.closest('.add-disc')) {
+            it._showDisc = true;
+            drawItems();
+            itemsEl.querySelector(`[data-idx="${idx}"] [data-f=discount]`).focus();
+          } else if (e.target.closest('.rm-disc')) {
+            const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+            if (gross) it.amount = Math.round(gross);
+            else it.amount = (Number(it.amount) || 0) + (Number(it.discount) || 0);
+            it.discount = 0;
+            it._showDisc = false;
+            drawItems();
+          }
         });
         body.querySelector('.add-item').addEventListener('click', () => {
           p.items.push(blankItem());
@@ -149,21 +184,27 @@ export function openEditor(draft, { imageFile, note } = {}) {
 }
 
 function blankItem() {
-  return { id: uid(), name: '', category: '기타', qty: 1, unit: '', unitPrice: '', amount: '' };
+  return { id: uid(), name: '', category: '기타', qty: 1, unit: '', unitPrice: '', discount: 0, amount: '' };
 }
 
 /** Claude 인식 결과(JSON) → purchase 초안 */
 export function draftFromOcr(r, fallbackDate) {
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? r.date : fallbackDate;
-  const items = (r.items || []).map((i) => ({
-    id: uid(),
-    name: i.name,
-    category: i.category,
-    qty: i.qty || 1,
-    unit: i.unit || '',
-    unitPrice: i.unitPrice || (i.qty ? Math.round(i.amount / i.qty) : i.amount),
-    amount: i.amount || (i.qty || 1) * (i.unitPrice || 0),
-  }));
+  const items = (r.items || []).map((i) => {
+    const qty = i.qty || 1;
+    const discount = Math.max(0, Math.round(Number(i.discount) || 0));
+    const unitPrice = i.unitPrice || Math.round(((Number(i.amount) || 0) + discount) / qty);
+    return {
+      id: uid(),
+      name: i.name,
+      category: i.category,
+      qty,
+      unit: i.unit || '',
+      unitPrice,
+      discount,
+      amount: i.amount || qty * unitPrice - discount,
+    };
+  });
   if (!items.length && r.total) items.push({ id: uid(), name: '합계', category: '기타', qty: 1, unit: '', unitPrice: r.total, amount: r.total });
 
   const notes = [];

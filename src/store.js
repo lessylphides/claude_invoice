@@ -75,7 +75,8 @@ function sanitizeItem(i) {
   };
 }
 
-export const PACK_UNITS = ['ml', 'g', '개', '조각', '잔'];
+// 용량 단위: 마시는 것은 ml, 무게는 g, 조각·낱개로 나눠 쓰는 것(케이크 7조각, 맥주 24병)은 개
+export const PACK_UNITS = ['ml', 'g', '개'];
 
 /** 품목 이름에서 용량 추정: '몽키숄더700ML' → 700 ml, '휘핑크림 2L' → 2000 ml, '블루베리510G' → 510 g */
 export function guessPack(name) {

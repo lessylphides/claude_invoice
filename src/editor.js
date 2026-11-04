@@ -1,9 +1,10 @@
 // 매입 내역 입력/수정 폼 (촬영 인식 결과 검토 포함)
 
 import { esc, num, won, todayStr, uid } from './format.js';
-import { store, purchaseTotal, guessPack, PACK_UNITS } from './store.js';
+import { store, purchaseTotal, guessPack } from './store.js';
 import { openSheet, toast } from './sheet.js';
 import { payChoiceHTML } from './payui.js';
+import { unitSelectHTML } from './units.js';
 
 /**
  * @param {object} draft 초기값 (purchase 형식, id 가 있으면 수정)
@@ -50,7 +51,6 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
             </fieldset>
             <h3 class="sub">품목</h3>
             <div class="row-nums item-head" aria-hidden="true"><span>분류</span><span>수량</span><span>단위</span><span>단가</span><span>금액</span></div>
-            <datalist id="pack-units">${PACK_UNITS.map((u) => `<option value="${u}">`).join('')}</datalist>
             <div class="items"></div>
             <button type="button" class="btn ghost add-item">+ 품목 추가</button>
             <label>메모<input name="memo" value="${esc(p.memo)}" placeholder="선택"></label>
@@ -87,7 +87,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
               <div class="row-spec">
                 <span class="spec-label">1개 용량</span>
                 <input data-f="packSize" type="number" inputmode="decimal" step="any" min="0" placeholder="예: 700" value="${it.packSize || ''}" aria-label="1개 용량">
-                <input data-f="packUnit" list="pack-units" class="unit" placeholder="ml" value="${esc(it.packUnit || '')}" aria-label="용량 단위">
+                ${unitSelectHTML('data-f="packUnit"', it.packUnit || '')}
                 ${it._specFrom === 'history' ? '<em class="spec-tag">이전 기록</em>' : ''}
                 ${Number(it.discount) || it._showDisc ? '' : '<button type="button" class="link add-disc">+ 쿠폰·할인</button>'}
               </div>
@@ -136,7 +136,14 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           if (!it) return;
           if (e.target.dataset.f === 'category') it.category = e.target.value;
           // 품목명을 입력하면 같은 품목의 이전 용량 기록(없으면 이름의 700ML 등)으로 용량을 채움
-          if (e.target.dataset.f === 'name' && !Number(it.packSize) && fillSpec(it)) setTimeout(drawItems);
+          // (목록을 다시 그리지 않고 그 줄의 용량 칸만 바꿔서, 다음 칸으로 넘어갈 때 포커스가 끊기지 않게 함)
+          if (e.target.dataset.f === 'name' && !Number(it.packSize) && fillSpec(it)) {
+            const row = e.target.closest('.item-edit');
+            row.querySelector('[data-f=packSize]').value = it.packSize || '';
+            row.querySelector('[data-f=packUnit]').outerHTML = unitSelectHTML('data-f="packUnit"', it.packUnit || '');
+            if (it._specFrom === 'history' && !row.querySelector('.spec-tag'))
+              row.querySelector('[data-f=packUnit]').insertAdjacentHTML('afterend', '<em class="spec-tag">이전 기록</em>');
+          }
         });
         itemsEl.addEventListener('click', (e) => {
           const row = e.target.closest('.item-edit');

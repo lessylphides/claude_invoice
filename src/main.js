@@ -597,15 +597,25 @@ function exportCsv() {
   for (const p of [...monthPurchases()].sort((a, b) => a.date.localeCompare(b.date)))
     for (const i of p.items)
       rows.push([p.date, p.vendor, PAY_LABEL[p.payType], p.payType === 'tax' ? (p.taxIssued ? '발행' : '미발행') : '', i.name, i.category, i.qty, i.unit, i.packSize || '', i.packUnit || '', i.unitPrice, i.discount || 0, i.amount]);
-  const csv = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  // 엑셀이 =, +, @ 로 시작하는 값을 수식으로 실행하지 않도록 앞에 ' 를 붙임 (음수 숫자는 그대로)
+  const cell = (c) => {
+    let s = String(c ?? '');
+    if (/^[=+@\t\r]/.test(s) || /^-(?!\d)/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  const csv = rows.map((r) => r.map(cell).join(',')).join('\r\n');
   download(`매입_${monthKey()}.csv`, '﻿' + csv, 'text/csv');
 }
 
 function download(name, content, type) {
+  // 링크를 문서에 붙였다가 떼야 브라우저가 파일 이름(download 속성)을 지켜 줌
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([content], { type }));
   a.download = name;
+  a.hidden = true;
+  document.body.append(a);
   a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 

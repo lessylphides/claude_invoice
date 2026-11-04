@@ -2,7 +2,8 @@
 // 데이터 형식·계산 규칙은 lib/model.js, 품목 색인은 lib/itemIndex.js 에 있습니다.
 
 import { normKey, todayStr } from './lib/format.js';
-import { migrate, mergeLegacy, sanitizePurchase, sanitizeMenu, sanitizeCategories, parseTarget } from './lib/model.js';
+import { migrate, mergeLegacy, sanitizePurchase, sanitizeMenu, sanitizeCategories, parseTarget, parseMargin } from './lib/model.js';
+import { currentMinMargin } from './lib/cost.js';
 import { buildItemIndex } from './lib/itemIndex.js';
 import { applyCategoryEdit } from './lib/menuCategories.js';
 import * as persist from './persist.js';
@@ -207,11 +208,41 @@ export const store = {
    * @returns {number} 미분류로 옮겨진 메뉴 수
    */
   saveMenuCategories(entries) {
-    const r = applyCategoryEdit(data.menus, entries, data.menuCategories);
+    const r = applyCategoryEdit(data.menus, entries, data.menuCategories, data.minMargins);
     data.menuCategories = r.categories;
     data.menus = r.menus;
+    data.minMargins = r.margins;
     commit();
     return r.moved;
+  },
+  /** 분류별 최소 마진 기록 { 분류: [{value, at}] } */
+  get minMargins() {
+    return data.minMargins;
+  },
+  /** 분류의 현재 최소 마진 (없으면 null) */
+  minMarginOf(category) {
+    return currentMinMargin(data.minMargins, category);
+  },
+  /** 분류의 최소 마진이 마지막으로 바뀐 기록 {value, at} (없으면 null) */
+  minMarginLast(category) {
+    return data.minMargins[category]?.at(-1) ?? null;
+  },
+  /**
+   * 여러 분류의 최소 마진을 한 번에 저장. 바뀐 분류만 오늘 날짜로 기록 (빈칸·0 = 설정 안 함)
+   * @param {Record<string, string|number>} values
+   * @returns {string[]} 바뀐 분류
+   */
+  setMinMargins(values) {
+    const parsed = Object.entries(values).map(([cat, v]) => [cat, parseMargin(v)]); // 잘못된 값이 있으면 아무것도 저장하지 않음
+    const changed = [];
+    for (const [cat, v] of parsed) {
+      if (!data.menuCategories.includes(cat)) continue;
+      if ((this.minMarginOf(cat) ?? 0) === v) continue;
+      (data.minMargins[cat] ??= []).push({ value: v, at: todayStr() });
+      changed.push(cat);
+    }
+    if (changed.length) commit();
+    return changed;
   },
   /** 현재 목표 원가율 {value, at, note?} */
   get costTarget() {

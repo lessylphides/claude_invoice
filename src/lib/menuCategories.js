@@ -6,9 +6,10 @@ import { UNCATEGORIZED, sanitizeMenuCategories } from './model.js';
  * @param {Array} menus
  * @param {Array<{orig: string|null, name: string}>} entries 편집 화면의 줄 (orig: 원래 이름, 새로 추가한 줄은 null), 이 순서가 새 순서
  * @param {string[]} before 편집 전 분류 목록
- * @returns {{categories: string[], menus: Array, moved: number}} moved: 지운 분류에서 미분류로 옮겨진 메뉴 수
+ * @param {object} margins 분류별 최소 마진 기록 (이름을 바꾸면 따라가고, 지운 분류의 기록은 버림)
+ * @returns {{categories: string[], menus: Array, moved: number, margins: object}} moved: 지운 분류에서 미분류로 옮겨진 메뉴 수
  */
-export function applyCategoryEdit(menus, entries, before) {
+export function applyCategoryEdit(menus, entries, before, margins = {}) {
   const categories = sanitizeMenuCategories(entries.map((e) => e.name));
   const rename = new Map();
   for (const e of entries) {
@@ -25,7 +26,9 @@ export function applyCategoryEdit(menus, entries, before) {
     }
     return m;
   });
-  return { categories, menus: next, moved };
+  const nextMargins = {};
+  for (const [orig, name] of rename) if (margins[orig]?.length && !nextMargins[name]) nextMargins[name] = margins[orig];
+  return { categories, menus: next, moved, margins: nextMargins };
 }
 
 /**

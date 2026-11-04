@@ -49,17 +49,48 @@ export function menuCost(menu, index) {
 /** 목표 원가율에 맞추려면 필요한 판매가 (100원 단위 올림) */
 export const priceForTarget = (cost, target) => Math.ceil(cost / (target / 100) / 100) * 100;
 
+/** 최소 마진을 남기려면 필요한 판매가 (100원 단위 올림) */
+export const priceForMargin = (cost, minMargin) => Math.ceil((cost + minMargin) / 100) * 100;
+
+/** 분류의 현재 최소 마진 (설정 안 했거나 0 이면 null) */
+export function currentMinMargin(margins, category) {
+  const v = margins?.[category]?.at(-1)?.value;
+  return v > 0 ? v : null;
+}
+
 /**
- * 원가 탭 요약: 원가율 높은 순(계산 불가는 맨 뒤), 목표 초과 수, 평균.
- * 초과 수: 일부 재료가 빠져도 이미 목표를 넘었으면 셈(실제로는 더 높으므로).
- * 평균: 모든 재료가 계산된 메뉴만.
+ * 메뉴 판정
+ * - 'rate'    원가율이 목표 이하 → 합격
+ * - 'margin'  원가율은 넘었지만 한 잔 마진이 최소 마진 이상 → 합격(마진 기준). 일부 재료가 빠졌으면 실제 마진이 더 작을 수 있어 이 판정은 하지 않음
+ * - 'over'    둘 다 못 채움 → ⚠
+ * - 'unknown' 원가율을 계산할 수 없음
  */
-export function summarizeMenus(menus, index, target) {
-  const rows = menus.map((m) => ({ m, c: menuCost(m, index) })).sort((a, b) => (b.c.rate ?? -1) - (a.c.rate ?? -1));
+export function judgeMenu(c, price, target, minMargin) {
+  const margin = (Number(price) || 0) - c.cost;
+  if (c.rate == null) return { status: 'unknown', margin, minMargin };
+  if (c.rate <= target) return { status: 'rate', margin, minMargin };
+  if (minMargin != null && !c.missing && margin >= minMargin) return { status: 'margin', margin, minMargin };
+  return { status: 'over', margin, minMargin };
+}
+
+/**
+ * 원가 탭 요약: 원가율 높은 순(계산 불가는 맨 뒤), ⚠ 수, 마진 기준 충족 수, 평균.
+ * ⚠: 원가율이 목표를 넘고 최소 마진도 못 채운 메뉴 (일부 재료가 빠져도 이미 넘었으면 셈)
+ * 평균: 모든 재료가 계산된 메뉴만.
+ * @param {object} margins 분류별 최소 마진 기록
+ */
+export function summarizeMenus(menus, index, target, margins = {}) {
+  const rows = menus
+    .map((m) => {
+      const c = menuCost(m, index);
+      return { m, c, j: judgeMenu(c, m.price, target, currentMinMargin(margins, m.category)) };
+    })
+    .sort((a, b) => (b.c.rate ?? -1) - (a.c.rate ?? -1));
   const complete = rows.filter((r) => r.c.rate != null && !r.c.missing);
   return {
     rows,
-    over: rows.filter((r) => r.c.rate != null && r.c.rate > target).length,
+    over: rows.filter((r) => r.j.status === 'over').length,
+    byMargin: rows.filter((r) => r.j.status === 'margin').length,
     avg: complete.length ? complete.reduce((s, r) => s + r.c.rate, 0) / complete.length : null,
   };
 }

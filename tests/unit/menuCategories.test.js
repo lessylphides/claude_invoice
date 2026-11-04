@@ -52,3 +52,11 @@ describe('분류별 묶기·거르기', () => {
     expect(filterMenus(ms, '미분류', before).map((m) => m.id)).toEqual(['y', 'w']);
   });
 });
+
+describe('분류 편집과 최소 마진 기록', () => {
+  const margins = { 커피: [{ value: 3000, at: '2026-11-01' }], 위스키: [{ value: 12000, at: '2026-11-01' }] };
+  it('이름을 바꾸면 기록도 따라가고, 지운 분류의 기록은 버림', () => {
+    const r = applyCategoryEdit([], [{ orig: '위스키', name: '싱글몰트' }, { orig: '칵테일', name: '칵테일' }], ['커피', '위스키', '칵테일'], margins);
+    expect(r.margins).toEqual({ 싱글몰트: [{ value: 12000, at: '2026-11-01' }] });
+  });
+});

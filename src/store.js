@@ -1,0 +1,167 @@
+// 데이터 저장소 (기기 브라우저의 localStorage 에 저장)
+//
+// purchase = {
+//   id, date: 'YYYY-MM-DD', vendor,
+//   payType: 'tax' | 'card' | '',   // 세금계산서 / 카드 / 미지정
+//   taxIssued: boolean,              // 세금계산서 발행 받았는지
+//   items: [{ id, name, category, qty, unit, unitPrice, amount }],
+//   memo, createdAt
+// }
+
+import { normKey, uid } from './format.js';
+
+const DATA_KEY = 'maeip.data.v1';
+const SETTINGS_KEY = 'maeip.settings.v1';
+
+export const DEFAULT_CATEGORIES = [
+  '채소·과일',
+  '육류',
+  '수산물',
+  '곡물·가공식품',
+  '유제품·계란',
+  '양념·소스',
+  '주류·음료',
+  '포장·소모품',
+  '공산품·비품',
+  '기타',
+];
+
+export const MODELS = [
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (정확도 우선, 기본)' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (빠름·저렴)' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (가장 저렴)' },
+];
+
+function readJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    alert('저장에 실패했습니다. 브라우저 저장 공간 또는 개인정보 보호 모드를 확인하세요.');
+    return false;
+  }
+}
+
+function sanitizeItem(i) {
+  const qty = Number(i.qty) || 0;
+  const unitPrice = Number(i.unitPrice) || 0;
+  let amount = Number(i.amount);
+  if (!Number.isFinite(amount) || amount === 0) amount = qty * unitPrice;
+  return {
+    id: i.id || uid(),
+    name: String(i.name || '').trim() || '(품목명 없음)',
+    category: String(i.category || '기타'),
+    qty,
+    unit: String(i.unit || '').trim(),
+    unitPrice,
+    amount: Math.round(amount),
+  };
+}
+
+function sanitizePurchase(p) {
+  return {
+    id: p.id || uid(),
+    date: String(p.date),
+    vendor: String(p.vendor || '').trim() || '(거래처 미상)',
+    payType: p.payType === 'tax' || p.payType === 'card' ? p.payType : '',
+    taxIssued: p.payType === 'tax' ? !!p.taxIssued : false,
+    items: (p.items || []).map(sanitizeItem),
+    memo: String(p.memo || ''),
+    createdAt: p.createdAt || Date.now(),
+  };
+}
+
+let data = readJSON(DATA_KEY, null) || { purchases: [], categories: DEFAULT_CATEGORIES.slice() };
+if (!Array.isArray(data.categories) || !data.categories.length) data.categories = DEFAULT_CATEGORIES.slice();
+if (!Array.isArray(data.purchases)) data.purchases = [];
+
+let settings = { apiKey: '', model: MODELS[0].id, ...readJSON(SETTINGS_KEY, {}) };
+
+const listeners = new Set();
+function commit() {
+  writeJSON(DATA_KEY, data);
+  listeners.forEach((fn) => fn());
+}
+
+export const store = {
+  subscribe(fn) {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  },
+  get purchases() {
+    return data.purchases;
+  },
+  get categories() {
+    return data.categories;
+  },
+  get settings() {
+    return settings;
+  },
+  saveSettings(patch) {
+    settings = { ...settings, ...patch };
+    writeJSON(SETTINGS_KEY, settings);
+  },
+  get(id) {
+    return data.purchases.find((p) => p.id === id);
+  },
+  upsert(p) {
+    const clean = sanitizePurchase(p);
+    const idx = data.purchases.findIndex((x) => x.id === clean.id);
+    if (idx >= 0) data.purchases[idx] = clean;
+    else data.purchases.push(clean);
+    commit();
+    return clean;
+  },
+  remove(id) {
+    data.purchases = data.purchases.filter((p) => p.id !== id);
+    commit();
+  },
+  /** 여러 영수증(같은 날·같은 거래처)의 결제 정보를 한 번에 바꿈 */
+  setPayment(ids, patch) {
+    for (const p of data.purchases) {
+      if (!ids.includes(p.id)) continue;
+      if ('payType' in patch) p.payType = patch.payType;
+      if ('taxIssued' in patch) p.taxIssued = !!patch.taxIssued;
+      if (p.payType !== 'tax') p.taxIssued = false;
+    }
+    commit();
+  },
+  setCategories(list) {
+    const clean = [...new Set(list.map((s) => s.trim()).filter(Boolean))];
+    data.categories = clean.length ? clean : DEFAULT_CATEGORIES.slice();
+    if (!data.categories.includes('기타')) data.categories.push('기타');
+    commit();
+  },
+  exportData() {
+    return JSON.stringify({ app: 'maeip-calendar', version: 1, exportedAt: new Date().toISOString(), ...data }, null, 2);
+  },
+  importData(json) {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed.purchases)) throw new Error('올바른 백업 파일이 아닙니다.');
+    data = {
+      purchases: parsed.purchases.map(sanitizePurchase),
+      categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : DEFAULT_CATEGORIES.slice(),
+    };
+    commit();
+  },
+  /** 지금까지 입력된 거래처 이름 (최근 사용 순) */
+  vendorNames() {
+    const seen = new Map();
+    [...data.purchases].sort((a, b) => b.date.localeCompare(a.date)).forEach((p) => {
+      const k = normKey(p.vendor);
+      if (!seen.has(k)) seen.set(k, p.vendor);
+    });
+    return [...seen.values()];
+  },
+};
+
+export const purchaseTotal = (p) => p.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);

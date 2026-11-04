@@ -1,0 +1,127 @@
+// 영수증·거래명세서 사진 → Claude API(비전 + 구조화 출력)로 매입 내역 추출
+
+import Anthropic from '@anthropic-ai/sdk';
+import { todayStr } from './format.js';
+
+/** 사진을 긴 변 1568px 이하 JPEG(base64)로 줄임 – 전송량을 줄이고 인식 품질은 유지 */
+export async function fileToJpegBase64(file, maxSide = 1568) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('이미지를 읽을 수 없습니다. (HEIC 형식이면 JPG로 촬영해 주세요)'));
+      el.src = url;
+    });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function buildSchema(categories) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['documentType', 'date', 'vendor', 'paymentHint', 'items', 'total'],
+    properties: {
+      documentType: { type: 'string', enum: ['영수증', '거래명세서', '세금계산서', '기타'] },
+      date: { type: 'string', description: '거래일 YYYY-MM-DD. 알 수 없으면 빈 문자열' },
+      vendor: { type: 'string', description: '판매자(공급자) 상호명' },
+      paymentHint: {
+        type: 'string',
+        enum: ['card', 'tax', 'cash', 'unknown'],
+        description: 'card=카드 결제 흔적(카드번호/승인번호), tax=세금계산서 또는 세금계산서 발행 예정 거래명세서, cash=현금, unknown',
+      },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'category', 'qty', 'unit', 'unitPrice', 'amount'],
+          properties: {
+            name: { type: 'string' },
+            category: { type: 'string', enum: categories },
+            qty: { type: 'number' },
+            unit: { type: 'string', description: 'kg, 개, 박스, 봉 등. 없으면 빈 문자열' },
+            unitPrice: { type: 'number', description: '단가(원)' },
+            amount: { type: 'number', description: '공급가액+세액 합계 금액(원)' },
+          },
+        },
+      },
+      total: { type: 'number', description: '문서의 최종 합계 금액(원)' },
+    },
+  };
+}
+
+const SYSTEM = `당신은 한국 식당·소상공인의 매입 장부 입력을 돕는 도우미입니다.
+사진 속 구매 영수증, 거래명세서, 세금계산서를 읽어 매입 내역을 정확히 추출합니다.
+- 금액은 원 단위 숫자만 (쉼표·'원' 제외). 품목별 amount 는 부가세 포함 실제 지불 금액으로 적고, 거래명세서에 공급가액과 세액이 따로 있으면 합산합니다.
+- 할인·봉투값 등은 별도 품목으로 넣되 할인은 음수 금액으로 적습니다.
+- 수량이나 단가가 없으면 qty=1, unitPrice=amount 로 둡니다.
+- 품목명은 문서에 적힌 그대로 쓰되 규격(예: 1kg, 20입)은 unit 이나 품목명 뒤에 유지합니다.
+- 각 품목을 주어진 분류 중 가장 알맞은 것으로 분류합니다.
+- 읽을 수 없는 값은 추측하지 말고 빈 문자열 또는 0 으로 둡니다.`;
+
+export async function extractReceipt(file, { apiKey, model, categories, knownVendors = [] }) {
+  if (!apiKey) throw new Error('설정에서 Claude API 키를 먼저 입력해 주세요.');
+  const data = await fileToJpegBase64(file);
+
+  // 키는 이 기기 브라우저에만 저장되며 Anthropic API 로만 전송됩니다.
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 2 });
+
+  const prompt = `오늘 날짜: ${todayStr()} (연도가 생략된 문서는 오늘 기준 가장 가까운 과거 날짜로 판단)
+분류 목록: ${categories.join(', ')}
+${knownVendors.length ? `기존 거래처(같은 곳이면 이 표기를 그대로 사용): ${knownVendors.slice(0, 60).join(', ')}` : ''}
+이 사진의 매입 내역을 추출해 주세요.`;
+
+  const usesFallback = !model.startsWith('claude-haiku');
+  let res;
+  try {
+    res = await client.beta.messages.create({
+      model,
+      max_tokens: 16000,
+      ...(usesFallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: buildSchema(categories) } },
+      system: SYSTEM,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+            { type: 'text', text: prompt },
+          ],
+        },
+      ],
+    });
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw new Error('API 키가 올바르지 않습니다. 설정에서 확인해 주세요.');
+    if (err instanceof Anthropic.PermissionDeniedError) throw new Error('이 API 키로는 선택한 모델을 쓸 수 없습니다.');
+    if (err instanceof Anthropic.RateLimitError) throw new Error('요청이 많습니다. 잠시 후 다시 시도해 주세요.');
+    if (err instanceof Anthropic.BadRequestError) throw new Error(`요청 오류: ${err.message}`);
+    if (err instanceof Anthropic.APIConnectionError) throw new Error('인터넷 연결을 확인해 주세요.');
+    if (err instanceof Anthropic.APIError) throw new Error(`Claude API 오류 (${err.status ?? '?'}): ${err.message}`);
+    throw err;
+  }
+
+  if (res.stop_reason === 'refusal') throw new Error('이 사진은 인식할 수 없습니다. 직접 입력해 주세요.');
+  if (res.stop_reason === 'max_tokens') throw new Error('품목이 너무 많아 인식이 중간에 끊겼습니다. 나눠서 촬영해 주세요.');
+
+  const text = res.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('인식 결과를 해석하지 못했습니다. 다시 시도하거나 직접 입력해 주세요.');
+  }
+}

@@ -2,8 +2,10 @@
 // 매입 내역의 '가장 최근 매입 단가(할인 반영)'로 자동 계산하므로, 새 영수증이 들어오면 원가율도 바로 바뀝니다.
 
 import { dotDate, esc, normKey, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
-import { guessPack } from '../lib/model.js';
+import { guessPack, UNCATEGORIZED } from '../lib/model.js';
 import { menuCost, priceForTarget, summarizeMenus } from '../lib/cost.js';
+import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
+import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
@@ -15,10 +17,51 @@ const specOf = (name) => store.index.spec(name);
 
 // ───────────────────────── 원가 탭 화면 ─────────────────────────
 
+/** 지금 고른 분류 (지워진 분류를 보고 있었으면 '전체'로) */
+function currentFilter() {
+  const f = view.costFilter;
+  const cats = store.menuCategories;
+  if (f === '전체' || cats.includes(f)) return f;
+  if (f === UNCATEGORIZED && store.menus.some((m) => !m.category || !cats.includes(m.category))) return f;
+  return '전체';
+}
+
+function filterChips(filter) {
+  const cats = store.menuCategories;
+  const count = (f) => filterMenus(store.menus, f, cats).length;
+  const uncategorized = count(UNCATEGORIZED);
+  const chip = (f) =>
+    `<button class="chip" aria-pressed="${filter === f}" data-cost-filter="${esc(f)}">${esc(f)} <small>${count(f)}</small></button>`;
+  return `<div class="chips cat-chips" role="group" aria-label="메뉴 분류">
+    ${chip('전체')}${cats.map(chip).join('')}${uncategorized ? chip(UNCATEGORIZED) : ''}
+    <button class="chip chip-edit" data-cost="edit-cats" aria-label="메뉴 분류 편집">✎ 편집</button>
+  </div>`;
+}
+
 export function renderCostTab() {
   const target = store.costTarget;
-  const { rows, over, avg } = summarizeMenus(store.menus, store.index, target.value);
+  const filter = currentFilter();
+  const menus = filterMenus(store.menus, filter, store.menuCategories);
+  const { rows, over, avg } = summarizeMenus(menus, store.index, target.value);
   const scale = Math.max(50, target.value * 2);
+  const cards = (list) => list.map(({ m, c }) => menuCard(m, c, target.value, scale)).join('');
+
+  let body;
+  if (!store.menus.length)
+    body = `<section class="summary"><p class="empty-msg">파는 메뉴를 등록하면<br>최근 매입가로 <b>한 잔(조각) 원가</b>와 <b>원가율</b>을 자동 계산합니다.<br><br>
+             <span class="muted small">예) 몽키숄더 한 잔: 700ml 한 병 중 30ml 사용<br>바스크 치즈케이크: 1개를 7조각으로</span></p></section>`;
+  else if (!rows.length) body = `<section class="summary"><p class="empty-msg">${esc(filter)} 분류에 메뉴가 없습니다.<br>아래 <b>메뉴 추가</b>로 등록하세요.</p></section>`;
+  else
+    body = `<p class="cost-summary">${filter === '전체' ? '' : `${esc(filter)} · `}메뉴 ${rows.length}개 · ${
+      over ? `<b class="warn">⚠ 목표 초과 ${over}개</b>` : '<b class="ok">모두 목표 이내</b>'
+    } · 평균 ${pct(avg)}</p>
+      ${
+        filter === '전체'
+          ? groupRowsByCategory(rows, store.menuCategories)
+              .map((g) => `<section class="menu-group" aria-label="${esc(g.name)}"><h2 class="group-title">${esc(g.name)} <small>${g.rows.length}</small></h2><div class="menu-list">${cards(g.rows)}</div></section>`)
+              .join('')
+          : `<section class="menu-list">${cards(rows)}</section>`
+      }`;
 
   return `
     <header class="top">
@@ -35,13 +78,8 @@ export function renderCostTab() {
       <button class="btn ghost" data-cost="target">변경</button>
     </section>
 
-    ${
-      rows.length
-        ? `<p class="cost-summary">메뉴 ${rows.length}개 · ${over ? `<b class="warn">⚠ 목표 초과 ${over}개</b>` : '<b class="ok">모두 목표 이내</b>'} · 평균 ${pct(avg)}</p>
-           <section class="menu-list">${rows.map(({ m, c }) => menuCard(m, c, target.value, scale)).join('')}</section>`
-        : `<section class="summary"><p class="empty-msg">파는 메뉴를 등록하면<br>최근 매입가로 <b>한 잔(조각) 원가</b>와 <b>원가율</b>을 자동 계산합니다.<br><br>
-             <span class="muted small">예) 몽키숄더 한 잔: 700ml 한 병 중 30ml 사용<br>바스크 치즈케이크: 1개를 7조각으로</span></p></section>`
-    }
+    ${filterChips(filter)}
+    ${body}
 
     <div class="fab-wrap">
       <button class="fab" data-cost="add">＋<span>메뉴 추가</span></button>
@@ -67,11 +105,16 @@ function menuCard(m, c, target, scale) {
 }
 
 export function handleCostClick(e) {
-  const t = e.target.closest('[data-cost],[data-cost-open]');
+  const t = e.target.closest('[data-cost],[data-cost-open],[data-cost-filter]');
   if (!t) return false;
-  if (t.dataset.costOpen) openMenuDetail(t.dataset.costOpen);
-  else if (t.dataset.cost === 'add') openMenuEditor({});
-  else if (t.dataset.cost === 'target') openTargetSheet();
+  if (t.dataset.costFilter) setCostFilter(t.dataset.costFilter);
+  else if (t.dataset.costOpen) openMenuDetail(t.dataset.costOpen);
+  else if (t.dataset.cost === 'add') {
+    // 보고 있던 분류로 미리 골라 둠
+    const f = currentFilter();
+    openMenuEditor({ category: store.menuCategories.includes(f) ? f : '' });
+  } else if (t.dataset.cost === 'target') openTargetSheet();
+  else if (t.dataset.cost === 'edit-cats') openCategoryEditor();
   return true;
 }
 
@@ -175,8 +218,9 @@ function ingLi(p, total) {
 // ───────────────────────── 메뉴 등록/수정 ─────────────────────────
 
 function openMenuEditor(menu) {
-  const m = structuredClone({ name: '', price: '', ingredients: [], ...menu });
+  const m = structuredClone({ name: '', price: '', category: '', ingredients: [], ...menu });
   const isEdit = !!(menu.id && store.getMenu(menu.id));
+  const catOptions = ['', ...store.menuCategories];
 
   openSheet({
     title: isEdit ? '메뉴 수정' : '메뉴 추가',
@@ -187,6 +231,14 @@ function openMenuEditor(menu) {
             <label>메뉴 이름<input name="name" required placeholder="예: 몽키숄더 한 잔" value="${esc(m.name)}"></label>
             <label>판매가 (원)<input name="price" type="number" inputmode="numeric" required placeholder="12000" value="${m.price || ''}"></label>
           </div>
+          <fieldset class="cat-pick">
+            <legend>분류</legend>
+            <div class="chips">${catOptions
+              .map(
+                (c) => `<label class="chip radio-chip"><input type="radio" name="category" value="${esc(c)}" ${(m.category || '') === c ? 'checked' : ''}>${esc(c || UNCATEGORIZED)}</label>`,
+              )
+              .join('')}</div>
+          </fieldset>
           <h3 class="sub">재료 <span class="muted small">— 한 잔(한 조각)에 들어가는 양</span></h3>
           <div class="ings"></div>
           <div class="btn-row">
@@ -320,6 +372,7 @@ function openMenuEditor(menu) {
         e.preventDefault();
         m.name = form.elements.name.value.trim();
         m.price = Number(form.elements.price.value) || 0;
+        m.category = form.elements.category?.value ?? '';
         if (!m.name) return toast('메뉴 이름을 입력해 주세요.');
         if (!m.price) return toast('판매가를 입력해 주세요.');
         m.ingredients = m.ingredients.filter((g) => (g.type === 'manual' ? g.name || g.cost : g.itemName));
@@ -334,6 +387,85 @@ function openMenuEditor(menu) {
 
 function blankItemIng() {
   return { id: uid(), type: 'item', itemName: '', packSize: 0, unit: '', use: 0 };
+}
+
+// ───────────────────────── 메뉴 분류 편집 ─────────────────────────
+
+/** 분류 추가·이름 바꾸기·삭제·순서 바꾸기 (저장을 눌러야 반영) */
+function openCategoryEditor() {
+  // 편집 중인 줄: orig = 원래 이름(새 줄은 null). 이름을 바꿔도 orig 로 메뉴를 따라가게 함
+  let rows = store.menuCategories.map((name) => ({ orig: name, name }));
+  const countOf = (orig) => (orig ? store.menus.filter((m) => m.category === orig).length : 0);
+
+  openSheet({
+    title: '메뉴 분류 편집',
+    render(body, close, redraw) {
+      body.innerHTML = `
+        <p class="muted small">↑↓로 순서를 바꾸고, 이름을 눌러 고칠 수 있습니다. 분류를 지워도 메뉴는 지워지지 않고 '미분류'로 옮겨집니다.</p>
+        <ol class="cat-edit">${rows
+          .map(
+            (r, i) => `<li data-i="${i}">
+              <input data-f="name" value="${esc(r.name)}" aria-label="분류 이름 ${i + 1}" placeholder="분류 이름">
+              <span class="muted small cat-count">${countOf(r.orig)}개</span>
+              <button type="button" class="icon-btn" data-move="-1" aria-label="${esc(r.name)} 위로" ${i === 0 ? 'disabled' : ''}>↑</button>
+              <button type="button" class="icon-btn" data-move="1" aria-label="${esc(r.name)} 아래로" ${i === rows.length - 1 ? 'disabled' : ''}>↓</button>
+              <button type="button" class="icon-btn del" data-del aria-label="${esc(r.name)} 삭제">✕</button>
+            </li>`,
+          )
+          .join('')}</ol>
+        <form class="cat-add">
+          <input name="newCat" placeholder="새 분류 이름 (예: 와인)" aria-label="새 분류 이름">
+          <button class="btn ghost" type="submit">추가</button>
+        </form>
+        <div class="actions">
+          <button type="button" class="btn ghost cancel">취소</button>
+          <button type="button" class="btn primary save">저장</button>
+        </div>`;
+
+      const list = body.querySelector('.cat-edit');
+      list.addEventListener('input', (e) => {
+        if (e.target.dataset.f === 'name') rows[+e.target.closest('li').dataset.i].name = e.target.value;
+      });
+      list.addEventListener('click', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const i = +li.dataset.i;
+        const mv = e.target.closest('[data-move]');
+        if (mv) {
+          const j = i + Number(mv.dataset.move);
+          if (j < 0 || j >= rows.length) return;
+          [rows[i], rows[j]] = [rows[j], rows[i]];
+          redraw();
+          body.querySelector(`li[data-i="${j}"] [data-move="${mv.dataset.move}"]:not([disabled])`)?.focus() ??
+            body.querySelector(`li[data-i="${j}"] [data-move]:not([disabled])`)?.focus();
+        } else if (e.target.closest('[data-del]')) {
+          const n = countOf(rows[i].orig);
+          if (n && !confirm(`'${rows[i].name}' 분류의 메뉴 ${n}개는 '미분류'로 옮겨집니다. 지울까요?`)) return;
+          rows.splice(i, 1);
+          redraw();
+        }
+      });
+      body.querySelector('.cat-add').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = e.target.elements.newCat.value.trim();
+        if (!name) return;
+        if (name === '전체' || name === UNCATEGORIZED) return toast(`'${name}'은(는) 분류 이름으로 쓸 수 없습니다.`);
+        if (rows.some((r) => r.name.trim() === name)) return toast('이미 있는 분류입니다.');
+        rows.push({ orig: null, name });
+        redraw();
+        body.querySelector('.cat-add input').focus();
+      });
+      body.querySelector('.cancel').addEventListener('click', close);
+      body.querySelector('.save').addEventListener('click', () => {
+        const names = rows.map((r) => r.name.trim());
+        if (names.some((n) => !n)) return toast('빈 분류 이름이 있습니다.');
+        if (new Set(names).size !== names.length) return toast('같은 이름의 분류가 두 개 있습니다.');
+        const moved = store.saveMenuCategories(rows);
+        toast(moved ? `저장했습니다. 메뉴 ${moved}개를 '미분류'로 옮겼습니다.` : '저장했습니다.');
+        close();
+      });
+    },
+  });
 }
 
 // ───────────────────────── 매입 품목 고르기 ─────────────────────────

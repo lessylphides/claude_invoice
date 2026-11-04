@@ -106,7 +106,7 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(d.menus).toEqual([]);
   });
   it('밖에서 들어온 데이터는 현재 버전 표시가 있어도 전부 검사, 앱이 저장한 데이터만 빠르게 통과', () => {
-    const forged = { version: DATA_VERSION, purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }], menus: [], categories: ['a'], costTarget: { history: [{ value: 25, at: '2026-11-04' }] } };
+    const forged = { version: DATA_VERSION, purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }], menus: [], menuCategories: [], categories: ['a'], costTarget: { history: [{ value: 25, at: '2026-11-04' }] } };
     expect(migrate(forged).purchases[0].date).toBe('2026-11-04');
     expect(migrate(forged).purchases[0].items[0].qty).toBe(0);
     expect(migrate(forged, { trusted: true })).toBe(forged);
@@ -127,6 +127,17 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(data.purchases.map((p) => [p.id, p.vendor])).toEqual([['a', 'v'], ['b', 'new']]); // 같은 id 는 현재 것을 유지
     expect(data.menus.map((m) => m.id)).toEqual(['m1', 'm2']);
     expect(mergeLegacy(cur, cur)).toEqual({ data: cur, added: 0 });
+  });
+  it('v2 데이터: 메뉴 분류가 없으면 기본 분류, 메뉴는 미분류로', () => {
+    const d = migrate({ version: 2, menus: [{ id: 'm', name: '진토닉', price: 9000 }] }, { trusted: true });
+    expect(d.version).toBe(DATA_VERSION);
+    expect(d.menuCategories).toEqual(['커피', '위스키', '칵테일', '맥주', '티', '디저트']);
+    expect(d.menus[0].category).toBe('');
+  });
+  it('메뉴에 적힌 분류가 목록에 없으면 목록 끝에 더하고, 예약어(전체·미분류)는 분류로 쓰지 않음', () => {
+    const d = migrate({ menuCategories: ['커피', ' 커피 ', '전체', ''], menus: [{ name: 'a', category: '와인' }, { name: 'b', category: '미분류' }] });
+    expect(d.menuCategories).toEqual(['커피', '와인']);
+    expect(d.menus.map((m) => m.category)).toEqual(['와인', '']);
   });
   it('이미 정리된 데이터는 다시 넣어도 같다', () => {
     const once = migrate({ purchases: [{ id: 'a', date: '2026-10-28', vendor: 'x', createdAt: 1, items: [{ id: 'i', name: 'y', qty: 1, unitPrice: 10, amount: 10 }] }] });

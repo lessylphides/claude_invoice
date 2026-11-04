@@ -383,3 +383,29 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 /* 좁은 상자에서 '발행 받음', '미발행'이 글자 중간에서 끊기지 않게 (필요하면 상태만 다음 줄로) */
 .pay-sub { flex-wrap: wrap; row-gap: 2px; }
 .pay-sub span, .pay-sub em { white-space: nowrap; }
+
+/* 원가 탭: 메뉴 분류 */
+.cat-chips { margin: 2px 0 6px; padding: 2px 2px 8px; }
+.chip small { color: inherit; opacity: 0.75; font-size: 12px; margin-left: 2px; }
+.chip-edit { border-style: dashed; color: var(--accent); }
+.group-title { font-size: 15px; margin: 16px 4px 8px; color: var(--ink-2); }
+.group-title small { color: var(--muted); font-weight: 500; }
+.menu-group:first-of-type .group-title { margin-top: 4px; }
+fieldset.cat-pick { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.cat-pick legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; padding: 0; }
+fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+.radio-chip { display: inline-flex; align-items: center; cursor: pointer; }
+.radio-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.radio-chip:has(input:checked) { background: var(--accent-fill); color: #fff; border-color: var(--accent-fill); }
+.radio-chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.editor .radio-chip { flex-direction: row; font-size: 14px; color: var(--ink); }
+.editor .radio-chip:has(input:checked) { color: #fff; }
+.cat-edit { list-style: none; margin: 8px 0; padding: 0; background: var(--surface); border-radius: 12px; }
+.cat-edit li { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 10px; border-bottom: 1px solid var(--line); }
+.cat-edit li:last-child { border-bottom: 0; }
+.cat-edit input { flex: 1; padding: 8px 10px; }
+.cat-edit .icon-btn { width: 36px; height: 36px; font-size: 18px; }
+.cat-edit .icon-btn[disabled] { opacity: 0.25; }
+.cat-count { min-width: 30px; text-align: right; }
+.cat-add { display: flex; gap: 8px; }
+.cat-add .btn { flex: none; }

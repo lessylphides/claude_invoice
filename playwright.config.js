@@ -14,6 +14,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173/',
     trace: 'retain-on-failure',
+    // 서비스워커가 페이지를 장악하면 WebKit 에서는 테스트의 가짜 Claude API 가 요청을 가로채지 못함
+    serviceWorkers: 'block',
   },
   projects: [
     { name: 'chromium', use: { ...iphone, browserName: 'chromium' } },

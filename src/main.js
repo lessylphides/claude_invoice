@@ -1,11 +1,11 @@
 // 앱 시작: 탭(매입 | 원가) 그리기, 클릭 연결, 서비스워커 등록
 import './style.css';
-import { store } from './store.js';
+import { store, warmIndex } from './store.js';
 import { view, setRenderer, setTab, shiftMonth } from './state.js';
 import { renderPurchaseTab, handlePurchaseClick } from './views/purchase.js';
 import { renderCostTab, handleCostClick } from './views/cost.js';
 import { openSettings } from './views/settings.js';
-import { bindCaptureInputs } from './views/capture.js';
+import { bindCaptureInputs, preloadOcr } from './views/capture.js';
 
 const app = document.getElementById('app');
 
@@ -46,6 +46,8 @@ bindCaptureInputs();
 setRenderer(render);
 store.subscribe(render);
 render();
+warmIndex();
+preloadOcr();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});

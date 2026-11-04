@@ -33,7 +33,7 @@ function writeJSON(key, value) {
   }
 }
 
-let data = migrate(readJSON(DATA_KEY));
+let data = migrate(readJSON(DATA_KEY), { trusted: true });
 let settings = { apiKey: '', model: MODELS[0].id, ...readJSON(SETTINGS_KEY) };
 let index = null; // 품목 색인 (데이터가 바뀌면 다시 만듦)
 
@@ -50,6 +50,13 @@ const upsertInto = (list, clean) => {
   else list.push(clean);
   return clean;
 };
+
+/** 첫 화면을 그린 뒤 한가할 때 품목 색인을 미리 만들어 둠 (가격 추이·원가 탭을 처음 열 때 빠르게) */
+export function warmIndex() {
+  const run = () => store.index;
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 500);
+}
 
 export const store = {
   subscribe(fn) {

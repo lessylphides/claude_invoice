@@ -23,11 +23,21 @@ export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 /** 거래처·품목 이름을 묶기 위한 키 (공백, (주), 주식회사 등 제거) */
-export const normKey = (s) =>
-  String(s || '')
-    .replace(/\(주\)|㈜|\(유\)|주식회사|유한회사/g, '')
-    .replace(/[\s·.,\-_/()[\]]+/g, '')
-    .toLowerCase();
+// 같은 이름이 수만 번 반복되므로(품목 수백 종 × 매입 수천 건) 결과를 기억해 둠
+const normCache = new Map();
+export function normKey(s) {
+  const raw = String(s || '');
+  let k = normCache.get(raw);
+  if (k === undefined) {
+    k = raw
+      .replace(/\(주\)|㈜|\(유\)|주식회사|유한회사/g, '')
+      .replace(/[\s·.,\-_/()[\]]+/g, '')
+      .toLowerCase();
+    if (normCache.size > 20000) normCache.clear();
+    normCache.set(raw, k);
+  }
+  return k;
+}
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 

@@ -116,6 +116,14 @@ async function handleFiles(files) {
 
 const withNote = ({ draft, note }, imageFiles) => [draft, { imageFiles, note }];
 
+/** API 키가 있으면 한가할 때 인식 코드를 미리 받아 둠 (첫 촬영이 기다리지 않게, 서비스워커가 오프라인용으로 보관) */
+export function preloadOcr() {
+  if (!store.settings.apiKey) return;
+  const run = () => import('../ocr.js').catch(() => {});
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 5000 });
+  else setTimeout(run, 2000);
+}
+
 export function bindCaptureInputs() {
   for (const id of ['cam', 'gallery']) document.getElementById(id).addEventListener('change', (e) => handleFiles([...e.target.files]));
 }

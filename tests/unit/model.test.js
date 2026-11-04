@@ -97,6 +97,12 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(d.categories).toEqual(['주류·음료', '기타']);
     expect(d.menus).toEqual([]);
   });
+  it('밖에서 들어온 데이터는 현재 버전 표시가 있어도 전부 검사, 앱이 저장한 데이터만 빠르게 통과', () => {
+    const forged = { version: DATA_VERSION, purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }], menus: [], categories: ['a'], costTarget: { history: [{ value: 25, at: '2026-11-04' }] } };
+    expect(migrate(forged).purchases[0].date).toBe('2026-11-04');
+    expect(migrate(forged).purchases[0].items[0].qty).toBe(0);
+    expect(migrate(forged, { trusted: true })).toBe(forged);
+  });
   it('이미 정리된 데이터는 다시 넣어도 같다', () => {
     const once = migrate({ purchases: [{ id: 'a', date: '2026-10-28', vendor: 'x', createdAt: 1, items: [{ id: 'i', name: 'y', qty: 1, unitPrice: 10, amount: 10 }] }] });
     expect(migrate(JSON.parse(JSON.stringify(once)))).toEqual(once);

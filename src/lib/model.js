@@ -135,9 +135,14 @@ export function sanitizeCategories(list) {
  * 저장된(또는 백업 파일의) 데이터를 현재 형식으로 맞춤.
  * - v1(버전 표시 없음): 원가 데이터·용량 필드가 없을 수 있음 → 기본값 채움
  * 앞으로 형식이 바뀌면 여기에 단계별 변환을 추가합니다.
+ * @param {{trusted?: boolean}} opts trusted=true: 이 앱이 저장한 데이터 (현재 형식이면 빠르게 통과)
  */
-export function migrate(raw) {
+export function migrate(raw, { trusted = false } = {}) {
   const d = raw && typeof raw === 'object' ? raw : {};
+  // 이 앱이 직접 저장한 현재 형식이면 품목 하나하나를 다시 정리하지 않음 (시작을 빠르게).
+  // 백업 파일처럼 밖에서 들어온 데이터(trusted=false)는 항상 전부 검사.
+  if (trusted && d.version === DATA_VERSION && Array.isArray(d.purchases) && Array.isArray(d.menus) && Array.isArray(d.categories) && Array.isArray(d.costTarget?.history) && d.costTarget.history.length)
+    return d;
   return {
     version: DATA_VERSION,
     purchases: (Array.isArray(d.purchases) ? d.purchases : []).map(sanitizePurchase),

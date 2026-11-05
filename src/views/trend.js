@@ -2,10 +2,11 @@
 import { esc, normKey, num, shortDate, won } from '../lib/format.js';
 import { pricePoints, priceStats } from '../lib/aggregate.js';
 import { renderTrendChart } from '../ui/chart.js';
-import { openSheet } from '../ui/sheet.js';
+import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { view, goToMonth } from '../state.js';
 import { openDay } from './day.js';
+import { pickItem } from './itemPicker.js';
 
 /** @param {string|null} vendor 날짜 화면에서 그 거래처 품목을 눌렀으면 그 거래처 기준으로 시작 */
 export function openTrend(name, vendor = null) {
@@ -42,6 +43,7 @@ export function openTrend(name, vendor = null) {
         </div>
         <div class="chart-host"></div>
         <p class="muted small center">그래프를 누르면 날짜별 단가를 볼 수 있습니다 · 쿠폰·할인을 뺀 실제 매입 단가(수량 1당) 기준</p>
+        ${sameItemSection(name)}
         <table class="hist">
           <caption class="sr-only">${esc(name)} 매입 이력</caption>
           <thead><tr><th scope="col">날짜</th><th scope="col">거래처</th><th scope="col">수량</th><th scope="col">단가</th><th scope="col">금액</th></tr></thead>
@@ -55,10 +57,20 @@ export function openTrend(name, vendor = null) {
             .join('')}</tbody>
         </table>`;
       renderTrendChart(body.querySelector('.chart-host'), pts);
-      body.addEventListener('click', (e) => {
-        const t = e.target.closest('[data-scope],[data-date]');
+      body.addEventListener('click', async (e) => {
+        const t = e.target.closest('[data-scope],[data-date],[data-link],[data-unlink]');
         if (!t) return;
-        if (t.dataset.scope) {
+        if (t.dataset.link !== undefined) {
+          const key = store.itemKey(name);
+          const other = await pickItem({
+            title: '같은 품목으로 묶을 이름',
+            hint: `거래처마다 이름이 다르게 적힌 같은 물건을 고르세요. 묶으면 가격 추이와 원가에서 '${esc(name)}'과 하나로 계산합니다(원가는 가장 최근 매입가). 영수증의 원래 이름은 그대로 둡니다.`,
+            exclude: (n) => store.itemKey(n) === key,
+          });
+          if (other && store.linkItems(other, name)) toast(`'${other}'을(를) 같은 품목으로 묶었습니다.`);
+        } else if (t.dataset.unlink) {
+          if (store.unlinkItem(t.dataset.unlink)) toast(`'${t.dataset.unlink}'을(를) 묶음에서 뺐습니다.`);
+        } else if (t.dataset.scope) {
           scope = t.dataset.scope;
           redraw();
         } else if (t.dataset.date !== view.selectedDate) {
@@ -68,4 +80,27 @@ export function openTrend(name, vendor = null) {
       });
     },
   });
+}
+
+/** 같은 품목으로 묶인 이름들: 대표 이름 + 연결 해제, 다른 이름 연결 */
+function sameItemSection(name) {
+  const names = store.index.names(name);
+  const linked = names.filter((n) => store.isLinkedAlias(n));
+  return `<section class="same-item">
+    <h3 class="sub">같은 품목 ${linked.length ? `<small>${names.length}개 이름</small>` : ''}</h3>
+    ${
+      linked.length
+        ? `<ul class="same-list">${names
+            .map(
+              (n) => `<li><span>${esc(n)}</span>${
+                store.isLinkedAlias(n)
+                  ? `<button type="button" class="link danger" data-unlink="${esc(n)}" aria-label="${esc(n)} 묶음에서 빼기">연결 해제</button>`
+                  : '<em class="muted small">대표 이름</em>'
+              }</li>`,
+            )
+            .join('')}</ul>`
+        : '<p class="muted small">거래처마다 이름이 조금 다른 같은 물건이 있으면 묶어서 함께 볼 수 있습니다.</p>'
+    }
+    <button type="button" class="btn ghost small-btn" data-link>+ 같은 품목 연결</button>
+  </section>`;
 }

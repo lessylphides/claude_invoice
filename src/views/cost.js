@@ -1,7 +1,7 @@
 // 원가 탭: 메뉴별 1잔(1조각) 원가와 원가율
 // 매입 내역의 '가장 최근 매입 단가(할인 반영)'로 자동 계산하므로, 새 영수증이 들어오면 원가율도 바로 바뀝니다.
 
-import { dotDate, esc, normKey, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
+import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
 import { menuCost, priceForTarget, priceForMargin, judgeMenu, summarizeMenus } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
@@ -10,6 +10,7 @@ import { unitSelectHTML } from '../ui/units.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { openTrend } from './trend.js';
+import { pickItem } from './itemPicker.js';
 
 
 const costOf = (m) => menuCost(m, store.index);
@@ -558,59 +559,5 @@ function openCategoryEditor() {
         close();
       });
     },
-  });
-}
-
-// ───────────────────────── 매입 품목 고르기 ─────────────────────────
-
-/** 매입된 품목 목록을 분류별로 보여주고 하나를 고르게 함. 고른 품목 이름(취소하면 null) */
-function pickItem(current) {
-  const items = store.index.pickList();
-  const cats = [...new Set(store.categories.concat(items.map((i) => i.category)))].filter((c) => items.some((i) => i.category === c));
-
-  return new Promise((resolve) => {
-    let picked = null;
-    let q = '';
-    openSheet({
-      title: '매입 품목 선택',
-      onClose: () => resolve(picked),
-      render(body, close) {
-        body.innerHTML = `
-          <input class="pick-search" type="search" placeholder="이름으로 찾기 (선택 사항)" aria-label="품목 검색">
-          <div class="pick-list"></div>`;
-        const list = body.querySelector('.pick-list');
-        const drawList = () => {
-          const k = normKey(q);
-          const hit = items.filter((i) => !k || normKey(i.name).includes(k));
-          list.innerHTML = hit.length
-            ? cats
-                .map((c) => {
-                  const rows = hit.filter((i) => i.category === c);
-                  if (!rows.length) return '';
-                  return `<h3 class="sub">${esc(c)}</h3><ul class="pick-ul">${rows
-                    .map(
-                      (i) => `<li><button type="button" class="pick-item ${normKey(i.name) === normKey(current) ? 'cur' : ''}" data-name="${esc(i.name)}">
-                        <span class="iname">${esc(i.name)}<small>${i.spec ? `${num(i.spec.packSize)}${esc(i.spec.packUnit)} · ` : ''}최근 ${num(i.price)}원 · ${shortDate(i.date)}</small></span>
-                        <span aria-hidden="true">›</span>
-                      </button></li>`,
-                    )
-                    .join('')}</ul>`;
-                })
-                .join('')
-            : `<p class="empty-msg">${items.length ? '찾는 품목이 없습니다.' : '아직 매입 기록이 없습니다.<br>먼저 매입 탭에서 영수증을 입력해 주세요.'}</p>`;
-        };
-        drawList();
-        body.querySelector('.pick-search').addEventListener('input', (e) => {
-          q = e.target.value;
-          drawList();
-        });
-        list.addEventListener('click', (e) => {
-          const b = e.target.closest('[data-name]');
-          if (!b) return;
-          picked = b.dataset.name;
-          close();
-        });
-      },
-    });
   });
 }

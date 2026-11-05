@@ -52,11 +52,14 @@ export function paySummary(purchases) {
   return s;
 }
 
-/** 같은 품목(이름 기준)끼리 수량·금액·할인 합산 (금액 큰 순) */
-export function aggregateItems(entries) {
+/**
+ * 같은 품목끼리 수량·금액·할인 합산 (금액 큰 순)
+ * @param {(name:string)=>string} keyOf 같은 품목 판별 (기본: 이름 정규화, 묶기를 쓰면 store.index.key)
+ */
+export function aggregateItems(entries, keyOf = normKey) {
   const map = new Map();
   for (const { item, purchase } of entries) {
-    const k = normKey(item.name);
+    const k = keyOf(item.name);
     const a = map.get(k) ?? { name: item.name, qty: 0, unit: item.unit, amount: 0, discount: 0, vendors: new Set(), count: 0 };
     a.qty += Number(item.qty) || 0;
     a.amount += Number(item.amount) || 0;

@@ -1,8 +1,9 @@
 // 매입 내역 입력/수정 폼 (촬영 인식 결과 검토 포함)
 
-import { esc, num, won, todayStr, uid } from '../lib/format.js';
+import { esc, num, shortDate, won, todayStr, uid } from '../lib/format.js';
 import { purchaseTotal, itemAmount } from '../lib/model.js';
 import { fillSpec } from '../lib/draft.js';
+import { findSimilar } from '../lib/itemLinks.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { payChoiceHTML } from '../ui/payui.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -26,10 +27,13 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
 
   return new Promise((resolve) => {
     let saved = null;
+    let suggestions = [];
     openSheet({
       title: isEdit ? '매입 내역 수정' : '매입 내역 확인',
-      onClose: () => {
+      onClose: async () => {
         imgUrls.forEach((u) => URL.revokeObjectURL(u));
+        // 저장한 새 품목 이름이 기존 품목과 비슷하면 같은 물건인지 물어봄 (다음 영수증 확인 전에)
+        if (saved && suggestions.length) await askSameItems(suggestions, saved.vendor);
         resolve(saved);
       },
       render(body, close) {
@@ -199,6 +203,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           if (!p.vendor) return toast('거래처를 입력해 주세요.');
           p.items = p.items.filter((i) => String(i.name || '').trim() || Number(i.amount));
           if (!p.items.length) return toast('품목을 하나 이상 입력해 주세요.');
+          suggestions = similarSuggestions(p.items);
           saved = store.upsert(p);
           toast('저장했습니다.');
           close();
@@ -210,4 +215,62 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
 
 function blankItem() {
   return { id: uid(), name: '', category: '기타', qty: 1, unit: '', unitPrice: '', discount: 0, amount: '', packSize: '', packUnit: '' };
+}
+
+/** 처음 보는 품목 이름 중 기존 품목과 비슷한 것: [{name, match}] (저장 전에 계산) */
+function similarSuggestions(items) {
+  const candidates = store.index.pickList().map((i) => i.name);
+  const out = [];
+  for (const it of items) {
+    const name = String(it.name || '').trim();
+    if (!name || store.index.history(name).length) continue; // 이미 아는 품목(또는 묶음)
+    const key = store.itemKey(name);
+    if (out.some((s) => store.itemKey(s.name) === key)) continue;
+    const best = findSimilar(name, candidates, (c) => store.itemKey(c) === key || store.isNotSame(name, c));
+    if (best) out.push({ name, match: best.name });
+  }
+  return out;
+}
+
+/** '같은 품목인가요?' 확인. 답한 것만 기록하고, 닫으면 끝 (나중에 가격 추이에서도 묶을 수 있음) */
+function askSameItems(list, vendor) {
+  return new Promise((resolve) => {
+    const answered = new Map(); // name → 'same' | 'diff'
+    openSheet({
+      title: '같은 품목인가요?',
+      onClose: () => resolve(),
+      render(body, close, redraw) {
+        body.innerHTML = `
+          <p class="muted small">이번에 저장한 품목 중 기존 품목과 이름이 비슷한 것이 있습니다. 같은 물건이면 묶어서 가격 추이와 원가를 함께 계산합니다(원가는 가장 최근 매입가). 영수증의 원래 이름은 그대로 둡니다.</p>
+          <ul class="same-ask">${list
+            .map(({ name, match }, i) => {
+              const last = store.index.history(match).find((r) => r.name !== name) ?? store.index.history(match)[0];
+              const a = answered.get(name);
+              return `<li>
+                <p><b>${esc(name)}</b> <small class="muted">${esc(vendor)} · 이번 영수증</small></p>
+                <p class="same-arrow">↔ <b>${esc(match)}</b> ${last ? `<small class="muted">${esc(last.vendor)} · 최근 ${num(last.price)}원 (${shortDate(last.date)})</small>` : ''}</p>
+                ${
+                  a
+                    ? `<p class="${a === 'same' ? 'ok' : 'muted'} small">${a === 'same' ? '✔ 같은 품목으로 묶었습니다' : '다른 품목으로 기억합니다'}</p>`
+                    : `<div class="same-actions"><button type="button" class="btn ghost small-btn" data-diff="${i}">다른 품목</button><button type="button" class="btn primary small-btn" data-same="${i}">같은 품목</button></div>`
+                }
+              </li>`;
+            })
+            .join('')}</ul>
+          <div class="actions"><button type="button" class="btn ghost done">${answered.size === list.length ? '완료' : '나중에'}</button></div>`;
+        body.addEventListener('click', (e) => {
+          const same = e.target.closest('[data-same]');
+          const diff = e.target.closest('[data-diff]');
+          if (same || diff) {
+            const { name, match } = list[+(same ?? diff).dataset[same ? 'same' : 'diff']];
+            if (same) store.linkItems(name, match);
+            else store.markNotSame(name, match);
+            answered.set(name, same ? 'same' : 'diff');
+            if (answered.size === list.length) return close();
+            redraw();
+          } else if (e.target.closest('.done')) close();
+        });
+      },
+    });
+  });
 }

@@ -6,6 +6,7 @@ import { migrate, mergeLegacy, sanitizePurchase, sanitizeMenu, sanitizeCategorie
 import { currentMinMargin } from './lib/cost.js';
 import { buildItemIndex } from './lib/itemIndex.js';
 import { applyCategoryEdit } from './lib/menuCategories.js';
+import { linkInto, unlink, pairKey, groupKey } from './lib/itemLinks.js';
 import * as persist from './persist.js';
 
 const SETTINGS_KEY = 'maeip.settings.v1';
@@ -142,7 +143,7 @@ export const store = {
   },
   /** 품목 색인: history(name) / spec(name) / pickList() */
   get index() {
-    return (index ??= buildItemIndex(data.purchases));
+    return (index ??= buildItemIndex(data.purchases, data.itemLinks));
   },
   get(id) {
     return data.purchases.find((p) => p.id === id);
@@ -169,6 +170,41 @@ export const store = {
   setCategories(list) {
     data.categories = sanitizeCategories(list);
     commit();
+  },
+  // ── 같은 품목 묶기 ──
+  /** 같은 품목이면 같은 값 (묶기 반영) */
+  itemKey(name) {
+    return groupKey(data.itemLinks, name);
+  },
+  /** name 이 속한 묶음을 intoName 의 묶음에 합침 */
+  linkItems(name, intoName) {
+    const next = linkInto(data.itemLinks, name, intoName);
+    if (next === data.itemLinks) return false;
+    data.itemLinks = next;
+    commit();
+    return true;
+  },
+  /** 묶음에서 빼기 (대표 이름이 아닌 이름만) */
+  unlinkItem(name) {
+    const next = unlink(data.itemLinks, name);
+    if (next === data.itemLinks) return false;
+    data.itemLinks = next;
+    commit();
+    return true;
+  },
+  /** 대표 이름인지 (묶음에서 뺄 수 없는 이름) */
+  isLinkedAlias(name) {
+    return !!data.itemLinks[groupKey({}, name)];
+  },
+  /** '다른 품목'이라고 답한 쌍 (비슷한 이름 제안을 다시 하지 않음) */
+  markNotSame(a, b) {
+    const k = pairKey(a, b);
+    if (data.itemNotSame.includes(k)) return;
+    data.itemNotSame = [...data.itemNotSame, k];
+    commit();
+  },
+  isNotSame(a, b) {
+    return data.itemNotSame.includes(pairKey(a, b));
   },
   /** 지금까지 입력된 거래처 이름 (최근 사용 순) */
   vendorNames() {

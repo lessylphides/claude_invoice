@@ -106,7 +106,7 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(d.menus).toEqual([]);
   });
   it('밖에서 들어온 데이터는 현재 버전 표시가 있어도 전부 검사, 앱이 저장한 데이터만 빠르게 통과', () => {
-    const forged = { version: DATA_VERSION, purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }], menus: [], menuCategories: [], minMargins: {}, categories: ['a'], costTarget: { history: [{ value: 25, at: '2026-11-04' }] } };
+    const forged = { ...migrate(null), purchases: [{ id: 'x', date: 'bad', items: [{ name: 'a', qty: 'x' }] }] }; // 현재 형식의 모든 칸을 갖춘 데이터에 잘못된 영수증만 넣음
     expect(migrate(forged).purchases[0].date).toBe('2026-11-04');
     expect(migrate(forged).purchases[0].items[0].qty).toBe(0);
     expect(migrate(forged, { trusted: true })).toBe(forged);

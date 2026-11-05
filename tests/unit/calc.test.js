@@ -152,3 +152,30 @@ describe('최소 마진', () => {
     expect(s.byMargin).toBe(1);
   });
 });
+
+describe('같은 품목 묶기와 색인·원가', () => {
+  const ps = [
+    p_('c', '2026-11-04', '코스트코', [it_('러셀싱글베럴', 70000, { packSize: 750, packUnit: 'ml' })]),
+    p_('s', '2026-11-05', '서광컴퍼니', [it_('러셀 싱글배럴 750', 73000)]),
+  ];
+  it('묶기 전: 따로, 묶은 뒤: 한 품목으로 두 거래처 가격', async () => {
+    const { linkInto } = await import('../../src/lib/itemLinks.js');
+    expect(buildItemIndex(ps).history('러셀싱글베럴')).toHaveLength(1);
+    const links = linkInto({}, '러셀 싱글배럴 750', '러셀싱글베럴');
+    const idx = buildItemIndex(ps, links);
+    expect(idx.history('러셀싱글베럴').map((r) => [r.vendor, r.price])).toEqual([['서광컴퍼니', 73000], ['코스트코', 70000]]);
+    expect(idx.names('러셀싱글베럴')).toEqual(['러셀 싱글배럴 750', '러셀싱글베럴']);
+    // 용량은 묶음 안에서 적힌 기록을 씀 (서광 영수증엔 없음)
+    expect(idx.spec('러셀 싱글배럴 750')).toEqual({ packSize: 750, packUnit: 'ml' });
+    // 고르기 목록엔 한 줄, 대표 이름으로
+    expect(idx.pickList().map((i) => i.name)).toEqual(['러셀싱글베럴']);
+    // 원가: 가장 최근 매입가(서광 73,000)로 30ml
+    const r = ingredientCost({ type: 'item', itemName: '러셀싱글베럴', use: 30 }, idx);
+    expect(r.cost).toBeCloseTo((73000 * 30) / 750, 6);
+    expect(r.prevCost).toBeCloseTo((70000 * 30) / 750, 6);
+    // 월 요약 합산도 한 줄로
+    const entries = ps.flatMap((p) => p.items.map((item) => ({ item, purchase: p })));
+    expect(aggregateItems(entries, idx.key)).toHaveLength(1);
+    expect(aggregateItems(entries)).toHaveLength(2);
+  });
+});

@@ -19,10 +19,12 @@
 // menuCategories = ['커피', '위스키', ...]  원가 탭의 메뉴 분류 (이 순서대로 보여줌)
 // minMargins = { '위스키': [{ value: 12000, at:'YYYY-MM-DD' }, ...] }  분류별 최소 마진 금액(한 잔에 최소 남길 돈) 변경 기록.
 //              마지막 항목이 현재 값, 0 이면 설정 안 함(원가율로만 판정)
+// itemLinks = { 묶인이름키: '대표 이름' }, itemNotSame = ['키A|키B']  같은 품목 묶기 (lib/itemLinks.js)
 
 import { isYmd, todayStr, uid } from './format.js';
+import { sanitizeLinks, sanitizeNotSame } from './itemLinks.js';
 
-export const DATA_VERSION = 4; // 3: 메뉴 분류(menuCategories, menu.category), 4: 분류별 최소 마진(minMargins)
+export const DATA_VERSION = 5; // 3: 메뉴 분류, 4: 분류별 최소 마진(minMargins), 5: 같은 품목 묶기(itemLinks, itemNotSame)
 
 export const DEFAULT_MENU_CATEGORIES = ['커피', '위스키', '칵테일', '맥주', '티', '디저트'];
 export const UNCATEGORIZED = '미분류';
@@ -185,6 +187,8 @@ export function migrate(raw, { trusted = false } = {}) {
     Array.isArray(d.categories) &&
     Array.isArray(d.menuCategories) &&
     d.minMargins && typeof d.minMargins === 'object' &&
+    d.itemLinks && typeof d.itemLinks === 'object' &&
+    Array.isArray(d.itemNotSame) &&
     Array.isArray(d.costTarget?.history) &&
     d.costTarget.history.length
   )
@@ -200,6 +204,8 @@ export function migrate(raw, { trusted = false } = {}) {
     menus,
     menuCategories,
     minMargins: sanitizeMinMargins(d.minMargins, menuCategories),
+    itemLinks: sanitizeLinks(d.itemLinks),
+    itemNotSame: sanitizeNotSame(d.itemNotSame),
     costTarget: sanitizeCostTarget(d.costTarget),
   };
 }

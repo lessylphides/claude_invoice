@@ -111,7 +111,7 @@ function barRow(g, total, key) {
         <span class="val">${won(g.total)} <small>${pct.toFixed(1)}%</small></span>
         <span class="bar" aria-hidden="true"><i style="width:${pct}%"></i></span>
       </button>
-      ${open ? `<ul class="item-list">${aggregateItems(g.items).map(itemAggLi).join('')}</ul>` : ''}
+      ${open ? `<ul class="item-list">${aggregateItems(g.items, store.index.key).map(itemAggLi).join('')}</ul>` : ''}
     </div>`;
 }
 

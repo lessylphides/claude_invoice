@@ -251,13 +251,13 @@ export const store = {
     commit();
     return r.moved;
   },
-  /** 분류별 최소 마진 기록 { 분류: [{value, at}] } */
+  /** 분류별 최소 마진 기록 { 분류: [{value, bottle, at}] } */
   get minMargins() {
     return data.minMargins;
   },
-  /** 분류의 현재 최소 마진 (없으면 null) */
-  minMarginOf(category) {
-    return currentMinMargin(data.minMargins, category);
+  /** 분류의 현재 최소 마진 (없으면 null). kind: 'glass' 잔 / 'bottle' 보틀 */
+  minMarginOf(category, kind = 'glass') {
+    return currentMinMargin(data.minMargins, category, kind);
   },
   /** 분류의 최소 마진이 마지막으로 바뀐 기록 {value, at} (없으면 null) */
   minMarginLast(category) {
@@ -265,16 +265,22 @@ export const store = {
   },
   /**
    * 여러 분류의 최소 마진을 한 번에 저장. 바뀐 분류만 오늘 날짜로 기록 (빈칸·0 = 설정 안 함)
-   * @param {Record<string, string|number>} values
+   * 값이 숫자·문자열이면 잔 최소 마진만 바꾸고 보틀은 그대로, {glass, bottle} 이면 적힌 것만 바꿈
+   * @param {Record<string, string|number|{glass?: string|number, bottle?: string|number}>} values
    * @returns {string[]} 바뀐 분류
    */
   setMinMargins(values) {
-    const parsed = Object.entries(values).map(([cat, v]) => [cat, parseMargin(v)]); // 잘못된 값이 있으면 아무것도 저장하지 않음
+    // 잘못된 값이 있으면 아무것도 저장하지 않음
+    const parsed = Object.entries(values).map(([cat, v]) => {
+      const o = v && typeof v === 'object' ? v : { glass: v };
+      const cur = { glass: this.minMarginOf(cat) ?? 0, bottle: this.minMarginOf(cat, 'bottle') ?? 0 };
+      return [cat, 'glass' in o ? parseMargin(o.glass) : cur.glass, 'bottle' in o ? parseMargin(o.bottle) : cur.bottle, cur];
+    });
     const changed = [];
-    for (const [cat, v] of parsed) {
+    for (const [cat, glass, bottle, cur] of parsed) {
       if (!data.menuCategories.includes(cat)) continue;
-      if ((this.minMarginOf(cat) ?? 0) === v) continue;
-      (data.minMargins[cat] ??= []).push({ value: v, at: todayStr() });
+      if (cur.glass === glass && cur.bottle === bottle) continue;
+      (data.minMargins[cat] ??= []).push({ value: glass, bottle, at: todayStr() });
       changed.push(cat);
     }
     if (changed.length) commit();

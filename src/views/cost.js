@@ -3,7 +3,7 @@
 
 import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
-import { menuCost, priceForTarget, priceForMargin, judgeMenu, summarizeMenus } from '../lib/cost.js';
+import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, summarizeMenus } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
 import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -31,13 +31,20 @@ function currentFilter() {
 function marginLine(filter) {
   const cats = store.menuCategories;
   let text;
+  const bottleOf = (c) => store.minMarginOf(c, 'bottle');
   if (cats.includes(filter)) {
     const v = store.minMarginOf(filter);
+    const b = bottleOf(filter);
     const last = store.minMarginLast(filter);
-    text = v ? `${esc(filter)} 최소 마진 <b>${won(v)}</b> <span class="muted">· ${dotDate(last.at)}</span>` : `${esc(filter)}: 최소 마진 없음 (원가율로만 판정)`;
+    text =
+      v || b
+        ? `${esc(filter)} 최소 마진 ${v ? `<b>${won(v)}</b>` : '잔 없음'}${b ? ` · 보틀 <b>${won(b)}</b>` : ''} <span class="muted">· ${dotDate(last.at)}</span>`
+        : `${esc(filter)}: 최소 마진 없음 (원가율로만 판정)`;
   } else {
-    const set = cats.filter((c) => store.minMarginOf(c));
-    text = set.length ? `최소 마진: ${set.map((c) => `${esc(c)} <b>${num(store.minMarginOf(c))}</b>`).join(' · ')}` : '분류별 최소 마진: 설정 안 함';
+    const set = cats.filter((c) => store.minMarginOf(c) || bottleOf(c));
+    text = set.length
+      ? `최소 마진: ${set.map((c) => `${esc(c)} <b>${store.minMarginOf(c) ? num(store.minMarginOf(c)) : '-'}</b>${bottleOf(c) ? `<small>/보틀 ${num(bottleOf(c))}</small>` : ''}`).join(' · ')}`
+      : '분류별 최소 마진: 설정 안 함';
   }
   return `<section class="margin-line"><p>${text}</p><button class="btn ghost small-btn" data-cost="margins">최소 마진</button></section>`;
 }
@@ -60,7 +67,7 @@ export function renderCostTab() {
   const menus = filterMenus(store.menus, filter, store.menuCategories);
   const { rows, over, byMargin, avg } = summarizeMenus(menus, store.index, target.value, store.minMargins);
   const scale = Math.max(50, target.value * 2);
-  const cards = (list) => list.map(({ m, c, j }) => menuCard(m, c, j, target.value, scale)).join('');
+  const cards = (list) => list.map(({ m, c, j, jb }) => menuCard(m, c, j, jb, target.value, scale)).join('');
 
   let body;
   if (!store.menus.length)
@@ -103,23 +110,34 @@ export function renderCostTab() {
     </div>`;
 }
 
-function menuCard(m, c, j, target, scale) {
-  const over = j.status === 'over';
+function menuCard(m, c, j, jb, target, scale) {
+  const over = j.status === 'over' || jb?.status === 'over';
   const w = c.rate == null ? 0 : Math.min(100, (c.rate / scale) * 100);
   const delta = Math.round(c.delta);
   return `
-    <button class="menu-card ${over ? 'over' : ''} ${j.status === 'margin' ? 'by-margin' : ''}" data-cost-open="${m.id}">
+    <button class="menu-card ${over ? 'over' : ''} ${!over && (j.status === 'margin' || jb?.status === 'margin') ? 'by-margin' : ''}" data-cost-open="${m.id}">
       <span class="mc-top">
         <span class="mc-name">${over ? '⚠ ' : ''}${esc(m.name)}</span>
-        <span class="mc-rate">${c.rate == null ? '<small>계산 불가</small>' : pct(c.rate)}</span>
+        <span class="mc-rate ${j.status === 'over' ? 'over' : ''}">${c.rate == null ? '<small>계산 불가</small>' : pct(c.rate)}</span>
       </span>
       <span class="mc-sub">
         판매 ${num(m.price)} · 원가 ${num(c.cost)} · 마진 ${num(j.margin)}${c.missing ? ' <em class="warn">(일부 재료 미계산)</em>' : ''}
         ${delta ? `<em class="${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '▲' : '▼'}${num(Math.abs(delta))}</em>` : ''}
       </span>
+      ${jb ? bottleLine(m, jb) : ''}
       ${j.status === 'margin' ? `<span class="mc-badge">✔ 마진 기준 충족 (최소 ${num(j.minMargin)}원)</span>` : ''}
       <span class="mc-bar" aria-hidden="true"><i style="width:${w}%"></i><b style="left:${(target / scale) * 100}%"></b></span>
     </button>`;
+}
+
+/** 카드의 보틀 줄: 보틀 판매가 · 원가율 · 마진 */
+function bottleLine(m, jb) {
+  const mark = jb.status === 'over' ? '⚠ ' : '';
+  const tail =
+    jb.status === 'unknown'
+      ? '<small>원가 계산 불가 (매입 기록 없음)</small>'
+      : `원가율 <b>${pct(jb.rate)}</b> · 마진 ${num(jb.margin)}${jb.status === 'margin' ? ' <span class="ok">✔ 마진 기준</span>' : ''}`;
+  return `<span class="mc-bottle ${jb.status === 'over' ? 'over' : ''}">${mark}보틀 ${num(m.bottlePrice)} · ${tail}</span>`;
 }
 
 export function handleCostClick(e) {
@@ -199,6 +217,7 @@ function openMenuDetail(id) {
           <div class="${j.status === 'margin' ? 'good' : ''}"><p>마진</p><b>${won(j.margin)}</b>${j.minMargin ? `<small>최소 ${num(j.minMargin)}</small>` : ''}</div>
         </div>
         ${detailNotice(m, c, j, target)}
+        ${bottleSection(m, target)}
         <h3 class="sub">재료별 원가</h3>
         <ul class="ing-list">${c.parts.map((p) => ingLi(p, c.cost)).join('')}</ul>
         <p class="muted small">매입 품목 재료는 가장 최근 매입 단가(쿠폰·할인 반영)로 계산합니다. ▲▼는 직전 매입 대비 변화입니다.</p>
@@ -249,6 +268,45 @@ function detailNotice(m, c, j, target) {
   </div>`;
 }
 
+/** 메뉴 상세의 보틀 판매: 판매가·원가·원가율·마진, 합격 안내 또는 추천 판매가 */
+function bottleSection(m, target) {
+  if (!m.bottlePrice) return '';
+  const jb = judgeBottle(m, store.index, target, store.minMarginOf(m.category, 'bottle'));
+  const b = jb.b;
+  if (!b)
+    return `<h3 class="sub">보틀 판매</h3><p class="notice">보틀 판매가 ${won(m.bottlePrice)} · 첫 번째 재료의 매입 기록이 없어 보틀 원가를 계산할 수 없습니다.</p>`;
+  const refs = bottleRefs(b, m.price);
+  const lines = [];
+  if (jb.status === 'over') {
+    lines.push(`원가율 ${target}% 기준: <b>${won(priceForTarget(b.cost, target))}</b> 이상`);
+    if (jb.minMargin) lines.push(`보틀 최소 마진 ${won(jb.minMargin)} 기준: <b>${won(priceForMargin(b.cost, jb.minMargin))}</b> 이상`);
+  }
+  const refLines = [
+    refs.glassSum70 ? `잔 합계의 70%: ${won(refs.glassSum70)} <small class="muted">(${refs.glasses}잔 × ${num(m.price)} = ${num(refs.glassSum)})</small>` : '',
+    `원가 × 3배: ${won(refs.x3)}`,
+  ].filter(Boolean);
+  const head =
+    jb.status === 'margin'
+      ? `<p class="notice ok-notice">원가율은 목표(${target}%)보다 높지만, 보틀 마진 <b>${won(jb.margin)}</b>이 보틀 최소 마진 ${won(jb.minMargin)} 이상이라 합격입니다.</p>`
+      : jb.status === 'over'
+        ? `<div class="notice"><p>${jb.minMargin ? `보틀 원가율이 목표 ${target}%를 넘었고, 보틀 최소 마진 ${won(jb.minMargin)}도 못 채웁니다.` : `보틀 원가율이 목표 ${target}%를 넘었습니다.${m.category ? ` (${esc(m.category)}은 보틀 최소 마진이 없어 원가율로만 판정)` : ''}`}</p>
+            <p class="suggest-title">추천 보틀 판매가</p><ul class="suggest">${lines.map((l) => `<li>${l}</li>`).join('')}</ul></div>`
+        : '';
+  return `<section class="bottle-sec">
+    <h3 class="sub">보틀 판매</h3>
+    <div class="stats">
+      <div><p>보틀 판매가</p><b>${won(m.bottlePrice)}</b></div>
+      <div><p>1병 원가</p><b>${won(b.cost)}</b></div>
+      <div class="${jb.rate > target ? 'over' : ''}"><p>원가율</p><b>${pct(jb.rate)}</b><small>목표 ${target}%</small></div>
+      <div class="${jb.status === 'margin' ? 'good' : ''}"><p>마진</p><b>${won(jb.margin)}</b>${jb.minMargin ? `<small>최소 ${num(jb.minMargin)}</small>` : ''}</div>
+    </div>
+    <p class="muted small">${esc(b.itemName)} 최근 ${num(b.cost)}원 (${shortDate(b.source.date)} ${esc(b.source.vendor)})${b.glasses ? ` · 1병 ≈ ${Math.floor(b.glasses)}잔` : ''}</p>
+    ${head}
+    <p class="suggest-title">참고 가격</p>
+    <ul class="suggest ref">${refLines.map((l) => `<li>${l}</li>`).join('')}</ul>
+  </section>`;
+}
+
 // ───────────────────────── 분류별 최소 마진 ─────────────────────────
 
 function openMarginSheet() {
@@ -262,18 +320,24 @@ function openMarginSheet() {
         .sort((a, b) => b.at.localeCompare(a.at) || b.i - a.i) // 같은 날이면 나중에 바꾼 것이 위
         .slice(0, 30);
       body.innerHTML = `
-        <p class="muted small">한 잔(한 조각)에 최소 이만큼은 남겨야 하는 금액입니다. 원가율이 목표를 넘어도 이 금액 이상 남으면 '마진 기준 충족'으로 봅니다.
-          비싼 위스키·와인처럼 원가율로만 가격을 정하기 어려운 분류에 쓰세요. 비워 두면 원가율로만 판정합니다.</p>
+        <p class="muted small">한 잔(한 조각)·보틀 하나에 최소 이만큼은 남겨야 하는 금액입니다. 원가율이 목표를 넘어도 이 금액 이상 남으면 '마진 기준 충족'으로 봅니다.
+          비싼 위스키·와인처럼 원가율로만 가격을 정하기 어려운 분류에 쓰세요. 비워 두면 원가율로만 판정합니다. 보틀은 보틀 판매가를 적은 메뉴에만 씁니다.</p>
         ${
           cats.length
             ? `<form class="editor margin-form" novalidate>
           <ul class="margin-list">${cats
             .map((c) => {
               const v = store.minMarginOf(c);
+              const b = store.minMarginOf(c, 'bottle');
               const last = store.minMarginLast(c);
-              return `<li><label><span class="mname">${esc(c)}</span>
-                <span class="minput"><input name="${esc(c)}" type="number" inputmode="numeric" min="0" step="100" placeholder="없음" value="${v ?? ''}" aria-label="${esc(c)} 최소 마진(원)"><span>원</span></span></label>
-                <span class="muted small mdate">${last ? `${dotDate(last.at)} ${last.value ? '설정' : '해제'}` : '설정 안 함'}</span></li>`;
+              const input = (name, val, label) =>
+                `<input name="${esc(name)}" type="number" inputmode="numeric" min="0" step="100" placeholder="없음" value="${val ?? ''}" aria-label="${esc(c)} ${label} 최소 마진(원)">`;
+              return `<li><span class="mname">${esc(c)}</span>
+                <span class="mpair">
+                  <label class="minput"><span class="mk">잔</span>${input(c, v, '잔')}<span>원</span></label>
+                  <label class="minput"><span class="mk">보틀</span>${input(`${c}::bottle`, b, '보틀')}<span>원</span></label>
+                </span>
+                <span class="muted small mdate">${last ? `${dotDate(last.at)} ${last.value || last.bottle ? '설정' : '해제'}` : '설정 안 함'}</span></li>`;
             })
             .join('')}</ul>
           <div class="actions"><button type="button" class="btn ghost cancel">닫기</button><button class="btn primary" type="submit">저장</button></div>
@@ -283,7 +347,10 @@ function openMarginSheet() {
         ${
           hist.length
             ? `<h3 class="sub">변경 기록</h3><ul class="target-hist">${hist
-                .map((h) => `<li><b>${esc(h.c)} ${h.value ? won(h.value) : '해제'}</b><span>${dotDate(h.at)}</span></li>`)
+                .map(
+                  (h) =>
+                    `<li><b>${esc(h.c)} ${h.value || h.bottle ? h.bottle ? `${h.value ? `잔 ${won(h.value)}` : '잔 없음'} · 보틀 ${won(h.bottle)}` : won(h.value) : '해제'}</b><span>${dotDate(h.at)}</span></li>`,
+                )
                 .join('')}</ul>`
             : ''
         }`;
@@ -291,7 +358,7 @@ function openMarginSheet() {
       body.querySelector('.cancel')?.addEventListener('click', close);
       form?.addEventListener('submit', (e) => {
         e.preventDefault();
-        const values = Object.fromEntries(cats.map((c) => [c, form.elements[c].value]));
+        const values = Object.fromEntries(cats.map((c) => [c, { glass: form.elements[c].value, bottle: form.elements[`${c}::bottle`].value }]));
         try {
           const changed = store.setMinMargins(values);
           toast(changed.length ? `${changed.join(', ')} 최소 마진을 저장했습니다.` : '바뀐 값이 없습니다.');
@@ -306,7 +373,7 @@ function openMarginSheet() {
 // ───────────────────────── 메뉴 등록/수정 ─────────────────────────
 
 function openMenuEditor(menu) {
-  const m = structuredClone({ name: '', price: '', category: '', ingredients: [], ...menu });
+  const m = structuredClone({ name: '', price: '', bottlePrice: 0, category: '', ingredients: [], ...menu });
   const isEdit = !!(menu.id && store.getMenu(menu.id));
   const catOptions = ['', ...store.menuCategories];
 
@@ -317,8 +384,11 @@ function openMenuEditor(menu) {
         <form class="editor menu-editor" novalidate>
           <div class="row2">
             <label>메뉴 이름<input name="name" required placeholder="예: 몽키숄더 한 잔" value="${esc(m.name)}"></label>
-            <label>판매가 (원)<input name="price" type="number" inputmode="numeric" required placeholder="12000" value="${m.price || ''}"></label>
+            <label>판매가 (잔, 원)<input name="price" type="number" inputmode="numeric" required placeholder="12000" value="${m.price || ''}"></label>
           </div>
+          <label class="bottle-price">보틀 판매가 (원, 선택)
+            <input name="bottlePrice" type="number" inputmode="numeric" placeholder="보틀로 안 팔면 비워 두세요" value="${m.bottlePrice || ''}">
+          </label>
           <fieldset class="cat-pick">
             <legend>분류</legend>
             <div class="chips">${catOptions
@@ -333,7 +403,9 @@ function openMenuEditor(menu) {
             <button type="button" class="btn ghost" data-add="item">+ 매입 품목 재료</button>
             <button type="button" class="btn ghost" data-add="manual">+ 직접 입력 재료</button>
           </div>
-          <div class="total-bar"><span>원가 · 원가율</span><strong class="sum"></strong></div>
+          <div class="total-bar"><span>잔 원가 · 원가율</span><strong class="sum"></strong></div>
+          <div class="total-bar bottle-bar" hidden><span>보틀 원가 · 원가율</span><strong class="bsum"></strong></div>
+          <p class="muted small bottle-info" hidden></p>
           <div class="actions">
             <button type="button" class="btn ghost cancel">취소</button>
             <button type="submit" class="btn primary">저장</button>
@@ -352,6 +424,34 @@ function openMenuEditor(menu) {
         sumEl.innerHTML = `${won(c.cost)} · <span class="${j.status === 'over' ? 'warn' : j.status === 'margin' ? 'ok' : ''}">${pct(c.rate)}</span>${
           price ? `<small class="sum-margin">마진 ${won(j.margin)}${j.status === 'margin' ? ' ✔' : ''}</small>` : ''
         }`;
+        // 보틀: 첫 번째 매입 품목 한 병 기준. 판매가를 안 적었어도 참고 가격은 보여 줌
+        const bottlePrice = Number(form.elements.bottlePrice.value) || 0;
+        const b = bottleCost(m, store.index);
+        const bBar = body.querySelector('.bottle-bar');
+        const bInfo = body.querySelector('.bottle-info');
+        bBar.hidden = !(bottlePrice && b);
+        if (bottlePrice && b) {
+          const jb = judgeBottle({ ...m, bottlePrice }, store.index, t, store.minMarginOf(cat, 'bottle'));
+          body.querySelector('.bsum').innerHTML = `${won(b.cost)} · <span class="${jb.status === 'over' ? 'warn' : jb.status === 'margin' ? 'ok' : ''}">${pct(jb.rate)}</span><small class="sum-margin">마진 ${won(jb.margin)}${jb.status === 'margin' ? ' ✔' : ''}</small>`;
+        }
+        bInfo.hidden = !b;
+        if (b) {
+          const refs = bottleRefs(b, price);
+          const minB = store.minMarginOf(cat, 'bottle');
+          const opts = [
+            refs.glassSum70 ? ['잔 합계 70%', refs.glassSum70] : null,
+            ['원가 × 3', refs.x3],
+            minB ? ['보틀 최소 마진', priceForMargin(b.cost, minB)] : null,
+          ].filter(Boolean);
+          // 누르면 보틀 판매가 칸에 그 금액을 넣음 (지금 칸에 있는 금액이면 눌린 상태로)
+          bInfo.innerHTML = `보틀 기준: ${esc(b.itemName)} 1병 ${won(b.cost)}${refs.glasses ? ` · 1병 ≈ ${refs.glasses}잔` : ''}
+            <span class="fill-row">${opts
+              .map(
+                ([label, v]) =>
+                  `<button type="button" class="chip fill-chip" data-fill-bottle="${v}" aria-pressed="${bottlePrice === v}" aria-label="보틀 판매가를 ${label} ${num(v)}원으로">${label}<b>${num(v)}</b></button>`,
+              )
+              .join('')}</span>`;
+        }
         ingsEl.querySelectorAll('.ing-edit').forEach((row) => {
           const p = c.parts[+row.dataset.idx];
           const info = row.querySelector('.ing-info');
@@ -460,12 +560,21 @@ function openMenuEditor(menu) {
         }),
       );
       form.elements.price.addEventListener('input', updateSum);
+      form.elements.bottlePrice.addEventListener('input', updateSum);
+      body.querySelector('.bottle-info').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-fill-bottle]');
+        if (!btn) return;
+        form.elements.bottlePrice.value = btn.dataset.fillBottle;
+        updateSum();
+        body.querySelector(`[data-fill-bottle="${btn.dataset.fillBottle}"]`)?.focus(); // 다시 그려도 포커스 유지
+      });
       form.querySelector('.cat-pick')?.addEventListener('change', updateSum); // 분류마다 최소 마진이 다름
       body.querySelector('.cancel').addEventListener('click', close);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         m.name = form.elements.name.value.trim();
         m.price = Number(form.elements.price.value) || 0;
+        m.bottlePrice = Number(form.elements.bottlePrice.value) || 0;
         m.category = form.elements.category?.value ?? '';
         if (!m.name) return toast('메뉴 이름을 입력해 주세요.');
         if (!m.price) return toast('판매가를 입력해 주세요.');

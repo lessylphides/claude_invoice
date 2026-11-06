@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildItemIndex } from '../../src/lib/itemIndex.js';
 import { groupByVendor, groupByCategory, paySummary, aggregateItems, pricePoints, priceStats } from '../../src/lib/aggregate.js';
-import { ingredientCost, menuCost, priceForTarget, priceForMargin, currentMinMargin, judgeMenu, summarizeMenus, bottleCost, judgeBottle, bottleRefs } from '../../src/lib/cost.js';
+import { ingredientCost, menuCost, priceForTarget, priceForMargin, currentMinMargin, judgeMenu, summarizeMenus, bottleCost, judgeBottle, bottleRefs, bottleRefList } from '../../src/lib/cost.js';
 
 const it_ = (name, unitPrice, extra = {}) => {
   const qty = extra.qty ?? 1;
@@ -209,10 +209,13 @@ describe('보틀 판매', () => {
     expect(judgeBottle({ ...menu, bottlePrice: 200000 }, idx, 25, null).status).toBe('rate'); // 19.9%
     expect(judgeBottle({ ...menu, ingredients: [{ type: 'manual', cost: 1 }] }, idx, 25, 1).status).toBe('unknown');
   });
-  it('보틀 참고가: 잔 합계 70%, 원가 × 3', () => {
-    const r = bottleRefs(bottleCost(menu, idx), 18000);
-    expect(r).toEqual({ glasses: 23, glassSum: 414000, glassSum70: 289800, x3: 119400 });
-    expect(bottleRefs(null, 18000)).toEqual({ glasses: null, glassSum: null, glassSum70: null, x3: null });
+  it('보틀 참고가: 최소 마진선, 잔 합계 50%, 원가 × 2, × 2.5', () => {
+    const r = bottleRefs(bottleCost(menu, idx), 18000, 150000);
+    expect(r).toEqual({ glasses: 23, glassSum: 414000, byMargin: 189800, glassSum50: 207000, x2: 79600, x25: 99500 });
+    expect(bottleRefList(r).map(([l]) => l)).toEqual(['최소 마진선', '잔 합계 50%', '원가 × 2', '원가 × 2.5']);
+    // 최소 마진을 안 정했으면 합격선은 빠짐
+    expect(bottleRefList(bottleRefs(bottleCost(menu, idx), 18000)).map(([l]) => l)).toEqual(['잔 합계 50%', '원가 × 2', '원가 × 2.5']);
+    expect(bottleRefs(null, 18000)).toEqual({ glasses: null, glassSum: null, byMargin: null, glassSum50: null, x2: null, x25: null });
   });
   it('요약: 잔은 합격이어도 보틀이 못 채우면 ⚠', () => {
     const s = summarizeMenus([{ ...menu, bottlePrice: 110000 }, menu, { ...menu, bottlePrice: 0 }], idx, 25, margins);

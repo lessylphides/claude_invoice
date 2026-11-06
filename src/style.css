@@ -316,9 +316,12 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 .bottle-price { margin-top: 2px; }
 .bottle-info { margin: 4px 2px 0; line-height: 1.6; }
 .total-bar[hidden], .bottle-info[hidden] { display: none; }
-.fill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.fill-chip { border-radius: 10px; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: 12px; padding: 6px 10px; line-height: 1.3; }
-.fill-chip b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.fill-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.fill-chip.below b { color: var(--warn); }
+.fill-chip.below[aria-pressed='true'] b { color: #fff; }
+.fill-hint { display: block; margin-top: 6px; }
+.fill-chip { border-radius: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: 11.5px; padding: 6px 8px; line-height: 1.3; min-width: 0; white-space: nowrap; overflow: hidden; }
+.fill-chip b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .mc-rate { font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
 .mc-rate small { font-size: 13px; color: var(--muted); font-weight: 600; }
 .mc-sub { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }

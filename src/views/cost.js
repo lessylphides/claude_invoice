@@ -3,7 +3,7 @@
 
 import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
-import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, summarizeMenus } from '../lib/cost.js';
+import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
 import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -275,16 +275,18 @@ function bottleSection(m, target) {
   const b = jb.b;
   if (!b)
     return `<h3 class="sub">보틀 판매</h3><p class="notice">보틀 판매가 ${won(m.bottlePrice)} · 첫 번째 재료의 매입 기록이 없어 보틀 원가를 계산할 수 없습니다.</p>`;
-  const refs = bottleRefs(b, m.price);
+  const refs = bottleRefs(b, m.price, jb.minMargin);
   const lines = [];
   if (jb.status === 'over') {
     lines.push(`원가율 ${target}% 기준: <b>${won(priceForTarget(b.cost, target))}</b> 이상`);
     if (jb.minMargin) lines.push(`보틀 최소 마진 ${won(jb.minMargin)} 기준: <b>${won(priceForMargin(b.cost, jb.minMargin))}</b> 이상`);
   }
-  const refLines = [
-    refs.glassSum70 ? `잔 합계의 70%: ${won(refs.glassSum70)} <small class="muted">(${refs.glasses}잔 × ${num(m.price)} = ${num(refs.glassSum)})</small>` : '',
-    `원가 × 3배: ${won(refs.x3)}`,
-  ].filter(Boolean);
+  const refLines = bottleRefList(refs).map(
+    ([label, v]) =>
+      `${label}: ${won(v)}${label.startsWith('잔 합계') ? ` <small class="muted">(${refs.glasses}잔 × ${num(m.price)} = ${num(refs.glassSum)})</small>` : ''}${
+        jb.minMargin && v - b.cost < jb.minMargin ? ' <small class="warn">최소 마진 미달</small>' : ''
+      }`,
+  );
   const head =
     jb.status === 'margin'
       ? `<p class="notice ok-notice">원가율은 목표(${target}%)보다 높지만, 보틀 마진 <b>${won(jb.margin)}</b>이 보틀 최소 마진 ${won(jb.minMargin)} 이상이라 합격입니다.</p>`
@@ -436,21 +438,18 @@ function openMenuEditor(menu) {
         }
         bInfo.hidden = !b;
         if (b) {
-          const refs = bottleRefs(b, price);
           const minB = store.minMarginOf(cat, 'bottle');
-          const opts = [
-            refs.glassSum70 ? ['잔 합계 70%', refs.glassSum70] : null,
-            ['원가 × 3', refs.x3],
-            minB ? ['보틀 최소 마진', priceForMargin(b.cost, minB)] : null,
-          ].filter(Boolean);
-          // 누르면 보틀 판매가 칸에 그 금액을 넣음 (지금 칸에 있는 금액이면 눌린 상태로)
+          const refs = bottleRefs(b, price, minB);
+          // 누르면 보틀 판매가 칸에 그 금액을 넣음 (지금 칸에 있는 금액이면 눌린 상태로). 최소 마진에 못 미치는 값은 ⚠
           bInfo.innerHTML = `보틀 기준: ${esc(b.itemName)} 1병 ${won(b.cost)}${refs.glasses ? ` · 1병 ≈ ${refs.glasses}잔` : ''}
-            <span class="fill-row">${opts
-              .map(
-                ([label, v]) =>
-                  `<button type="button" class="chip fill-chip" data-fill-bottle="${v}" aria-pressed="${bottlePrice === v}" aria-label="보틀 판매가를 ${label} ${num(v)}원으로">${label}<b>${num(v)}</b></button>`,
-              )
-              .join('')}</span>`;
+            <span class="fill-row">${bottleRefList(refs)
+              .map(([label, v]) => {
+                const below = minB && v - b.cost < minB;
+                return `<button type="button" class="chip fill-chip ${below ? 'below' : ''}" data-fill-bottle="${v}" aria-pressed="${bottlePrice === v}" aria-label="보틀 판매가를 ${label} ${num(v)}원으로${below ? ' (최소 마진 미달)' : ''}">${label}<b>${below ? '⚠ ' : ''}${num(v)}</b></button>`;
+              })
+              .join('')}</span>${
+              minB ? '' : `<span class="fill-hint">${cat ? `${esc(cat)} 분류에` : '분류를 고르고'} 보틀 최소 마진을 정하면, 그 마진을 넘는 가장 싼 값(최소 마진선)도 버튼으로 나옵니다.</span>`
+            }`;
         }
         ingsEl.querySelectorAll('.ing-edit').forEach((row) => {
           const p = c.parts[+row.dataset.idx];

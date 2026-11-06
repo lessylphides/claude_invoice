@@ -22,6 +22,7 @@ export function openSheet({ title, render, live = false, onClose }) {
   wrap.innerHTML = `
     <div class="sheet-backdrop"></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
+      <div class="sheet-grip" aria-hidden="true"></div>
       <header class="sheet-head">
         <h2></h2>
         <button class="icon-btn close" aria-label="닫기">✕</button>
@@ -52,6 +53,13 @@ export function openSheet({ title, render, live = false, onClose }) {
 
   wrap.querySelector('.sheet-backdrop').addEventListener('click', close);
   wrap.querySelector('.close').addEventListener('click', close);
+  // 입력한 내용이 있는지 (끌어내려 닫을 때 실수로 지우지 않게 물어봄)
+  wrap.addEventListener('input', () => (entry.dirty = true));
+  enableSwipeDown(wrap, () => {
+    if (entry.dirty && !confirm('저장하지 않은 내용이 있어요. 닫을까요?')) return false;
+    close();
+    return true;
+  });
 
   // 다시 그릴 때마다 새 body 요소로 교체 → 이전에 붙인 이벤트 리스너가 중복되지 않음
   const draw = () => {
@@ -68,6 +76,88 @@ export function openSheet({ title, render, live = false, onClose }) {
   if (!wrap.contains(document.activeElement)) wrap.querySelector('.sheet').focus({ preventScroll: true });
   requestAnimationFrame(() => wrap.classList.add('open'));
   return close;
+}
+
+/**
+ * 시트를 아래로 끌어내려 닫기. 맨 위까지 스크롤된 상태에서 아래로 당길 때만 (위로 스크롤하는 동작과 겹치지 않게).
+ * 입력칸·가로로 넘기는 목록 위에서 시작한 동작은 무시. 충분히 내리거나 빠르게 튕기면 닫고, 아니면 제자리로.
+ * @param {() => boolean} tryClose 닫았으면 true (사용자가 취소하면 false → 제자리로)
+ */
+function enableSwipeDown(wrap, tryClose) {
+  const sheet = wrap.querySelector('.sheet');
+  const backdrop = wrap.querySelector('.sheet-backdrop');
+  let start = null; // {x, y, t}
+  let dragging = false;
+  let dy = 0;
+
+  const reset = () => {
+    sheet.style.transition = '';
+    sheet.style.transform = '';
+    backdrop.style.transition = '';
+    backdrop.style.opacity = '';
+  };
+
+  sheet.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length !== 1 || !wrap.classList.contains('open')) return (start = null);
+      const t = e.target;
+      const onHead = !!t.closest('.sheet-head, .sheet-grip');
+      const body = sheet.querySelector('.sheet-body');
+      const blocked = t.closest('input, textarea, select, .chips, .fill-row, .chart-host');
+      if (!onHead && (blocked || body.scrollTop > 0)) return (start = null);
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp };
+      dragging = false;
+      dy = 0;
+    },
+    { passive: true },
+  );
+
+  sheet.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!start) return;
+      const mx = e.touches[0].clientX - start.x;
+      const my = e.touches[0].clientY - start.y;
+      if (!dragging) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        // 아래쪽으로, 세로로 움직일 때만 끌기 시작 (위로 스크롤·가로 넘기기는 그대로)
+        if (my <= 0 || Math.abs(mx) > my) return (start = null);
+        if (sheet.querySelector('.sheet-body').scrollTop > 0) return (start = null);
+        dragging = true;
+        sheet.style.transition = 'none';
+        backdrop.style.transition = 'none';
+      }
+      e.preventDefault(); // 화면 전체가 같이 끌려 내려가지 않게
+      dy = Math.max(0, my);
+      sheet.style.transform = `translateY(${dy}px)`;
+      backdrop.style.opacity = String(Math.max(0, 1 - dy / sheet.offsetHeight));
+    },
+    { passive: false },
+  );
+
+  const end = (e) => {
+    if (!start) return;
+    const wasDragging = dragging;
+    const speed = dy / Math.max(1, e.timeStamp - start.t); // px/ms
+    start = null;
+    dragging = false;
+    if (!wasDragging) return;
+    const far = dy > Math.min(140, sheet.offsetHeight * 0.3);
+    const flick = dy > 40 && speed > 0.6;
+    if (far || flick) {
+      // 끝까지 내려보낸 뒤 닫기
+      sheet.style.transition = 'transform 0.18s ease-in';
+      sheet.style.transform = 'translateY(100%)';
+      backdrop.style.transition = 'opacity 0.18s';
+      backdrop.style.opacity = '0';
+      setTimeout(() => {
+        if (!tryClose()) reset();
+      }, 180);
+    } else reset();
+  };
+  sheet.addEventListener('touchend', end);
+  sheet.addEventListener('touchcancel', end);
 }
 
 export function closeTopSheet() {

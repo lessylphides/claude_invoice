@@ -23,8 +23,11 @@ test('잔은 합격, 보틀은 원가율 초과 → 보틀 최소 마진을 정�
   // 상세: 추천 보틀가와 참고 가격
   await card.click();
   const sec = sheet(page).locator('.bottle-sec');
-  await expect(sec).toContainText('1병 원가39,790원');
-  await expect(sec).toContainText('1병 ≈ 23잔');
+  await expect(sheet(page).locator('.stats').first()).toContainText('잔 판매가18,000원');
+  await expect(sheet(page).locator('.stats').first()).toContainText('잔 원가1,705원');
+  await expect(sec).toContainText('보틀 원가39,790원');
+  await expect(sec.locator('h3')).toHaveCount(0); // '보틀 판매' 제목 없음 (바로 아래 '보틀 판매가'와 중복)
+  await expect(sec).not.toContainText('코스트코'); // 매입처·날짜는 재료별 원가에만
   await expect(sec.locator('.suggest').first()).toContainText('원가율 25% 기준: 159,200원 이상');
   await expect(sec.locator('.suggest.ref li')).toHaveText(['잔 합계 60%: 248,400원 (23잔 × 18,000 = 414,000)', '원가 × 2: 79,600원', '원가 × 2.5: 99,500원']);
   await closeSheet(page);

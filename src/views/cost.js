@@ -208,11 +208,12 @@ function openMenuDetail(id) {
       const target = store.costTarget.value;
       const j = judgeMenu(c, m.price, target, store.minMarginOf(m.category));
       const overT = j.status === 'over';
+      const glassWord = m.bottlePrice ? '잔 ' : ''; // 보틀도 파는 메뉴만 '잔 판매가'로 구분 (디저트 등은 그냥 '판매가')
       body.innerHTML = `
         <h2 class="detail-name">${esc(m.name)}</h2>
         <div class="stats">
-          <div><p>판매가</p><b>${won(m.price)}</b></div>
-          <div><p>원가</p><b>${won(c.cost)}</b></div>
+          <div><p>${glassWord}판매가</p><b>${won(m.price)}</b></div>
+          <div><p>${glassWord}원가</p><b>${won(c.cost)}</b></div>
           <div class="${c.rate != null && c.rate > target ? 'over' : ''}"><p>원가율</p><b>${pct(c.rate)}</b><small>목표 ${target}%</small></div>
           <div class="${j.status === 'margin' ? 'good' : ''}"><p>마진</p><b>${won(j.margin)}</b>${j.minMargin ? `<small>최소 ${num(j.minMargin)}</small>` : ''}</div>
         </div>
@@ -274,7 +275,7 @@ function bottleSection(m, target) {
   const jb = judgeBottle(m, store.index, target, store.minMarginOf(m.category, 'bottle'));
   const b = jb.b;
   if (!b)
-    return `<h3 class="sub">보틀 판매</h3><p class="notice">보틀 판매가 ${won(m.bottlePrice)} · 첫 번째 재료의 매입 기록이 없어 보틀 원가를 계산할 수 없습니다.</p>`;
+    return `<p class="notice">보틀 판매가 ${won(m.bottlePrice)} · 첫 번째 재료의 매입 기록이 없어 보틀 원가를 계산할 수 없습니다.</p>`;
   const refs = bottleRefs(b, m.price, jb.minMargin);
   const lines = [];
   if (jb.status === 'over') {
@@ -295,14 +296,12 @@ function bottleSection(m, target) {
             <p class="suggest-title">추천 보틀 판매가</p><ul class="suggest">${lines.map((l) => `<li>${l}</li>`).join('')}</ul></div>`
         : '';
   return `<section class="bottle-sec">
-    <h3 class="sub">보틀 판매</h3>
     <div class="stats">
       <div><p>보틀 판매가</p><b>${won(m.bottlePrice)}</b></div>
-      <div><p>1병 원가</p><b>${won(b.cost)}</b></div>
+      <div><p>보틀 원가</p><b>${won(b.cost)}</b></div>
       <div class="${jb.rate > target ? 'over' : ''}"><p>원가율</p><b>${pct(jb.rate)}</b><small>목표 ${target}%</small></div>
       <div class="${jb.status === 'margin' ? 'good' : ''}"><p>마진</p><b>${won(jb.margin)}</b>${jb.minMargin ? `<small>최소 ${num(jb.minMargin)}</small>` : ''}</div>
     </div>
-    <p class="muted small">${esc(b.itemName)} 최근 ${num(b.cost)}원 (${shortDate(b.source.date)} ${esc(b.source.vendor)})${b.glasses ? ` · 1병 ≈ ${Math.floor(b.glasses)}잔` : ''}</p>
     ${head}
     <p class="suggest-title">참고 가격</p>
     <ul class="suggest ref">${refLines.map((l) => `<li>${l}</li>`).join('')}</ul>

@@ -437,9 +437,20 @@ function openMenuEditor(menu) {
         bInfo.hidden = !b;
         if (b) {
           const refs = bottleRefs(b, price);
-          bInfo.innerHTML = `보틀 기준: ${esc(b.itemName)} 1병 ${won(b.cost)}${refs.glasses ? ` · 1병 ≈ ${refs.glasses}잔` : ''}<br>참고 보틀가: ${
-            refs.glassSum70 ? `잔 합계 70% <b>${won(refs.glassSum70)}</b> · ` : ''
-          }원가 × 3 <b>${won(refs.x3)}</b>`;
+          const minB = store.minMarginOf(cat, 'bottle');
+          const opts = [
+            refs.glassSum70 ? ['잔 합계 70%', refs.glassSum70] : null,
+            ['원가 × 3', refs.x3],
+            minB ? ['보틀 최소 마진', priceForMargin(b.cost, minB)] : null,
+          ].filter(Boolean);
+          // 누르면 보틀 판매가 칸에 그 금액을 넣음 (지금 칸에 있는 금액이면 눌린 상태로)
+          bInfo.innerHTML = `보틀 기준: ${esc(b.itemName)} 1병 ${won(b.cost)}${refs.glasses ? ` · 1병 ≈ ${refs.glasses}잔` : ''}
+            <span class="fill-row">${opts
+              .map(
+                ([label, v]) =>
+                  `<button type="button" class="chip fill-chip" data-fill-bottle="${v}" aria-pressed="${bottlePrice === v}" aria-label="보틀 판매가를 ${label} ${num(v)}원으로">${label}<b>${num(v)}</b></button>`,
+              )
+              .join('')}</span>`;
         }
         ingsEl.querySelectorAll('.ing-edit').forEach((row) => {
           const p = c.parts[+row.dataset.idx];
@@ -550,6 +561,13 @@ function openMenuEditor(menu) {
       );
       form.elements.price.addEventListener('input', updateSum);
       form.elements.bottlePrice.addEventListener('input', updateSum);
+      body.querySelector('.bottle-info').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-fill-bottle]');
+        if (!btn) return;
+        form.elements.bottlePrice.value = btn.dataset.fillBottle;
+        updateSum();
+        body.querySelector(`[data-fill-bottle="${btn.dataset.fillBottle}"]`)?.focus(); // 다시 그려도 포커스 유지
+      });
       form.querySelector('.cat-pick')?.addEventListener('change', updateSum); // 분류마다 최소 마진이 다름
       body.querySelector('.cancel').addEventListener('click', close);
       form.addEventListener('submit', (e) => {

@@ -53,6 +53,13 @@ test('메뉴 편집기: 보틀 판매가를 적으면 보틀 원가율, 비우�
   await expect(s.locator('.bottle-bar')).toBeVisible();
   await expect(s.locator('.bsum')).toContainText('39,790원 · 36.2%');
   await expect(s.locator('.bottle-info')).toContainText('1병 ≈ 23잔');
+  // 참고 금액 버튼을 누르면 보틀 판매가 칸에 들어감
+  await expect(s.locator('[data-fill-bottle]')).toHaveText(['잔 합계 70%289,800', '원가 × 3119,400']);
+  await s.locator('[data-fill-bottle="119400"]').click();
+  await expect(s.locator('input[name=bottlePrice]')).toHaveValue('119400');
+  await expect(s.locator('[data-fill-bottle="119400"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(s.locator('[data-fill-bottle="119400"]')).toBeFocused();
+  await expect(s.locator('.bsum')).toContainText('33.3%');
   await s.locator('input[name=bottlePrice]').fill('160000');
   await expect(s.locator('.bsum')).toContainText('24.9%');
   await s.locator('input[name=bottlePrice]').fill('');

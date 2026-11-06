@@ -97,6 +97,29 @@ test('인식이 실패하면 사진을 둔 채 직접 입력 화면을 연다', 
   await expect(page.locator('.photo')).toBeVisible();
 });
 
+test('크레딧이 떨어지거나 사용 한도에 닿으면 충전 안내와 함께 직접 입력 화면을 연다', async ({ page }) => {
+  await openApp(page, { settings: KEY });
+  let msg = 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.';
+  await mockClaude(page, () => ({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: msg } } }));
+  await page.locator('#cam').setInputFiles(PHOTO);
+  await expect(page.locator('.notice')).toContainText('API 크레딧이 다 떨어졌어요');
+  await expect(page.locator('.notice')).not.toContainText('credit balance');
+  await expect(page.locator('.photo')).toBeVisible();
+  await page.locator('form.editor .cancel').click();
+
+  msg = 'You have reached your specified API usage limits. You will regain access on 2026-12-01 at 00:00 UTC.';
+  await page.locator('#cam').setInputFiles(PHOTO);
+  await expect(page.locator('.notice')).toContainText('이번 달 API 사용 한도에 닿았어요');
+});
+
+test('다른 요청 오류는 원래 내용을 그대로 보여 준다', async ({ page }) => {
+  await openApp(page, { settings: KEY });
+  await mockClaude(page, () => ({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'image too large' } } }));
+  await page.locator('#cam').setInputFiles(PHOTO);
+  await expect(page.locator('.notice')).toContainText('요청 오류');
+  await expect(page.locator('.notice')).toContainText('image too large');
+});
+
 test('API 키가 없으면 인식 없이 사진과 함께 직접 입력 화면을 연다', async ({ page }) => {
   await openApp(page);
   const requests = await mockClaude(page, () => costco);

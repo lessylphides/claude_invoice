@@ -121,10 +121,11 @@ ${
       ],
     });
   } catch (err) {
+    // 크레딧 소진·사용 한도는 400 이라 다른 요청 오류와 종류로는 구분되지 않아 안내 문구로 구분
     if (err instanceof Anthropic.AuthenticationError) throw new Error('API 키가 올바르지 않습니다. 설정에서 확인해 주세요.');
     if (err instanceof Anthropic.PermissionDeniedError) throw new Error('이 API 키로는 선택한 모델을 쓸 수 없습니다.');
     if (err instanceof Anthropic.RateLimitError) throw new Error('요청이 많습니다. 잠시 후 다시 시도해 주세요.');
-    if (err instanceof Anthropic.BadRequestError) throw new Error(`요청 오류: ${err.message}`);
+    if (err instanceof Anthropic.BadRequestError) throw new Error(billingMessage(err.message) ?? `요청 오류: ${err.message}`);
     if (err instanceof Anthropic.APIConnectionError) throw new Error('인터넷 연결을 확인해 주세요.');
     if (err instanceof Anthropic.APIError) throw new Error(`Claude API 오류 (${err.status ?? '?'}): ${err.message}`);
     throw err;
@@ -142,4 +143,17 @@ ${
   } catch {
     throw new Error('인식 결과를 해석하지 못했습니다. 다시 시도하거나 직접 입력해 주세요.');
   }
+}
+
+/**
+ * 결제 관련 400 오류를 알아보기 쉬운 안내로 (해당 없으면 null → 원래 오류를 그대로 보여 줌)
+ * Anthropic 이 문구를 바꾸면 못 알아볼 수 있지만, 그때도 원래 오류 내용은 그대로 보임
+ */
+export function billingMessage(message) {
+  const m = String(message ?? '');
+  if (/credit balance/i.test(m))
+    return '💳 API 크레딧이 다 떨어졌어요. Claude Console → Billing에서 충전하면 바로 다시 인식됩니다. 지금은 아래에 직접 입력해 주세요.';
+  if (/usage limit/i.test(m))
+    return '💳 이번 달 API 사용 한도에 닿았어요. Claude Console → Limits에서 한도를 올리거나, 그때까지는 아래에 직접 입력해 주세요.';
+  return null;
 }

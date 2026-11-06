@@ -26,7 +26,7 @@ test('잔은 합격, 보틀은 원가율 초과 → 보틀 최소 마진을 정�
   await expect(sec).toContainText('1병 원가39,790원');
   await expect(sec).toContainText('1병 ≈ 23잔');
   await expect(sec.locator('.suggest').first()).toContainText('원가율 25% 기준: 159,200원 이상');
-  await expect(sec.locator('.suggest.ref li')).toHaveText(['잔 합계 50%: 207,000원 (23잔 × 18,000 = 414,000)', '원가 × 2: 79,600원', '원가 × 2.5: 99,500원']);
+  await expect(sec.locator('.suggest.ref li')).toHaveText(['잔 합계 60%: 248,400원 (23잔 × 18,000 = 414,000)', '원가 × 2: 79,600원', '원가 × 2.5: 99,500원']);
   await closeSheet(page);
 
   // 보틀 최소 마진 70,000 → 합격
@@ -53,7 +53,7 @@ test('메뉴 편집기: 보틀 판매가를 적으면 보틀 원가율, 비우�
   await expect(s.locator('.bsum')).toContainText('39,790원 · 36.2%');
   await expect(s.locator('.bottle-info')).toContainText('1병 ≈ 23잔');
   // 참고 금액 버튼을 누르면 보틀 판매가 칸에 들어감
-  await expect(s.locator('[data-fill-bottle]')).toHaveText(['잔 합계 50%207,000', '원가 × 279,600', '원가 × 2.599,500']);
+  await expect(s.locator('[data-fill-bottle]')).toHaveText(['잔 합계 60%248,400', '원가 × 279,600', '원가 × 2.599,500']);
   await expect(s.locator('.fill-hint')).toContainText('위스키 분류에 보틀 최소 마진을 정하면');
   await s.locator('[data-fill-bottle="99500"]').click();
   await expect(s.locator('input[name=bottlePrice]')).toHaveValue('99500');
@@ -88,7 +88,7 @@ test('보틀 최소 마진을 정했으면: 합격선 버튼이 맨 앞, 못 미
   await expect(sheet(page).locator('.bottle-sec .suggest.ref li').first()).toHaveText('최소 마진선: 189,800원');
   await sheet(page).locator('[data-edit]').click();
   const s = sheet(page);
-  await expect(s.locator('[data-fill-bottle]')).toHaveText(['최소 마진선189,800', '잔 합계 50%207,000', '원가 × 2⚠ 79,600', '원가 × 2.5⚠ 99,500']);
+  await expect(s.locator('[data-fill-bottle]')).toHaveText(['최소 마진선189,800', '잔 합계 60%248,400', '원가 × 2⚠ 79,600', '원가 × 2.5⚠ 99,500']);
   await expect(s.locator('.fill-hint')).toHaveCount(0);
   await s.locator('[data-fill-bottle="189800"]').click();
   await expect(s.locator('.bsum')).toContainText('21.0%마진 150,010원');

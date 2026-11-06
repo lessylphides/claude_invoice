@@ -318,7 +318,8 @@ fieldset.pay legend { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; 
 .mc-bottle { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; padding-top: 4px; border-top: 1px dashed var(--line); }
 .mc-bottle.over, .mc-bottle.over b { color: var(--warn); }
 .mc-bottle small { color: var(--muted); }
-.bottle-sec { margin-top: 6px; }
+.bottle-sec { margin-top: 10px; }
+.bottle-sec > .stats { margin-bottom: 8px; }
 .suggest.ref small { font-size: 12px; }
 .bottle-price { margin-top: 2px; }
 .bottle-info { margin: 4px 2px 0; line-height: 1.6; }
@@ -470,3 +471,4 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .same-ask p { margin: 0 0 4px; }
 .same-arrow { color: var(--ink-2); }
 .same-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.stats small { white-space: nowrap; }

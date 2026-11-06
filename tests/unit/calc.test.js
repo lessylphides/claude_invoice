@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildItemIndex } from '../../src/lib/itemIndex.js';
 import { groupByVendor, groupByCategory, paySummary, aggregateItems, pricePoints, priceStats } from '../../src/lib/aggregate.js';
-import { ingredientCost, menuCost, priceForTarget, priceForMargin, currentMinMargin, judgeMenu, summarizeMenus } from '../../src/lib/cost.js';
+import { ingredientCost, menuCost, priceForTarget, priceForMargin, currentMinMargin, judgeMenu, summarizeMenus, bottleCost, judgeBottle, bottleRefs } from '../../src/lib/cost.js';
 
 const it_ = (name, unitPrice, extra = {}) => {
   const qty = extra.qty ?? 1;
@@ -177,5 +177,47 @@ describe('같은 품목 묶기와 색인·원가', () => {
     const entries = ps.flatMap((p) => p.items.map((item) => ({ item, purchase: p })));
     expect(aggregateItems(entries, idx.key)).toHaveLength(1);
     expect(aggregateItems(entries)).toHaveLength(2);
+  });
+});
+
+describe('보틀 판매', () => {
+  const idx = buildItemIndex([
+    p_('a', '2026-10-01', '코스트코', [it_('몽키숄더700ML', 45990, { packSize: 700, packUnit: 'ml' })]),
+    p_('b', '2026-10-28', '코스트코', [it_('몽키숄더700ML', 49790, { discount: 10000 })]),
+  ]);
+  const menu = { price: 18000, bottlePrice: 120000, category: '위스키', ingredients: [{ type: 'item', itemName: '몽키숄더700ML', use: 30 }] };
+  const margins = { 위스키: [{ value: 12000, bottle: 80000, at: '2026-11-06' }] };
+
+  it('보틀 원가 = 첫 매입 품목 한 병의 최근 매입가(할인 반영), 잔 수 = 용량 ÷ 사용량', () => {
+    const b = bottleCost(menu, idx);
+    expect(b).toMatchObject({ itemName: '몽키숄더700ML', cost: 39790, prevCost: 45990, pack: 700, unit: 'ml' });
+    expect(b.glasses).toBeCloseTo(23.33, 2);
+    expect(bottleCost({ ingredients: [{ type: 'manual', cost: 100 }] }, idx)).toBeNull();
+    expect(bottleCost({ ingredients: [{ type: 'item', itemName: '없음', use: 1 }] }, idx)).toBeNull();
+  });
+  it('잔·보틀 최소 마진을 따로', () => {
+    expect(currentMinMargin(margins, '위스키')).toBe(12000);
+    expect(currentMinMargin(margins, '위스키', 'bottle')).toBe(80000);
+    expect(currentMinMargin({ 위스키: [{ value: 12000, at: 'x' }] }, '위스키', 'bottle')).toBeNull();
+  });
+  it('보틀 판정: 판매가 없으면 null, 마진 기준 합격, 못 채우면 초과', () => {
+    expect(judgeBottle({ ...menu, bottlePrice: 0 }, idx, 25, 80000)).toBeNull();
+    const ok = judgeBottle(menu, idx, 25, 80000);
+    expect(ok).toMatchObject({ status: 'margin', margin: 80210 });
+    expect(ok.rate).toBeCloseTo(33.16, 2);
+    expect(judgeBottle({ ...menu, bottlePrice: 110000 }, idx, 25, 80000).status).toBe('over');
+    expect(judgeBottle({ ...menu, bottlePrice: 200000 }, idx, 25, null).status).toBe('rate'); // 19.9%
+    expect(judgeBottle({ ...menu, ingredients: [{ type: 'manual', cost: 1 }] }, idx, 25, 1).status).toBe('unknown');
+  });
+  it('보틀 참고가: 잔 합계 70%, 원가 × 3', () => {
+    const r = bottleRefs(bottleCost(menu, idx), 18000);
+    expect(r).toEqual({ glasses: 23, glassSum: 414000, glassSum70: 289800, x3: 119400 });
+    expect(bottleRefs(null, 18000)).toEqual({ glasses: null, glassSum: null, glassSum70: null, x3: null });
+  });
+  it('요약: 잔은 합격이어도 보틀이 못 채우면 ⚠', () => {
+    const s = summarizeMenus([{ ...menu, bottlePrice: 110000 }, menu, { ...menu, bottlePrice: 0 }], idx, 25, margins);
+    expect(s.rows.map((r) => [r.j.status, r.jb?.status ?? null])).toEqual([['rate', 'over'], ['rate', 'margin'], ['rate', null]]);
+    expect(s.over).toBe(1);
+    expect(s.byMargin).toBe(1);
   });
 });

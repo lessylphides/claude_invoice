@@ -146,7 +146,7 @@ describe('저장 형식 변환 (migrate)', () => {
   });
   it('최소 마진 기록 정리: 없는 분류·잘못된 값 정리', () => {
     expect(sanitizeMinMargins({ 위스키: [{ value: '12000.4', at: '2026-11-04' }, null], 없는분류: [{ value: 1 }], 칵테일: [] }, ['위스키', '칵테일'])).toEqual({
-      위스키: [{ value: 12000, at: '2026-11-04' }],
+      위스키: [{ value: 12000, bottle: 0, at: '2026-11-04' }],
     });
     expect(sanitizeMinMargins(null, ['위스키'])).toEqual({});
   });
@@ -155,6 +155,12 @@ describe('저장 형식 변환 (migrate)', () => {
     expect(parseMargin('12000')).toBe(12000);
     expect(() => parseMargin('-1')).toThrow();
     expect(() => parseMargin('abc')).toThrow();
+  });
+  it('v5 데이터: 메뉴 보틀 판매가는 0(안 팜), 최소 마진 기록에 보틀 0', () => {
+    const d = migrate({ version: 5, menuCategories: ['위스키'], menus: [{ id: 'm', name: 'x', price: 1 }], minMargins: { 위스키: [{ value: 12000, at: '2026-11-04' }] } }, { trusted: true });
+    expect(d.version).toBe(DATA_VERSION);
+    expect(d.menus[0].bottlePrice).toBe(0);
+    expect(d.minMargins.위스키).toEqual([{ value: 12000, bottle: 0, at: '2026-11-04' }]);
   });
   it('이미 정리된 데이터는 다시 넣어도 같다', () => {
     const once = migrate({ purchases: [{ id: 'a', date: '2026-10-28', vendor: 'x', createdAt: 1, items: [{ id: 'i', name: 'y', qty: 1, unitPrice: 10, amount: 10 }] }] });

@@ -12,19 +12,19 @@
 //             packSize, packUnit }], // 수량 1개의 용량, 예: 700 'ml' / 7 '개'. 원가 계산에 사용
 //   memo, createdAt
 // }
-// menu = { id, name, price(판매가), category(메뉴 분류, ''=미분류), createdAt,
+// menu = { id, name, price(잔 판매가), bottlePrice(보틀 판매가, 0=보틀 안 팜), category(메뉴 분류, ''=미분류), createdAt,
 //          ingredients: [ { id, type:'item', itemName, packSize, unit, use }   // 매입 품목: 1개(packSize) 중 use 만큼
 //                       | { id, type:'manual', name, cost } ] }              // 영수증에 없는 재료: 1잔당 원가
 // costTarget = { history: [{ value, at:'YYYY-MM-DD', note? }] }  마지막 항목이 현재 목표 원가율
 // menuCategories = ['커피', '위스키', ...]  원가 탭의 메뉴 분류 (이 순서대로 보여줌)
-// minMargins = { '위스키': [{ value: 12000, at:'YYYY-MM-DD' }, ...] }  분류별 최소 마진 금액(한 잔에 최소 남길 돈) 변경 기록.
-//              마지막 항목이 현재 값, 0 이면 설정 안 함(원가율로만 판정)
+// minMargins = { '위스키': [{ value: 12000, bottle: 80000, at:'YYYY-MM-DD' }, ...] }  분류별 최소 마진 변경 기록.
+//              value: 잔 하나에 최소 남길 돈, bottle: 보틀 하나에 최소 남길 돈. 마지막 항목이 현재 값, 0 이면 설정 안 함
 // itemLinks = { 묶인이름키: '대표 이름' }, itemNotSame = ['키A|키B']  같은 품목 묶기 (lib/itemLinks.js)
 
 import { isYmd, todayStr, uid } from './format.js';
 import { sanitizeLinks, sanitizeNotSame } from './itemLinks.js';
 
-export const DATA_VERSION = 5; // 3: 메뉴 분류, 4: 분류별 최소 마진(minMargins), 5: 같은 품목 묶기(itemLinks, itemNotSame)
+export const DATA_VERSION = 6; // 3: 메뉴 분류, 4: 분류별 최소 마진, 5: 같은 품목 묶기, 6: 보틀 판매가(menu.bottlePrice)·보틀 최소 마진
 
 export const DEFAULT_MENU_CATEGORIES = ['커피', '위스키', '칵테일', '맥주', '티', '디저트'];
 export const UNCATEGORIZED = '미분류';
@@ -142,6 +142,7 @@ export function sanitizeMenu(raw) {
     id: m.id || uid(),
     name: str(m.name) || '(이름 없음)',
     price: Math.round(nonNeg(m.price)),
+    bottlePrice: Math.round(nonNeg(m.bottlePrice)),
     category: RESERVED_MENU_CATEGORIES.includes(str(m.category)) ? '' : str(m.category),
     ingredients: list(m.ingredients).map(sanitizeIngredient).filter((g) => g.type === 'manual' || g.itemName),
     createdAt: toNum(m.createdAt) || Date.now(),
@@ -217,7 +218,7 @@ export function sanitizeMinMargins(raw, categories) {
   for (const cat of categories) {
     const hist = (Array.isArray(src[cat]) ? src[cat] : [])
       .filter((h) => h && typeof h === 'object')
-      .map((h) => ({ value: Math.round(nonNeg(h.value)), at: isYmd(h.at) ? h.at : todayStr() }));
+      .map((h) => ({ value: Math.round(nonNeg(h.value)), bottle: Math.round(nonNeg(h.bottle)), at: isYmd(h.at) ? h.at : todayStr() }));
     if (hist.length) out[cat] = hist;
   }
   return out;

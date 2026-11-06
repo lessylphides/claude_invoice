@@ -52,10 +52,59 @@ export const priceForTarget = (cost, target) => Math.ceil(cost / (target / 100) 
 /** 최소 마진을 남기려면 필요한 판매가 (100원 단위 올림) */
 export const priceForMargin = (cost, minMargin) => Math.ceil((cost + minMargin) / 100) * 100;
 
-/** 분류의 현재 최소 마진 (설정 안 했거나 0 이면 null) */
-export function currentMinMargin(margins, category) {
-  const v = margins?.[category]?.at(-1)?.value;
+/**
+ * 분류의 현재 최소 마진 (설정 안 했거나 0 이면 null)
+ * @param {'glass'|'bottle'} kind 잔 / 보틀
+ */
+export function currentMinMargin(margins, category, kind = 'glass') {
+  const last = margins?.[category]?.at(-1);
+  const v = kind === 'bottle' ? last?.bottle : last?.value;
   return v > 0 ? v : null;
+}
+
+/**
+ * 보틀 원가: 메뉴의 첫 번째 매입 품목 재료 한 병(구매 단위 1개)의 최근 매입가(할인 반영).
+ * glasses: 한 병에서 나오는 잔 수(1개 용량 ÷ 한 잔 사용량, 모르면 null). 매입 기록이 없으면 null
+ */
+export function bottleCost(menu, index) {
+  const g = menu.ingredients.find((x) => x.type === 'item');
+  if (!g) return null;
+  const r = ingredientCost(g, index);
+  if (!r.source) return null;
+  return {
+    itemName: g.itemName,
+    cost: r.source.price,
+    prevCost: r.prev ? r.prev.price : r.source.price,
+    pack: r.pack || 0,
+    unit: r.unit,
+    glasses: r.pack && g.use ? r.pack / g.use : null,
+    source: r.source,
+  };
+}
+
+/**
+ * 보틀 판정 (보틀 판매가가 없으면 null). 잔과 같은 규칙: 원가율 목표 이하 또는 보틀 최소 마진 이상이면 합격
+ * @returns {null | {status, margin, minMargin, rate, b}}
+ */
+export function judgeBottle(menu, index, target, minBottleMargin) {
+  const price = Number(menu.bottlePrice) || 0;
+  if (!price) return null;
+  const b = bottleCost(menu, index);
+  if (!b) return { status: 'unknown', margin: null, minMargin: minBottleMargin, rate: null, b: null };
+  const rate = (b.cost / price) * 100;
+  return { ...judgeMenu({ cost: b.cost, rate, missing: 0 }, price, target, minBottleMargin), rate, b };
+}
+
+/** 보틀 가격 참고값: 잔 합계(잔 가격 × 잔 수)의 70%, 원가 × 3 (100원 단위 올림) */
+export function bottleRefs(b, glassPrice) {
+  const up = (v) => Math.ceil(v / 100) * 100;
+  const glasses = b?.glasses ? Math.floor(b.glasses) : null;
+  return {
+    glasses,
+    glassSum: glasses && glassPrice ? glasses * glassPrice : null,
+    glassSum70: glasses && glassPrice ? up(glasses * glassPrice * 0.7) : null,
+    x3: b ? up(b.cost * 3) : null,
+  };
 }
 
 /**
@@ -74,23 +123,30 @@ export function judgeMenu(c, price, target, minMargin) {
 }
 
 /**
- * 원가 탭 요약: 원가율 높은 순(계산 불가는 맨 뒤), ⚠ 수, 마진 기준 충족 수, 평균.
- * ⚠: 원가율이 목표를 넘고 최소 마진도 못 채운 메뉴 (일부 재료가 빠져도 이미 넘었으면 셈)
- * 평균: 모든 재료가 계산된 메뉴만.
+ * 원가 탭 요약: 잔 원가율 높은 순(계산 불가는 맨 뒤), ⚠ 수, 마진 기준 충족 수, 평균.
+ * ⚠: 잔이나 보틀 중 하나라도 원가율·최소 마진을 둘 다 못 채운 메뉴 (일부 재료가 빠져도 이미 넘었으면 셈)
+ * 마진 기준 충족: ⚠ 가 아니면서 잔이나 보틀 중 하나라도 마진 기준으로 합격한 메뉴
+ * 평균: 잔 원가율, 모든 재료가 계산된 메뉴만.
  * @param {object} margins 분류별 최소 마진 기록
  */
 export function summarizeMenus(menus, index, target, margins = {}) {
   const rows = menus
     .map((m) => {
       const c = menuCost(m, index);
-      return { m, c, j: judgeMenu(c, m.price, target, currentMinMargin(margins, m.category)) };
+      return {
+        m,
+        c,
+        j: judgeMenu(c, m.price, target, currentMinMargin(margins, m.category)),
+        jb: judgeBottle(m, index, target, currentMinMargin(margins, m.category, 'bottle')),
+      };
     })
     .sort((a, b) => (b.c.rate ?? -1) - (a.c.rate ?? -1));
+  const isOver = (r) => r.j.status === 'over' || r.jb?.status === 'over';
   const complete = rows.filter((r) => r.c.rate != null && !r.c.missing);
   return {
     rows,
-    over: rows.filter((r) => r.j.status === 'over').length,
-    byMargin: rows.filter((r) => r.j.status === 'margin').length,
+    over: rows.filter(isOver).length,
+    byMargin: rows.filter((r) => !isOver(r) && (r.j.status === 'margin' || r.jb?.status === 'margin')).length,
     avg: complete.length ? complete.reduce((s, r) => s + r.c.rate, 0) / complete.length : null,
   };
 }

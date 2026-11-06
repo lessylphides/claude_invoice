@@ -95,16 +95,31 @@ export function judgeBottle(menu, index, target, minBottleMargin) {
   return { ...judgeMenu({ cost: b.cost, rate, missing: 0 }, price, target, minBottleMargin), rate, b };
 }
 
-/** 보틀 가격 참고값: 잔 합계(잔 가격 × 잔 수)의 70%, 원가 × 3 (100원 단위 올림) */
-export function bottleRefs(b, glassPrice) {
+/**
+ * 보틀 가격 참고값 (100원 단위 올림)
+ * byMargin: 1병 원가 + 보틀 최소 마진 = 설정한 마진을 남기는 가장 싼 값(최소 마진을 정했을 때만), 잔 합계(잔 가격 × 잔 수)의 60%, 원가 × 2, 원가 × 2.5
+ */
+export function bottleRefs(b, glassPrice, minBottleMargin = null) {
   const up = (v) => Math.ceil(v / 100) * 100;
   const glasses = b?.glasses ? Math.floor(b.glasses) : null;
   return {
     glasses,
     glassSum: glasses && glassPrice ? glasses * glassPrice : null,
-    glassSum70: glasses && glassPrice ? up(glasses * glassPrice * 0.7) : null,
-    x3: b ? up(b.cost * 3) : null,
+    byMargin: b && minBottleMargin ? priceForMargin(b.cost, minBottleMargin) : null,
+    glassSum60: glasses && glassPrice ? up(glasses * glassPrice * 0.6) : null,
+    x2: b ? up(b.cost * 2) : null,
+    x25: b ? up(b.cost * 2.5) : null,
   };
+}
+
+/** 참고 가격 버튼·목록용: [이름, 금액] (계산할 수 없는 것은 뺌) */
+export function bottleRefList(refs) {
+  return [
+    ['최소 마진선', refs.byMargin],
+    ['잔 합계 60%', refs.glassSum60],
+    ['원가 × 2', refs.x2],
+    ['원가 × 2.5', refs.x25],
+  ].filter(([, v]) => v);
 }
 
 /**

@@ -41,6 +41,8 @@ let index = null; // 품목 색인 (데이터가 바뀌면 다시 만듦)
 
 const listeners = new Set();
 const notify = () => listeners.forEach((fn) => fn());
+// 사용자가 직접 바꾼 경우에만 알림 (서버 동기화가 '올릴 것 있음'으로 표시하는 데 씀)
+const changeListeners = new Set();
 
 // ── 저장: 바뀔 때마다 바로 쓰기 시작하고, 쓰는 중에 또 바뀌면 끝난 뒤 한 번 더 씀 ──
 let inflight = null;
@@ -95,6 +97,7 @@ function persistNow() {
 function commit() {
   index = null;
   persistNow();
+  changeListeners.forEach((fn) => fn());
   notify();
 }
 
@@ -322,6 +325,22 @@ export const store = {
   },
   snoozeBackup(until) {
     this.saveSettings({ backupSnoozeUntil: until });
+    notify();
+  },
+  /** 사용자가 장부를 바꿀 때마다 fn 호출 (서버에서 받아 바꾼 경우는 제외) */
+  onLocalChange(fn) {
+    changeListeners.add(fn);
+    return () => changeListeners.delete(fn);
+  },
+  /** 서버에 올릴 장부 (그대로의 데이터) */
+  snapshot() {
+    return data;
+  },
+  /** 서버에서 받은 장부로 바꿈 (이 기기에도 저장, '바뀜'으로 치지 않음) */
+  replaceData(raw) {
+    data = migrate(raw);
+    index = null;
+    persistNow();
     notify();
   },
   importData(json) {

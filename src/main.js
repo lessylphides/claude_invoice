@@ -9,6 +9,7 @@ import { bindCaptureInputs, preloadOcr } from './views/capture.js';
 import { auth, landing } from './auth.js';
 import { renderAuth, handleAuthEvent } from './views/authScreen.js';
 import { closeTopSheet, toast } from './ui/sheet.js';
+import { sync } from './sync.js';
 
 const app = document.getElementById('app');
 
@@ -31,6 +32,13 @@ function staleBanner() {
 
 // 시작 상태: 로그인 확인 → 장부 불러오기
 const boot = { auth: 'loading', data: 'loading', dataError: null, authError: null };
+
+/** 로그인했고 장부를 불러왔으면 서버 동기화 시작, 로그아웃하면 멈춤 */
+function syncWithAuth() {
+  if (boot.auth !== 'ok' || boot.data !== 'ok') return;
+  if (auth.user && !auth.recovery) sync.start(auth.user);
+  else sync.stop();
+}
 
 function render() {
   if (boot.auth === 'loading') return (app.innerHTML = '<p class="boot-msg" role="status">불러오는 중…</p>');
@@ -101,6 +109,7 @@ ready.then(
     boot.data = 'ok';
     store.subscribe(render);
     render();
+    syncWithAuth();
     warmIndex();
     preloadOcr();
   },
@@ -113,8 +122,12 @@ ready.then(
 auth.init().then(
   () => {
     boot.auth = 'ok';
-    auth.subscribe(render);
+    auth.subscribe(() => {
+      render();
+      syncWithAuth();
+    });
     render();
+    syncWithAuth();
     // 메일의 인증 링크로 들어온 경우 (아이폰은 메일 링크가 Safari 로 열려 홈 화면 앱과 로그인이 따로임)
     if (landing.type === 'signup' && auth.user) toast('이메일 인증이 끝났어요. 홈 화면의 코스트노트 앱에서도 로그인해 주세요.', 5000);
   },

@@ -18,7 +18,8 @@ const listeners = new Set();
 const notify = () => listeners.forEach((f) => f());
 
 let clientP = null;
-function client() {
+/** Supabase 연결 (로그인 기능과 장부 동기화가 같이 씀) */
+export function client() {
   clientP ??= import('@supabase/supabase-js').then(({ createClient }) =>
     createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: AUTH_STORAGE_KEY },

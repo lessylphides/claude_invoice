@@ -496,3 +496,5 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .auth-card .btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .account-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .account-row p { margin: 0; overflow-wrap: anywhere; }
+.sync-choice .btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.sync-line { color: var(--ink-2); }

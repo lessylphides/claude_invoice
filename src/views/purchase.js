@@ -11,6 +11,7 @@ import { view, monthKey, rerender, shiftMonth, goToday } from '../state.js';
 import { openDay } from './day.js';
 import { openTrend } from './trend.js';
 import { openCaptureMenu } from './capture.js';
+import { sync } from '../sync.js';
 
 export const monthPurchases = () => {
   const k = monthKey();
@@ -57,6 +58,7 @@ export function renderPurchaseTab() {
 }
 
 function backupBanner() {
+  if (sync.syncedAt) return ''; // 서버에 저장되고 있으면 백업 알림은 띄우지 않음
   const { lastBackupAt, backupSnoozeUntil } = store.settings;
   const r = backupReminder({ count: store.purchases.length, lastBackupAt, snoozeUntil: backupSnoozeUntil, today: todayStr() });
   if (!r) return '';

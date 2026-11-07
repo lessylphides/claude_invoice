@@ -10,6 +10,18 @@ import { monthKey } from '../state.js';
 import { monthPurchases, backupNow } from './purchase.js';
 import { auth } from '../auth.js';
 import { setAuthNotice } from './authScreen.js';
+import { sync } from '../sync.js';
+
+function syncLine() {
+  const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+  const map = {
+    syncing: '서버에 저장하는 중…',
+    offline: '<b class="warn">인터넷 연결이 없어 이 기기에만 저장됨</b> (연결되면 자동으로 올림)',
+    error: '<b class="warn">서버 저장에 실패했어요</b> — [지금 동기화]로 다시 시도해 주세요',
+    conflict: '<b class="warn">다른 기기와 내용이 달라요</b> — [지금 동기화]를 눌러 고르세요',
+  };
+  return map[sync.status] ?? (sync.dirty ? '서버에 올릴 변경이 있어요' : t ? `서버에 저장됨 · ${t}` : '서버와 맞추는 중…');
+}
 
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 
@@ -29,6 +41,8 @@ export function openSettings() {
         <form class="settings">
           <h3 class="sub">계정</h3>
           <div class="account-row"><p class="small">로그인: <b class="account-email">${esc(auth.user?.email ?? '')}</b></p><button type="button" class="btn ghost small-btn" data-act="logout">로그아웃</button></div>
+          <div class="account-row"><p class="small sync-line">${syncLine()}</p><button type="button" class="btn ghost small-btn" data-act="sync-now">지금 동기화</button></div>
+          <p class="muted small">장부는 계정에 저장되어 다른 기기에서 로그인해도 볼 수 있어요. Claude API 키는 이 기기에만 저장됩니다.</p>
 
           <h3 class="sub">영수증 자동 인식 (Claude API)</h3>
           <p class="key-status small">${
@@ -54,7 +68,7 @@ export function openSettings() {
           <input type="file" accept="application/json,.json" hidden class="restore-file">
           <p class="small backup-line">${backupLine()}</p>
           <p class="muted small storage-line">매입 ${num(store.purchases.length)}건 · 메뉴 ${num(store.menus.length)}개</p>
-          <p class="muted small">데이터는 이 기기에만 저장됩니다. 기기를 바꾸거나 홈 화면 아이콘·브라우저 데이터를 지우기 전에 백업하세요.</p>
+          <p class="muted small">장부는 서버(계정)와 이 기기에 함께 저장됩니다. 백업 파일은 만일을 위한 추가 사본이에요.</p>
         </form>`;
       const form = body.querySelector('form');
       form.addEventListener('submit', (e) => {
@@ -72,8 +86,15 @@ export function openSettings() {
         toast('이 기기에서 키를 지웠습니다.');
         close();
       });
+      const unsubSync = sync.subscribe(() => {
+        const el = body.querySelector('.sync-line');
+        if (el?.isConnected) el.innerHTML = syncLine();
+        else unsubSync();
+      });
+      body.querySelector('[data-act=sync-now]').addEventListener('click', () => sync.now());
       body.querySelector('[data-act=logout]').addEventListener('click', async () => {
-        if (!confirm('로그아웃할까요? 이 기기에 저장된 장부는 지워지지 않습니다.')) return;
+        const warn = sync.dirty ? '\n\n⚠ 아직 서버에 올라가지 않은 변경이 있어요. 인터넷에 연결한 뒤 로그아웃하는 걸 권해요.' : '';
+        if (!confirm(`로그아웃할까요?${warn}`)) return;
         close();
         setAuthNotice('로그아웃했어요.');
         await auth.signOut();

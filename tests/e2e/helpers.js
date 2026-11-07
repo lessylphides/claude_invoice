@@ -40,7 +40,7 @@ export async function mockAuth(page, handler = null) {
     const path = new URL(req.url()).pathname + new URL(req.url()).search;
     const body = req.postData() ? JSON.parse(req.postData()) : null;
     calls.push({ method: req.method(), path, body });
-    const out = handler ? await handler(path, body, req.method()) : null;
+    const out = handler ? await handler(path, body, req.method(), req) : null;
     if (!out) return route.fulfill({ status: 500, headers: cors, contentType: 'application/json', body: JSON.stringify({ error_code: 'unexpected_failure', msg: 'not mocked' }) });
     return route.fulfill({ status: out.status ?? 200, headers: cors, contentType: 'application/json', body: JSON.stringify(out.body ?? {}) });
   });
@@ -51,11 +51,11 @@ export async function mockAuth(page, handler = null) {
  * 앱을 연다. data/settings 를 주면 그 상태로 시작 (새로고침해도 다시 덮어쓰지 않음)
  * loggedIn=false 면 로그인 안 된 상태(로그인 화면)로 시작. path 로 메일 링크 주소(#...)를 흉내 낼 수 있음
  */
-export async function openApp(page, { data, settings, tab, loggedIn = true, path = '/', auth = null } = {}) {
+export async function openApp(page, { data, settings, tab, loggedIn = true, path = '/', auth = null, local = null } = {}) {
   await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
   const calls = await mockAuth(page, auth);
   await page.addInitScript(
-    ({ data, settings, tab, session }) => {
+    ({ data, settings, tab, session, local }) => {
       if (sessionStorage.getItem('__seeded')) return;
       sessionStorage.setItem('__seeded', '1');
       localStorage.clear();
@@ -63,8 +63,9 @@ export async function openApp(page, { data, settings, tab, loggedIn = true, path
       if (settings) localStorage.setItem('maeip.settings.v1', JSON.stringify(settings));
       if (tab) localStorage.setItem('maeip.tab', tab);
       if (session) localStorage.setItem('costnote.auth', JSON.stringify(session));
+      for (const [k, v] of Object.entries(local ?? {})) localStorage.setItem(k, JSON.stringify(v));
     },
-    { data: data ?? null, settings: settings ?? null, tab: tab ?? null, session: loggedIn ? fakeSession() : null },
+    { data: data ?? null, settings: settings ?? null, tab: tab ?? null, session: loggedIn ? fakeSession() : null, local },
   );
   const errors = [];
   page.authCalls = calls; // 로그인 서버로 보낸 요청 (auth.spec 에서 확인)
@@ -169,4 +170,32 @@ export function clearSaved(page) {
         };
       }),
   );
+}
+
+/**
+ * 가짜 장부 서버 (Supabase 'ledgers' 표 흉내). server.row 가 서버에 저장된 장부 ({rev, data} 또는 null).
+ * openApp(page, { auth: server.handler }) 로 씀
+ */
+export function fakeLedgerServer(row = null) {
+  const server = { row, requests: [] };
+  server.handler = (path, body, method, req) => {
+    if (!path.startsWith('/rest/v1/ledgers')) return null;
+    server.requests.push({ method, path, body });
+    const wantsObject = (req.headers()['accept'] || '').includes('vnd.pgrst.object');
+    const out = (rows, status = 200) => ({ status, body: wantsObject ? rows[0] ?? null : rows });
+    if (method === 'GET') return out(server.row ? [{ ...server.row, updated_at: '2026-11-04T01:00:00Z' }] : []);
+    if (method === 'POST') {
+      if (server.row) return { status: 409, body: { code: '23505', message: 'duplicate key value violates unique constraint' } };
+      server.row = { rev: body.rev, data: body.data };
+      return out([{ rev: body.rev }], 201);
+    }
+    if (method === 'PATCH') {
+      const expected = Number(new URL('http://x' + path).searchParams.get('rev')?.replace('eq.', ''));
+      if (!server.row || server.row.rev !== expected) return out([]);
+      server.row = { rev: body.rev, data: body.data };
+      return out([{ rev: body.rev }]);
+    }
+    return null;
+  };
+  return server;
 }

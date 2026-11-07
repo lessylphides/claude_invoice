@@ -6,8 +6,13 @@
   "account_id": "9ecdd9e050cc043f4c41cbef5f0b9853",
   "main": "src/worker/index.js",
   "compatibility_date": "2026-11-07",
-  // costnote.co.kr, www.costnote.co.kr 은 Cloudflare 대시보드에서 맞춤 도메인으로 연결 (DNS 변경은 사람이 직접)
-  "routes": [{ "pattern": "app.costnote.co.kr", "custom_domain": true }],
+  // 맞춤 도메인 3개는 Cloudflare 대시보드에서 연결해 둔 것 (배포할 때 풀리지 않게 여기에도 적어 둠)
+  "routes": [
+    { "pattern": "app.costnote.co.kr", "custom_domain": true },
+    { "pattern": "costnote.co.kr", "custom_domain": true },
+    { "pattern": "www.costnote.co.kr", "custom_domain": true }
+  ],
+  "preview_urls": false,
   "workers_dev": true,
   "observability": { "enabled": true },
   "vars": {

@@ -98,6 +98,16 @@ export const auth = {
     state.recovery = false;
     notify();
   },
+  /** 회원 탈퇴: 서버의 계정·장부·사용량을 지우고 이 기기에서도 로그아웃 */
+  async deleteAccount() {
+    const c = await client();
+    const { error } = await c.rpc('delete_my_account');
+    if (error) throw error;
+    await c.auth.signOut({ scope: 'local' });
+    state.session = null;
+    state.recovery = false;
+    notify();
+  },
   async signOut() {
     await (await client()).auth.signOut({ scope: 'local' });
     state.session = null;

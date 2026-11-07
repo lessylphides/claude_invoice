@@ -1,6 +1,6 @@
 // 로그인·회원가입·이메일 인증·비밀번호 찾기 (로그인 서버는 가짜 응답)
 import { test, expect } from '@playwright/test';
-import { openApp, TEST_USER, fakeSession } from './helpers.js';
+import { openApp, TEST_USER, fakeSession, sheet } from './helpers.js';
 
 const fill = async (page, values) => {
   for (const [name, v] of Object.entries(values)) await page.locator(`.auth-screen input[name=${name}]`).fill(v);
@@ -66,6 +66,9 @@ test('회원가입: 비밀번호 규칙 확인 → 인증 메일 안내 → 다�
   await expect(notice(page)).toHaveText('비밀번호 확인이 일치하지 않아요.');
   await fill(page, { password2: 'goodpass12' });
   await submit(page);
+  await expect(notice(page)).toHaveText('이용약관과 개인정보 처리에 동의해 주세요.');
+  await page.locator('.auth-screen input[name=agree]').check();
+  await submit(page);
   await expect(page.locator('.auth-card h2')).toHaveText('메일함을 확인해 주세요');
   await expect(page.locator('.auth-text')).toContainText('new@example.com');
   await page.locator('[data-auth-act=resend]').click();
@@ -83,6 +86,7 @@ test('이미 가입된 이메일로 가입하면 로그인·비밀번호 찾기 
   });
   await page.locator('[data-auth-go=signup]').click();
   await fill(page, { email: 'owner@example.com', password: 'goodpass12', password2: 'goodpass12' });
+  await page.locator('.auth-screen input[name=agree]').check();
   await submit(page);
   await expect(notice(page)).toContainText('이미 가입된 이메일이에요');
 });
@@ -158,4 +162,21 @@ test('소개 페이지의 [지금 써 보기](?start=signup)로 오면 회원가
   await openApp(page, { loggedIn: false, path: '/?start=signup' });
   await expect(page.locator('.auth-card h2')).toHaveText('회원가입');
   expect(await page.evaluate(() => location.search)).toBe('');
+});
+
+test('회원 탈퇴: "탈퇴"를 입력해야 진행, 서버 계정 삭제 후 이 기기 장부도 지우고 로그인 화면', async ({ page }) => {
+  await openApp(page, {
+    data: { purchases: [] , menus: [{ id: 'm', name: '아메리카노', price: 4500, ingredients: [{ id: 'g', type: 'manual', name: '원두', cost: 500 }] }] },
+    auth: (path, body, method) => (path.startsWith('/rest/v1/rpc/delete_my_account') ? { status: 200, body: null } : null),
+  });
+  await page.locator('[data-act=settings]').click();
+  page.once('dialog', (d) => d.accept('아니요'));
+  await sheet(page).locator('[data-act=delete-account]').click();
+  expect(page.authCalls.some((c) => c.path.includes('delete_my_account'))).toBe(false); // 잘못 입력하면 그대로
+  page.once('dialog', (d) => d.accept('탈퇴'));
+  await sheet(page).locator('[data-act=delete-account]').click();
+  await expect(page.locator('.auth-notice')).toContainText('탈퇴가 끝났어요');
+  expect(page.authCalls.some((c) => c.path.includes('delete_my_account'))).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem('costnote.auth'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('costnote.sync'))).toBeNull();
 });

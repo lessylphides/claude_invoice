@@ -43,6 +43,7 @@ function body() {
         ${emailField()}
         ${field('password', `비밀번호 (${MIN_PASSWORD}자 이상, 영문+숫자)`, 'password', 'autocomplete="new-password"')}
         ${field('password2', '비밀번호 확인', 'password', 'autocomplete="new-password"')}
+        <label class="agree"><input type="checkbox" name="agree"><span><a href="https://costnote.co.kr/terms" target="_blank" rel="noopener">이용약관</a>과 <a href="https://costnote.co.kr/privacy" target="_blank" rel="noopener">개인정보 수집·이용 및 국외 이전</a>에 동의합니다 (필수)</span></label>
         ${noticeHtml()}
         <button class="btn primary" type="submit">가입하기</button>
       </form>
@@ -131,6 +132,7 @@ export async function handleAuthEvent(e, rerender) {
     if (problem) return fail(problem);
     if (v('password') !== v('password2')) return fail('비밀번호 확인이 일치하지 않아요.');
   }
+  if (kind === 'signup' && !form.elements.agree.checked) return fail('이용약관과 개인정보 처리에 동의해 주세요.');
   if (kind === 'login' && !v('password')) return fail('비밀번호를 넣어 주세요.');
 
   const btn = form.querySelector('[type=submit]');
@@ -169,5 +171,5 @@ function rememberEmail(root) {
 
 /** 로그아웃 후 로그인 화면에 띄울 안내 */
 export function setAuthNotice(text) {
-  go('login', { kind: 'ok', text });
+  go('login', text ? { kind: 'ok', text } : null);
 }

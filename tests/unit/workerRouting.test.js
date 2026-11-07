@@ -12,6 +12,10 @@ describe.skipIf(!built)('서버 주소별 응답 (npm run deploy 의 빌드 결�
     expect(r.headers.get('content-security-policy')).toContain("default-src 'none'");
     expect((await get('https://costnote.co.kr/assets/shot-cost.jpg')).headers.get('content-type')).toBe('image/jpeg');
   });
+  it('약관 페이지는 .html 없이도 열림', async () => {
+    expect(await (await get('https://costnote.co.kr/terms')).text()).toContain('코스트노트 이용약관');
+    expect(await (await get('https://costnote.co.kr/privacy')).text()).toContain('개인정보처리방침');
+  });
   it('www 는 소개 페이지 주소로 이동', async () => {
     const r = await get('https://www.costnote.co.kr/?a=1');
     expect(r.status).toBe(301);

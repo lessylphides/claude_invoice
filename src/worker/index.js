@@ -11,7 +11,8 @@ const LANDING_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inlin
 
 function serveFile(request, url, files = FILES, csp = CSP, key = 'app') {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method Not Allowed', { status: 405 });
-  const path = url.pathname === '/' ? '/index.html' : url.pathname;
+  let path = url.pathname === '/' ? '/index.html' : url.pathname;
+  if (!files[path] && files[`${path}.html`]) path = `${path}.html`; // /terms → /terms.html
   const file = files[path];
   if (!file) return new Response('Not Found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
   const ck = `${key}:${path}`;

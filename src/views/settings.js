@@ -6,10 +6,9 @@ import { download } from '../ui/download.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { storageInfo } from '../persist.js';
 import { store } from '../store.js';
-import { client } from '../auth.js';
 import { monthKey } from '../state.js';
 import { monthPurchases, backupNow } from './purchase.js';
-import { auth } from '../auth.js';
+import { auth, client } from '../auth.js';
 import { setAuthNotice } from './authScreen.js';
 import { sync } from '../sync.js';
 
@@ -78,6 +77,11 @@ export function openSettings() {
           <p class="small backup-line">${backupLine()}</p>
           <p class="muted small storage-line">매입 ${num(store.purchases.length)}건 · 메뉴 ${num(store.menus.length)}개</p>
           <p class="muted small">장부는 서버(계정)와 이 기기에 함께 저장됩니다. 백업 파일은 만일을 위한 추가 사본이에요.</p>
+
+          <h3 class="sub">약관·탈퇴</h3>
+          <p class="small"><a href="https://costnote.co.kr/terms" target="_blank" rel="noopener">이용약관</a> · <a href="https://costnote.co.kr/privacy" target="_blank" rel="noopener">개인정보처리방침</a></p>
+          <button class="btn ghost danger-text" type="button" data-act="delete-account">회원 탈퇴</button>
+          <p class="muted small">탈퇴하면 계정과 서버에 저장된 장부가 바로 지워지고 되돌릴 수 없어요. 필요하면 먼저 백업 파일을 저장하세요.</p>
         </form>`;
       const form = body.querySelector('form');
       form.addEventListener('submit', (e) => {
@@ -91,6 +95,19 @@ export function openSettings() {
         const el = body.querySelector('.sync-line');
         if (el?.isConnected) el.innerHTML = syncLine();
         else unsubSync();
+      });
+      body.querySelector('[data-act=delete-account]').addEventListener('click', async () => {
+        const typed = prompt('탈퇴하면 계정과 서버의 장부가 모두 지워지고 되돌릴 수 없어요.\n계속하려면 "탈퇴"라고 입력하세요.');
+        if (typed?.trim() !== '탈퇴') return;
+        setAuthNotice('탈퇴가 끝났어요. 그동안 이용해 주셔서 감사합니다.'); // 로그인 화면이 그려질 때 보이도록 먼저
+        try {
+          await auth.deleteAccount();
+          sync.forget();
+          close();
+        } catch (err) {
+          setAuthNotice(null);
+          toast(`탈퇴하지 못했어요: ${err?.message || err}`, 4000);
+        }
       });
       body.querySelector('[data-act=sync-now]').addEventListener('click', () => sync.now());
       body.querySelector('[data-act=logout]').addEventListener('click', async () => {

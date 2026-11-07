@@ -300,6 +300,17 @@ export const sync = {
     clearTimeout(timer);
     setStatus('idle');
   },
+  /** 회원 탈퇴 뒤: 이 기기의 장부와 동기화 기록을 지움 */
+  forget() {
+    uid = null;
+    clearTimeout(timer);
+    store.replaceData(null);
+    st = { owner: null, rev: 0, dirty: false, syncedAt: null };
+    try {
+      localStorage.removeItem(STATE_KEY);
+    } catch {}
+    setStatus('idle');
+  },
   /** 지금 바로 올리기/받기 (설정 화면의 버튼) */
   now() {
     return st.dirty ? push() : pull();

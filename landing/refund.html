@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>환불정책 — 코스트노트</title>
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg:#f4f5f8; --surface:#fff; --ink:#1d2129; --ink-2:#4a505c; --muted:#636a77; --line:#e1e4ea; --accent:#2459c4; --soft:#fdeee4; --warn:#b23a0a; color-scheme: light; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --surface:#181b21; --ink:#eceef2; --ink-2:#b8bdc8; --muted:#9aa0ab; --line:#2c313a; --accent:#6d9cf0; --soft:#3a2416; --warn:#f59a5b; color-scheme: dark; } }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif; line-height:1.75; word-break:keep-all; -webkit-text-size-adjust:100%; }
+    a { color:var(--accent); }
+    .wrap { max-width:760px; margin:0 auto; padding:0 20px 56px; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:16px 0; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:800; color:var(--ink); text-decoration:none; }
+    .brand img { width:28px; height:28px; border-radius:7px; }
+    article { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:24px 20px; }
+    h1 { font-size:26px; margin:0 0 4px; }
+    .meta { color:var(--muted); font-size:14px; margin:0 0 20px; }
+    .draft { background:var(--soft); color:var(--warn); border-radius:10px; padding:10px 12px; font-size:14px; margin:0 0 20px; }
+    h2 { font-size:18px; margin:28px 0 8px; }
+    p, li { color:var(--ink-2); font-size:15px; }
+    ol, ul { padding-left:22px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; margin:8px 0; }
+    th, td { border:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; color:var(--ink-2); }
+    th { background:var(--bg); color:var(--ink); }
+    .scroll { overflow-x:auto; }
+    footer { color:var(--muted); font-size:13px; padding-top:20px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header><a class="brand" href="/"><img src="/assets/icon.svg" alt="" width="28" height="28">코스트노트</a><a href="/">소개 페이지</a></header>
+    <article>
+      <h1>코스트노트 환불정책</h1>
+      <p class="meta">시행일: 2026년 11월 7일</p>
+
+      <h2>1. 요금제</h2>
+      <p>코스트노트의 유료 구독은 한 달 단위로 결제하며, 요금제마다 영수증 자동 인식 횟수가 다릅니다. 장부 입력, 원가 계산, 기기 간 동기화 같은 나머지 기능은 모든 요금제에서 같습니다. 요금은 부가세 포함 금액입니다.</p>
+      <div class="scroll"><table>
+        <tr><th>요금제</th><th>월 요금</th><th>영수증 자동 인식</th></tr>
+        <tr><td>라이트</td><td>4,900원</td><td>한 달 30장 (하루 10장)</td></tr>
+        <tr><td>기본</td><td>9,900원</td><td>한 달 60장 (하루 15장)</td></tr>
+        <tr><td>프로</td><td>19,900원</td><td>한 달 125장 (하루 30장)</td></tr>
+      </table></div>
+      <p>가입하면 영수증 자동 인식 20장을 한 번 무료로 드립니다. 무료 체험은 결제가 없으므로 환불 대상이 아닙니다.</p>
+
+      <h2>2. 해지</h2>
+      <ol>
+        <li>구독은 앱의 ⚙ 설정에서 언제든 해지할 수 있습니다.</li>
+        <li>해지하면 다음 결제일부터 결제되지 않으며, 이미 결제한 기간이 끝날 때까지는 그대로 이용할 수 있습니다.</li>
+        <li>해지한 뒤에도 장부는 지워지지 않으며, 영수증 자동 인식을 뺀 기능은 계속 쓸 수 있습니다.</li>
+      </ol>
+
+      <h2>3. 결제 후 7일 이내 (청약 철회)</h2>
+      <ol>
+        <li>결제일로부터 7일 이내이고 그 결제 기간에 영수증 자동 인식을 한 번도 쓰지 않았다면 <b>전액 환불</b>합니다.</li>
+        <li>7일 이내라도 영수증 자동 인식을 썼다면, 결제 금액에서 <b>사용한 횟수 × 1장당 금액</b>을 뺀 나머지를 환불합니다. 1장당 금액은 월 요금을 월 인식 횟수로 나눈 값입니다. (라이트 약 163원, 기본 165원, 프로 약 159원)</li>
+      </ol>
+
+      <h2>4. 결제 후 7일이 지난 경우</h2>
+      <p>남은 기간에 대한 환불 없이 결제한 기간이 끝날 때까지 이용할 수 있으며, 해지하면 다음 결제부터 청구되지 않습니다. 다만 아래 5번에 해당하면 환불합니다.</p>
+
+      <h2>5. 기간과 관계없이 환불하는 경우</h2>
+      <ol>
+        <li>같은 기간에 두 번 결제되는 등 <b>잘못 결제된 금액</b>은 전액 환불합니다.</li>
+        <li>코스트노트의 사정으로 서비스를 <b>연속 24시간 이상</b> 쓰지 못했거나 서비스를 종료하는 경우, 쓰지 못한 기간만큼 날짜로 나누어 환불하거나 이용 기간을 늘려 드립니다.</li>
+      </ol>
+
+      <h2>6. 요금제 변경</h2>
+      <ol>
+        <li>더 높은 요금제로 바꾸면 바로 적용되며, 이번 결제 기간에는 두 요금제의 차액만 결제합니다. 결제일은 바뀌지 않습니다.</li>
+        <li>더 낮은 요금제로 바꾸면 다음 결제일부터 적용됩니다.</li>
+      </ol>
+
+      <h2>7. 환불 신청과 처리</h2>
+      <ol>
+        <li>가입한 이메일로 <a href="mailto:hanguk.soek@me.com">hanguk.soek@me.com</a>에 환불을 신청해 주세요.</li>
+        <li>신청을 확인한 날부터 3영업일 안에 결제를 취소합니다. 카드사에 따라 실제 반영까지 3~7영업일이 더 걸릴 수 있습니다.</li>
+        <li>환불은 결제한 카드로 취소하는 방식으로 합니다.</li>
+      </ol>
+
+      <h2>8. 기타</h2>
+      <p>이 정책에 없는 내용은 「전자상거래 등에서의 소비자보호에 관한 법률」 등 관련 법령과 <a href="/terms">이용약관</a>을 따릅니다.</p>
+    </article>
+    <footer>© 2026 코스트노트 · <a href="/terms">이용약관</a> · <a href="/privacy">개인정보처리방침</a> · <a href="/refund">환불정책</a></footer>
+  </div>
+</body>
+</html>

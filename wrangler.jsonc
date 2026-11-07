@@ -1,0 +1,11 @@
+// Cloudflare Workers 배포 설정: dist/ 의 앱 파일을 Worker 코드 하나에 담아 올림 (scripts/build-worker.mjs)
+// 배포: npm run deploy  (Cloudflare API 토큰 필요. 토큰은 저장소에 넣지 않음)
+{
+  "name": "costnote",
+  "account_id": "9ecdd9e050cc043f4c41cbef5f0b9853",
+  "main": ".wrangler-build/worker.js",
+  "compatibility_date": "2026-11-07",
+  "routes": [{ "pattern": "app.costnote.co.kr", "custom_domain": true }],
+  "workers_dev": true,
+  "no_bundle": true
+}

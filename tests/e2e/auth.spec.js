@@ -153,3 +153,9 @@ test('이미 쓴(만료된) 메일 링크면 안내', async ({ page }) => {
   });
   await expect(page.locator('.auth-notice')).toContainText('링크가 만료됐거나 이미 쓴 링크예요');
 });
+
+test('소개 페이지의 [지금 써 보기](?start=signup)로 오면 회원가입 화면부터, 주소는 깔끔하게', async ({ page }) => {
+  await openApp(page, { loggedIn: false, path: '/?start=signup' });
+  await expect(page.locator('.auth-card h2')).toHaveText('회원가입');
+  expect(await page.evaluate(() => location.search)).toBe('');
+});

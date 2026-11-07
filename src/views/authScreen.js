@@ -3,7 +3,14 @@ import { esc } from '../lib/format.js';
 import { auth, landing } from '../auth.js';
 import { authMessage, isEmail, passwordProblem, MIN_PASSWORD } from '../lib/authErrors.js';
 
-let mode = 'login'; // login | signup | sent | forgot | forgot-sent
+// 소개 페이지의 [지금 써 보기]는 ?start=signup 으로 와서 가입 화면부터 보여 줌
+const startSignup = new URLSearchParams(location.search).get('start') === 'signup';
+if (startSignup) {
+  const q = new URLSearchParams(location.search);
+  q.delete('start');
+  history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '') + location.hash);
+}
+let mode = startSignup ? 'signup' : 'login'; // login | signup | sent | forgot | forgot-sent
 let email = '';
 let notice = null; // {kind: 'error'|'ok', text}
 

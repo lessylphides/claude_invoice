@@ -475,3 +475,24 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .same-arrow { color: var(--ink-2); }
 .same-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 .stats small { white-space: nowrap; }
+
+/* 로그인 / 회원가입 */
+.boot-msg { padding: 40vh 16px 0; text-align: center; color: var(--muted); }
+.auth-screen { max-width: 420px; margin: 0 auto; padding: max(48px, env(safe-area-inset-top)) 16px 32px; }
+.auth-brand { text-align: center; margin-bottom: 20px; }
+.auth-brand img { border-radius: 14px; }
+.auth-brand h1 { margin: 10px 0 2px; font-size: 24px; }
+.auth-brand p { margin: 0; }
+.auth-card { background: var(--surface); border-radius: var(--radius); padding: 18px 16px 16px; }
+.auth-card h2 { margin: 0 0 12px; font-size: 19px; }
+.auth-card form { display: flex; flex-direction: column; gap: 12px; }
+.auth-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.auth-card .btn.primary { width: 100%; margin-top: 4px; }
+.auth-text { line-height: 1.6; margin: 0 0 8px; }
+.auth-links { text-align: center; margin: 12px 0 0; font-size: 14px; color: var(--ink-2); }
+.auth-notice { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5; }
+.auth-notice.error { background: var(--warn-soft); color: var(--warn); }
+.auth-notice.ok { background: var(--ok-soft); color: var(--ok); }
+.auth-card .btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.account-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.account-row p { margin: 0; overflow-wrap: anywhere; }

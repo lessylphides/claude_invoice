@@ -48,3 +48,17 @@ for (const scheme of ['light', 'dark']) {
     expect([...new Set(issues)]).toEqual([]);
   });
 }
+
+for (const scheme of ['light', 'dark']) {
+  test(`접근성 검사: 로그인·회원가입 (${scheme})`, async ({ page }) => {
+    const issues = [];
+    await page.emulateMedia({ colorScheme: scheme });
+    await openApp(page, { loggedIn: false });
+    await page.locator('.auth-screen input[name=email]').fill('x');
+    await page.locator('.auth-screen button[type=submit]').click(); // 오류 안내도 함께 검사
+    await check(page, '로그인', issues);
+    await page.locator('[data-auth-go=signup]').click();
+    await check(page, '회원가입', issues);
+    expect(issues).toEqual([]);
+  });
+}

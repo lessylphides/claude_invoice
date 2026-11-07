@@ -23,23 +23,54 @@ export const purchase = (id, date, vendor, items, extra = {}) => ({
 /**
  * 앱을 연다. data/settings 를 주면 그 상태로 시작 (새로고침해도 다시 덮어쓰지 않음)
  */
-export async function openApp(page, { data, settings, tab } = {}) {
+export const TEST_USER = { id: '00000000-0000-4000-8000-000000000001', email: 'owner@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, identities: [{}], created_at: '2026-11-01T00:00:00Z' };
+
+/** 로그인된 상태(Supabase 세션) — 만료가 먼 미래라 서버에 묻지 않음 */
+export const fakeSession = (user = TEST_USER) => ({
+  access_token: 'test-access-token', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, refresh_token: 'test-refresh', user,
+});
+
+/** 로그인 서버(Supabase) 요청을 가로챔. handler(route, path, body) 가 없으면 테스트 중 실제 서버로 나가지 않게 막음 */
+export async function mockAuth(page, handler = null) {
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, POST, PUT, OPTIONS' };
+  const calls = [];
+  await page.route('https://*.supabase.co/**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    const path = new URL(req.url()).pathname + new URL(req.url()).search;
+    const body = req.postData() ? JSON.parse(req.postData()) : null;
+    calls.push({ method: req.method(), path, body });
+    const out = handler ? await handler(path, body, req.method()) : null;
+    if (!out) return route.fulfill({ status: 500, headers: cors, contentType: 'application/json', body: JSON.stringify({ error_code: 'unexpected_failure', msg: 'not mocked' }) });
+    return route.fulfill({ status: out.status ?? 200, headers: cors, contentType: 'application/json', body: JSON.stringify(out.body ?? {}) });
+  });
+  return calls;
+}
+
+/**
+ * 앱을 연다. data/settings 를 주면 그 상태로 시작 (새로고침해도 다시 덮어쓰지 않음)
+ * loggedIn=false 면 로그인 안 된 상태(로그인 화면)로 시작. path 로 메일 링크 주소(#...)를 흉내 낼 수 있음
+ */
+export async function openApp(page, { data, settings, tab, loggedIn = true, path = '/', auth = null } = {}) {
   await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  const calls = await mockAuth(page, auth);
   await page.addInitScript(
-    ({ data, settings, tab }) => {
+    ({ data, settings, tab, session }) => {
       if (sessionStorage.getItem('__seeded')) return;
       sessionStorage.setItem('__seeded', '1');
       localStorage.clear();
       if (data) localStorage.setItem('maeip.data.v1', JSON.stringify(data));
       if (settings) localStorage.setItem('maeip.settings.v1', JSON.stringify(settings));
       if (tab) localStorage.setItem('maeip.tab', tab);
+      if (session) localStorage.setItem('costnote.auth', JSON.stringify(session));
     },
-    { data: data ?? null, settings: settings ?? null, tab: tab ?? null },
+    { data: data ?? null, settings: settings ?? null, tab: tab ?? null, session: loggedIn ? fakeSession() : null },
   );
   const errors = [];
+  page.authCalls = calls; // 로그인 서버로 보낸 요청 (auth.spec 에서 확인)
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/');
-  await expect(page.locator('.tabbar')).toBeVisible();
+  await page.goto(path);
+  await expect(page.locator(loggedIn ? '.tabbar' : '.auth-screen')).toBeVisible();
   return errors;
 }
 

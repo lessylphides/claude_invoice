@@ -16,6 +16,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     // 서비스워커가 페이지를 장악하면 WebKit 에서는 테스트의 가짜 Claude API 가 요청을 가로채지 못함
     serviceWorkers: 'block',
+    // 기본은 로그인된 상태로 시작 (로그인 화면 자체는 auth.spec 에서 따로 검사)
+    storageState: 'tests/e2e/logged-in.json',
   },
   projects: [
     { name: 'chromium', use: { ...iphone, browserName: 'chromium' } },

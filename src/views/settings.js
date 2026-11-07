@@ -8,6 +8,8 @@ import { storageInfo } from '../persist.js';
 import { store, MODELS } from '../store.js';
 import { monthKey } from '../state.js';
 import { monthPurchases, backupNow } from './purchase.js';
+import { auth } from '../auth.js';
+import { setAuthNotice } from './authScreen.js';
 
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 
@@ -25,6 +27,9 @@ export function openSettings() {
       const s = store.settings;
       body.innerHTML = `
         <form class="settings">
+          <h3 class="sub">계정</h3>
+          <div class="account-row"><p class="small">로그인: <b class="account-email">${esc(auth.user?.email ?? '')}</b></p><button type="button" class="btn ghost small-btn" data-act="logout">로그아웃</button></div>
+
           <h3 class="sub">영수증 자동 인식 (Claude API)</h3>
           <p class="key-status small">${
             s.apiKey ? `저장된 키: <code>${esc(maskKey(s.apiKey))}</code>` : '<b class="warn">저장된 키 없음</b> — 영수증 자동 인식을 쓰려면 키를 넣어 주세요.'
@@ -66,6 +71,12 @@ export function openSettings() {
         store.saveSettings({ apiKey: '' });
         toast('이 기기에서 키를 지웠습니다.');
         close();
+      });
+      body.querySelector('[data-act=logout]').addEventListener('click', async () => {
+        if (!confirm('로그아웃할까요? 이 기기에 저장된 장부는 지워지지 않습니다.')) return;
+        close();
+        setAuthNotice('로그아웃했어요.');
+        await auth.signOut();
       });
       body.querySelector('[data-act=csv]').addEventListener('click', () => download(`매입_${monthKey()}.csv`, purchasesCsv(monthPurchases()), 'text/csv'));
       body.querySelector('[data-act=backup]').addEventListener('click', async () => {

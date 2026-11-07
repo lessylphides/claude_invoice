@@ -6,6 +6,9 @@ import { renderPurchaseTab, handlePurchaseClick } from './views/purchase.js';
 import { renderCostTab, handleCostClick } from './views/cost.js';
 import { openSettings } from './views/settings.js';
 import { bindCaptureInputs, preloadOcr } from './views/capture.js';
+import { auth, landing } from './auth.js';
+import { renderAuth, handleAuthEvent } from './views/authScreen.js';
+import { closeTopSheet, toast } from './ui/sheet.js';
 
 const app = document.getElementById('app');
 
@@ -26,8 +29,30 @@ function staleBanner() {
     : '';
 }
 
+// 시작 상태: 로그인 확인 → 장부 불러오기
+const boot = { auth: 'loading', data: 'loading', dataError: null, authError: null };
+
 function render() {
+  if (boot.auth === 'loading') return (app.innerHTML = '<p class="boot-msg" role="status">불러오는 중…</p>');
+  if (boot.auth === 'error') return renderAuthError(boot.authError);
+  if (!auth.user || auth.recovery) {
+    closeTopSheet();
+    return renderAuth(app);
+  }
+  if (boot.data === 'error') return renderLoadError(boot.dataError);
+  if (boot.data === 'loading') return (app.innerHTML = '<p class="boot-msg" role="status">장부를 불러오는 중…</p>');
   app.innerHTML = staleBanner() + (view.tab === 'cost' ? renderCostTab() : renderPurchaseTab()) + tabBar();
+}
+
+/** 로그인 기능을 불러오지 못함 (처음 열 때 인터넷이 끊겨 있는 경우 등) */
+function renderAuthError(err) {
+  app.innerHTML = `
+    <section class="load-error" role="alert">
+      <h1>로그인 기능을 불러오지 못했습니다</h1>
+      <p>${String(err?.message || err).replace(/[<>&]/g, '')}</p>
+      <p class="muted small">인터넷 연결을 확인한 뒤 다시 시도해 주세요. 장부는 이 기기에 그대로 있습니다.</p>
+      <button class="btn primary" data-act="reload">다시 시도</button>
+    </section>`;
 }
 
 /** 저장된 데이터를 읽지 못했을 때: 빈 장부로 시작하지 않고 다시 시도하게 함 */
@@ -43,6 +68,7 @@ function renderLoadError(err) {
 
 app.addEventListener('click', (e) => {
   if (e.target.closest('[data-act=reload]')) return location.reload();
+  if (e.target.closest('.auth-screen')) return handleAuthEvent(e, render);
   const tab = e.target.closest('[data-tab]');
   if (tab) {
     window.scrollTo(0, 0);
@@ -51,6 +77,10 @@ app.addEventListener('click', (e) => {
   if (e.target.closest('[data-act=settings]')) return openSettings();
   if (view.tab === 'cost') handleCostClick(e);
   else handlePurchaseClick(e, { openSettings });
+});
+
+app.addEventListener('submit', (e) => {
+  if (e.target.closest('.auth-screen')) handleAuthEvent(e, render);
 });
 
 // 달력에서 좌우로 밀어 달 이동
@@ -65,14 +95,34 @@ app.addEventListener('touchend', (e) => {
 
 bindCaptureInputs();
 setRenderer(render);
+render();
 ready.then(
   () => {
+    boot.data = 'ok';
     store.subscribe(render);
     render();
     warmIndex();
     preloadOcr();
   },
-  (err) => renderLoadError(err),
+  (err) => {
+    boot.data = 'error';
+    boot.dataError = err;
+    render();
+  },
+);
+auth.init().then(
+  () => {
+    boot.auth = 'ok';
+    auth.subscribe(render);
+    render();
+    // 메일의 인증 링크로 들어온 경우 (아이폰은 메일 링크가 Safari 로 열려 홈 화면 앱과 로그인이 따로임)
+    if (landing.type === 'signup' && auth.user) toast('이메일 인증이 끝났어요. 홈 화면의 코스트노트 앱에서도 로그인해 주세요.', 5000);
+  },
+  (err) => {
+    boot.auth = 'error';
+    boot.authError = err;
+    render();
+  },
 );
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

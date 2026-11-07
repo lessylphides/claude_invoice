@@ -7,8 +7,13 @@ let mode = 'login'; // login | signup | sent | forgot | forgot-sent
 let email = '';
 let notice = null; // {kind: 'error'|'ok', text}
 
-// 메일 링크로 들어왔을 때 첫 안내
-if (landing.error) notice = { kind: 'error', text: landing.error === 'otp_expired' ? '링크가 만료됐어요. 메일을 다시 받아 주세요.' : '링크를 확인하지 못했어요. 다시 시도해 주세요.' };
+// 메일 링크로 들어왔을 때 첫 안내 (링크 확인은 로그인 기능을 불러온 뒤 끝나므로 처음 그릴 때 정함)
+let landingChecked = false;
+function checkLanding() {
+  if (landingChecked) return;
+  landingChecked = true;
+  if (landing.error) notice = { kind: 'error', text: landing.error === 'otp_expired' ? '링크가 만료됐거나 이미 쓴 링크예요. 메일을 다시 받아 주세요.' : '링크를 확인하지 못했어요. 다시 시도해 주세요.' };
+}
 
 const field = (name, label, type, extra = '') =>
   `<label>${label}<input name="${name}" type="${type}" ${extra} required></label>`;
@@ -70,6 +75,7 @@ function body() {
 }
 
 export function renderAuth(app) {
+  checkLanding();
   app.innerHTML = `<main class="auth-screen">
     <header class="auth-brand"><img src="./icon.svg" alt="" width="56" height="56"><h1>코스트노트</h1><p class="muted">매입 · 원가 관리</p></header>
     <section class="auth-card">${body()}</section>

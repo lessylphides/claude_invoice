@@ -120,5 +120,36 @@ test('재설정 링크로 들어오면 새 비밀번호를 정하고 앱이 열�
 
 test('만료된 메일 링크로 들어오면 안내', async ({ page }) => {
   await openApp(page, { loggedIn: false, path: '/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired' });
-  await expect(notice(page)).toHaveText('링크가 만료됐어요. 메일을 다시 받아 주세요.');
+  await expect(notice(page)).toHaveText('링크가 만료됐거나 이미 쓴 링크예요. 메일을 다시 받아 주세요.');
+});
+
+test('메일 링크가 우리 주소(token_hash)로 오면: 가입 인증 → 로그인된 상태로 열림', async ({ page }) => {
+  await openApp(page, {
+    loggedIn: false,
+    path: '/?token_hash=abc123&type=email',
+    auth: (path, body) => (path.startsWith('/auth/v1/verify') ? { body: { ...fakeSession(), type: body.type } } : null),
+  });
+  await expect(page.locator('.tabbar')).toBeVisible();
+  await expect(page.locator('.toast').last()).toContainText('이메일 인증이 끝났어요');
+  expect(await page.evaluate(() => location.search)).toBe('');
+  const verify = page.authCalls.find((c) => c.path.startsWith('/auth/v1/verify'));
+  expect(verify.body).toMatchObject({ token_hash: 'abc123', type: 'email' });
+});
+
+test('메일 링크(token_hash)로 비밀번호 재설정 → 새 비밀번호 화면', async ({ page }) => {
+  await openApp(page, {
+    loggedIn: false,
+    path: '/?token_hash=r9&type=recovery',
+    auth: (path) => (path.startsWith('/auth/v1/verify') ? { body: fakeSession() } : null),
+  });
+  await expect(page.locator('.auth-card h2')).toHaveText('새 비밀번호 정하기');
+});
+
+test('이미 쓴(만료된) 메일 링크면 안내', async ({ page }) => {
+  await openApp(page, {
+    loggedIn: false,
+    path: '/?token_hash=old&type=email',
+    auth: (path) => (path.startsWith('/auth/v1/verify') ? { status: 403, body: { error_code: 'otp_expired', msg: 'Email link is invalid or has expired' } } : null),
+  });
+  await expect(page.locator('.auth-notice')).toContainText('링크가 만료됐거나 이미 쓴 링크예요');
 });

@@ -71,7 +71,8 @@ export async function openApp(page, { data, settings, tab, loggedIn = true, path
   page.authCalls = calls; // 로그인 서버로 보낸 요청 (auth.spec 에서 확인)
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(path);
-  await expect(page.locator(loggedIn ? '.tabbar' : '.auth-screen')).toBeVisible();
+  // 로그인 안 한 상태로 시작해도 메일 링크(path)로 바로 로그인될 수 있으므로 둘 중 하나
+  await expect(page.locator(loggedIn ? '.tabbar' : '.auth-screen, .tabbar').first()).toBeVisible();
   return errors;
 }
 

@@ -4,10 +4,10 @@
   <h1 style="font-size:20px;margin:0 0 16px">코스트노트 가입을 환영해요</h1>
   <p style="margin:0 0 20px">아래 버튼을 누르면 이메일 인증이 끝나요.<br>인증한 뒤 <b>코스트노트 앱으로 돌아와 로그인</b>해 주세요.</p>
   <p style="margin:0 0 24px">
-    <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#2459c4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px">이메일 인증하기</a>
+    <a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=email" style="display:inline-block;background:#2459c4;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px">이메일 인증하기</a>
   </p>
   <p style="margin:0 0 8px;font-size:13px;color:#636a77">버튼이 눌리지 않으면 아래 주소를 복사해 브라우저에 붙여 넣으세요.</p>
-  <p style="margin:0 0 20px;font-size:12px;color:#636a77;word-break:break-all">{{ .ConfirmationURL }}</p>
+  <p style="margin:0 0 20px;font-size:12px;color:#636a77;word-break:break-all">{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=email</p>
   <p style="margin:0;font-size:13px;color:#636a77">이 링크는 1시간 동안만 쓸 수 있어요. 가입한 적이 없다면 이 메일은 무시하셔도 돼요.</p>
   <hr style="border:none;border-top:1px solid #e1e4ea;margin:24px 0 12px">
   <p style="margin:0;font-size:12px;color:#9aa0ab">코스트노트 · 매입·원가 관리 · app.costnote.co.kr</p>

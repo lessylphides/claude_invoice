@@ -8,8 +8,12 @@ export const AUTH_STORAGE_KEY = 'costnote.auth';
 
 // 메일 링크로 들어왔는지 (주소 # 뒤에 type=signup / recovery, 또는 오류)
 const hash = new URLSearchParams(location.hash.slice(1));
+// 메일 링크가 우리 주소로 오는 방식: https://app.costnote.co.kr/?token_hash=...&type=email|recovery
+// (링크 주소가 보낸 도메인과 같아야 스팸으로 덜 분류됨). 이 앱이 직접 Supabase 에 확인 요청을 보냄
+const query = new URLSearchParams(location.search);
+const tokenHash = query.get('token_hash');
 export const landing = {
-  type: hash.get('type'),
+  type: tokenHash ? (query.get('type') === 'recovery' ? 'recovery' : 'signup') : hash.get('type'),
   error: hash.get('error_code') || hash.get('error'),
 };
 
@@ -52,11 +56,16 @@ export const auth = {
       if (event === 'SIGNED_OUT') state.recovery = false;
       if (state.ready) setTimeout(notify); // supabase 내부 잠금 안에서 바로 다른 호출을 하지 않게
     });
+    if (tokenHash) {
+      const { error } = await c.auth.verifyOtp({ token_hash: tokenHash, type: landing.type === 'recovery' ? 'recovery' : 'email' });
+      if (error) landing.error = error.code === 'otp_expired' || /expired|invalid/i.test(error.message) ? 'otp_expired' : error.code || 'verify_failed';
+    }
     const { data } = await c.auth.getSession();
     state.session = data.session;
+    state.recovery = landing.type === 'recovery' && !landing.error && !!data.session;
     state.ready = true;
-    // 메일 링크 흔적(#access_token=...)은 주소창에서 지움
-    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    // 메일 링크 흔적(#access_token=..., ?token_hash=...)은 주소창에서 지움
+    if (location.hash || tokenHash) history.replaceState(null, '', location.pathname);
   },
 
   /** 서버(/api/...)에 로그인을 증명할 토큰 (만료됐으면 새로 받아 옴) */

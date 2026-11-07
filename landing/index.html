@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>코스트노트 — 영수증 찍으면 끝나는 매입·원가 관리</title>
+  <meta name="description" content="영수증·거래명세서를 찍으면 매입 장부가 자동으로 정리되고, 메뉴 원가율과 마진까지 바로 보여 주는 사장님용 웹앱.">
+  <meta property="og:title" content="코스트노트 — 매입·원가 관리">
+  <meta property="og:description" content="영수증 찍으면 매입 장부 정리 끝. 메뉴 원가율·마진까지 한눈에.">
+  <meta property="og:image" content="https://costnote.co.kr/assets/shot-cost.jpg">
+  <meta property="og:url" content="https://costnote.co.kr/">
+  <meta name="theme-color" content="#2459c4">
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <style>
+    :root {
+      --bg: #f4f5f8; --surface: #fff; --ink: #1d2129; --ink-2: #4a505c; --muted: #636a77; --line: #e1e4ea;
+      --accent: #2459c4; --accent-soft: #e6eefc; --ok: #18753f; --warn: #b23a0a;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f1115; --surface: #181b21; --ink: #eceef2; --ink-2: #b8bdc8; --muted: #9aa0ab; --line: #2c313a;
+        --accent: #6d9cf0; --accent-soft: #1f2c44; --ok: #4cc382; --warn: #f59a5b; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Malgun Gothic', sans-serif; line-height: 1.6; word-break: keep-all; }
+    a { color: var(--accent); }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--ink); text-decoration: none; }
+    .brand img { width: 32px; height: 32px; border-radius: 8px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 20px; border-radius: 12px; font-weight: 700; font-size: 16px; text-decoration: none; }
+    .btn.primary { background: #2459c4; color: #fff; }
+    .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+    .btn.small { padding: 8px 14px; font-size: 14px; }
+
+    .hero { display: grid; gap: 32px; align-items: center; padding: 28px 0 48px; }
+    .hero h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.25; margin: 0 0 14px; letter-spacing: -0.02em; }
+    .hero h1 em { font-style: normal; color: var(--accent); }
+    .hero p.lead { font-size: 18px; color: var(--ink-2); margin: 0 0 24px; }
+    .hero .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+    .hero .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
+    .phones { display: flex; justify-content: center; gap: 14px; }
+    .phone { width: min(44vw, 240px); border-radius: 28px; border: 6px solid #1d2129; overflow: hidden; background: #1d2129; box-shadow: 0 18px 40px rgba(20, 30, 50, 0.18); }
+    .phone img { display: block; width: 100%; height: auto; }
+    .phone.back { transform: translateY(28px); }
+    @media (min-width: 860px) { .hero { grid-template-columns: 1.1fr 1fr; padding: 48px 0 72px; } }
+
+    section { padding: 48px 0; }
+    h2 { font-size: clamp(24px, 4.5vw, 32px); margin: 0 0 8px; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); margin: 0 0 28px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .card { background: var(--surface); border-radius: 16px; padding: 20px; border: 1px solid var(--line); }
+    .card .ic { font-size: 26px; }
+    .card h3 { font-size: 18px; margin: 8px 0 6px; }
+    .card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+    .split { display: grid; gap: 28px; align-items: center; }
+    @media (min-width: 860px) { .split { grid-template-columns: 1fr 1fr; } .split.rev > :first-child { order: 2; } }
+    .split .phone { margin: 0 auto; }
+    .checks { list-style: none; padding: 0; margin: 0; }
+    .checks li { padding: 8px 0 8px 28px; position: relative; color: var(--ink-2); }
+    .checks li::before { content: '✓'; position: absolute; left: 0; color: var(--ok); font-weight: 800; }
+
+    .steps { counter-reset: s; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .step::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 800; margin-bottom: 8px; }
+    .step h3 { font-size: 17px; margin: 4px 0 6px; }
+    .step p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+    .faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; }
+    .faq summary { font-weight: 700; cursor: pointer; }
+    .faq p { margin: 10px 0 0; color: var(--ink-2); }
+
+    .cta-band { background: #2459c4; color: #fff; border-radius: 20px; padding: 32px 24px; text-align: center; }
+    .cta-band h2 { color: #fff; }
+    .cta-band p { color: #dfe8fb; margin: 0 0 18px; }
+    .cta-band .btn { background: #fff; color: #2459c4; }
+
+    footer { padding: 32px 0 48px; color: var(--muted); font-size: 13px; }
+    footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="/"><img src="/assets/icon.svg" alt="" width="32" height="32">코스트노트</a>
+      <a class="btn primary small" href="https://app.costnote.co.kr/">앱 열기</a>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <h1 id="hero-title">영수증만 찍으세요.<br><em>매입 장부와 원가율</em>은<br>알아서 정리돼요.</h1>
+          <p class="lead">카페·바·식당 사장님을 위한 매입·원가 관리 앱. 영수증과 거래명세서를 찍으면 품목·단가·할인까지 읽어 장부에 넣고, 메뉴 한 잔·한 접시의 원가율과 마진을 바로 계산해요.</p>
+          <div class="ctas">
+            <a class="btn primary" href="https://app.costnote.co.kr/">지금 써 보기</a>
+            <a class="btn ghost" href="#install">설치 방법</a>
+          </div>
+          <p class="note">앱스토어 설치 없이 휴대폰·컴퓨터 브라우저에서 바로 열려요.</p>
+        </div>
+        <div class="phones" aria-hidden="true">
+          <div class="phone"><img src="/assets/shot-calendar.jpg" alt="" width="600" height="1022"></div>
+          <div class="phone back"><img src="/assets/shot-cost.jpg" alt="" width="600" height="1022"></div>
+        </div>
+      </section>
+
+      <section aria-labelledby="feat-title">
+        <h2 id="feat-title">장부 정리에 쓰던 시간을 줄여 드려요</h2>
+        <p class="sub">매일 쌓이는 영수증, 거래처마다 다른 명세서, 메뉴별 원가 계산까지 한 곳에서.</p>
+        <div class="grid">
+          <div class="card"><div class="ic" aria-hidden="true">📷</div><h3>찍으면 자동 입력</h3><p>영수증·거래명세서 사진에서 날짜, 거래처, 품목, 단가, 쿠폰·할인까지 읽어 와요. 긴 영수증은 여러 장으로 나눠 찍어도 한 건으로 합쳐요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">🗓</div><h3>달력으로 한눈에</h3><p>날짜마다 매입 합계가 보이고, 이번 달 총액과 거래처별·항목별 비중을 바로 확인해요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">🧾</div><h3>세금계산서 챙기기</h3><p>거래마다 세금계산서·카드를 체크하고, 아직 발행 받지 못한 금액과 거래처를 따로 모아 보여 줘요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">📈</div><h3>품목 가격 추이</h3><p>같은 품목을 거래처별로 얼마에 샀는지 그래프로 비교해요. 이름이 조금 달라도 같은 품목으로 묶을 수 있어요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">🥃</div><h3>메뉴 원가율·마진</h3><p>최근 매입가로 한 잔·한 조각 원가를 자동 계산. 목표 원가율과 분류별 최소 마진으로 가격이 적당한지 바로 판단해요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">☁️</div><h3>어디서나 같은 장부</h3><p>계정에 안전하게 저장돼 휴대폰을 바꿔도, 컴퓨터에서 열어도 같은 장부가 보여요. 인터넷이 끊겨도 먼저 저장해 두었다가 올려요.</p></div>
+        </div>
+      </section>
+
+      <section aria-labelledby="cost-title">
+        <div class="split">
+          <div class="phone"><img src="/assets/shot-menu.jpg" alt="메뉴 원가 화면: 잔 판매가와 보틀 판매가의 원가율·마진, 참고 가격" width="600" height="1022" loading="lazy"></div>
+          <div>
+            <h2 id="cost-title">“이 메뉴, 남는 게 있나?”<br>바로 답이 나와요</h2>
+            <p class="sub">매입가가 바뀌면 메뉴 원가율도 저절로 따라 바뀌어요.</p>
+            <ul class="checks">
+              <li>재료별 사용량만 정하면 최근 매입가로 원가 자동 계산</li>
+              <li>목표 원가율을 넘은 메뉴는 ⚠ 표시와 추천 판매가</li>
+              <li>위스키·와인처럼 원가율보다 <b>마진 금액</b>이 중요한 분류는 최소 마진 기준</li>
+              <li>잔 판매가와 보틀 판매가를 한 메뉴에서 함께 관리</li>
+              <li>재료값이 오르면 ▲ 얼마 올랐는지 바로 보여 줌</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="install" aria-labelledby="install-title">
+        <h2 id="install-title">설치는 30초면 끝나요</h2>
+        <p class="sub">앱스토어가 아니라 웹 주소로 여는 앱이에요. 홈 화면에 추가하면 일반 앱처럼 쓸 수 있어요.</p>
+        <div class="steps">
+          <div class="step"><h3>주소 열기</h3><p>아이폰은 <b>Safari</b>, 안드로이드는 <b>Chrome</b>에서 <a href="https://app.costnote.co.kr/">app.costnote.co.kr</a> 을 열어요.</p></div>
+          <div class="step"><h3>홈 화면에 추가</h3><p>아이폰: 아래 <b>공유 버튼(□↑) → 홈 화면에 추가</b><br>안드로이드: 오른쪽 위 <b>⋮ → 홈 화면에 추가</b></p></div>
+          <div class="step"><h3>가입하고 시작</h3><p>홈 화면의 코스트노트 아이콘으로 열고, 이메일로 가입한 뒤 첫 영수증을 찍어 보세요.</p></div>
+        </div>
+      </section>
+
+      <section class="faq" aria-labelledby="faq-title">
+        <h2 id="faq-title">자주 묻는 질문</h2>
+        <details><summary>앱스토어에 없나요?</summary><p>코스트노트는 웹앱이에요. 설치 파일을 받지 않고 주소로 열어 홈 화면에 추가해 쓰면 돼요. 업데이트도 자동으로 반영돼요.</p></details>
+        <details><summary>제 장부는 안전한가요?</summary><p>장부는 계정별로 암호화된 연결을 통해 저장되고, 본인만 읽고 쓸 수 있어요. 영수증 사진은 인식에만 쓰고 서버에 남기지 않아요.</p></details>
+        <details><summary>인터넷이 끊기면요?</summary><p>휴대폰에 먼저 저장하고, 다시 연결되면 자동으로 서버에 올려요. 영수증 자동 인식만 인터넷이 필요해요.</p></details>
+        <details><summary>요금은 얼마인가요?</summary><p>지금은 시범 운영 중이에요. 구독 요금은 정해지는 대로 이 페이지에서 안내해 드릴게요.</p></details>
+      </section>
+
+      <section>
+        <div class="cta-band">
+          <h2>오늘 받은 영수증부터 찍어 보세요</h2>
+          <p>장부 정리는 코스트노트가, 메뉴와 손님은 사장님이.</p>
+          <a class="btn" href="https://app.costnote.co.kr/">코스트노트 열기</a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer>
+    <div class="wrap">
+      <span>© 2026 코스트노트</span>
+      <span>costnote.co.kr</span>
+    </div>
+  </footer>
+</body>
+</html>

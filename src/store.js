@@ -37,6 +37,11 @@ function writeJSON(key, value) {
 
 let data = migrate(null); // ready 전까지는 빈 데이터
 let settings = { apiKey: '', model: MODELS[0].id, ...readJSON(SETTINGS_KEY) };
+// 영수증 인식이 서버를 거치게 되면서 이 기기에 키를 둘 이유가 없어짐 → 예전에 저장한 키는 지움
+if (settings.apiKey) {
+  settings = { ...settings, apiKey: '' };
+  writeJSON(SETTINGS_KEY, settings);
+}
 let index = null; // 품목 색인 (데이터가 바뀌면 다시 만듦)
 
 const listeners = new Set();

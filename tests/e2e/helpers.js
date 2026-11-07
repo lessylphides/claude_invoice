@@ -76,30 +76,20 @@ export async function openApp(page, { data, settings, tab, loggedIn = true, path
 }
 
 /**
- * Claude API 를 가짜로 대신한다. respond(body, n) 가 돌려준 JSON 을 인식 결과로 보낸다.
- * 돌려받은 requests 배열에 실제로 보낸 요청 본문이 쌓인다.
+ * 영수증 인식 서버(/api/ocr)를 가짜로 대신한다. respond(body, n) 가 돌려준 객체를 인식 결과로 보낸다.
+ * {status, body} 를 돌려주면 그대로 응답 (오류 흉내). 돌려받은 requests 배열에 앱이 보낸 요청이 쌓인다.
  */
 export async function mockClaude(page, respond) {
   const requests = [];
-  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
-  await page.route('https://api.anthropic.com/**', async (route) => {
-    // WebKit(아이폰 Safari 엔진)은 실제 요청 전에 CORS 확인(OPTIONS)을 먼저 보냄 → 허용으로 응답
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+  await page.route('**/api/ocr', async (route) => {
     const body = JSON.parse(route.request().postData());
-    requests.push(body);
+    requests.push({ ...body, authorization: route.request().headers()['authorization'] });
     const out = await respond(body, requests.length);
-    if (out && out.status) {
-      return route.fulfill({ status: out.status, contentType: 'application/json', headers: cors, body: JSON.stringify(out.body) });
-    }
+    if (out && out.status) return route.fulfill({ status: out.status, contentType: 'application/json', body: JSON.stringify(out.body) });
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      headers: cors,
-      body: JSON.stringify({
-        id: `msg_${requests.length}`, type: 'message', role: 'assistant', model: body.model,
-        stop_reason: 'end_turn', stop_details: null, usage: { input_tokens: 1, output_tokens: 1 },
-        content: [{ type: 'thinking', thinking: '', signature: 'x' }, { type: 'text', text: JSON.stringify(out) }],
-      }),
+      body: JSON.stringify({ result: out, usage: { day: requests.length, month: requests.length }, limits: { day: 30, month: 300 } }),
     });
   });
   return requests;
@@ -124,7 +114,6 @@ export async function openManualEntry(page) {
   await expect(page.locator('form.editor')).toBeVisible();
 }
 
-export const KEY = { apiKey: 'sk-ant-test', model: 'claude-opus-5-5' };
 
 /** 앱이 IndexedDB 에 저장한 데이터 읽기 (없으면 null) */
 export function readSaved(page) {

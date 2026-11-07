@@ -1,11 +1,12 @@
 // 설정: Claude API 키·모델, 분류 목록, CSV 내보내기, 백업/복원
-import { dotDate, esc, maskKey, num, todayStr } from '../lib/format.js';
+import { dotDate, esc, num, todayStr } from '../lib/format.js';
 import { purchasesCsv } from '../lib/csv.js';
 import { daysBetween } from '../lib/backup.js';
 import { download } from '../ui/download.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { storageInfo } from '../persist.js';
-import { store, MODELS } from '../store.js';
+import { store } from '../store.js';
+import { client } from '../auth.js';
 import { monthKey } from '../state.js';
 import { monthPurchases, backupNow } from './purchase.js';
 import { auth } from '../auth.js';
@@ -21,6 +22,20 @@ function syncLine() {
     conflict: '<b class="warn">다른 기기와 내용이 달라요</b> — [지금 동기화]를 눌러 고르세요',
   };
   return map[sync.status] ?? (sync.dirty ? '서버에 올릴 변경이 있어요' : t ? `서버에 저장됨 · ${t}` : '서버와 맞추는 중…');
+}
+
+/** 오늘·이번 달 영수증 인식 횟수 (한도는 마지막 인식 때 서버가 알려 준 값) */
+async function showOcrUsage(el) {
+  try {
+    const { data, error } = await (await client()).rpc('ocr_usage_now');
+    if (error) throw error;
+    const { lastUsage } = await import('../ocr.js');
+    const lim = lastUsage?.limits;
+    if (el.isConnected)
+      el.textContent = `오늘 ${num(data.day)}회${lim ? ` / ${num(lim.day)}회` : ''} · 이번 달 ${num(data.month)}회${lim ? ` / ${num(lim.month)}회` : ''} 사용`;
+  } catch {
+    if (el.isConnected) el.textContent = '사용량을 불러오지 못했어요.';
+  }
 }
 
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)}MB`;
@@ -42,17 +57,11 @@ export function openSettings() {
           <h3 class="sub">계정</h3>
           <div class="account-row"><p class="small">로그인: <b class="account-email">${esc(auth.user?.email ?? '')}</b></p><button type="button" class="btn ghost small-btn" data-act="logout">로그아웃</button></div>
           <div class="account-row"><p class="small sync-line">${syncLine()}</p><button type="button" class="btn ghost small-btn" data-act="sync-now">지금 동기화</button></div>
-          <p class="muted small">장부는 계정에 저장되어 다른 기기에서 로그인해도 볼 수 있어요. Claude API 키는 이 기기에만 저장됩니다.</p>
+          <p class="muted small">장부는 계정에 저장되어 다른 기기에서 로그인해도 볼 수 있어요.</p>
 
-          <h3 class="sub">영수증 자동 인식 (Claude API)</h3>
-          <p class="key-status small">${
-            s.apiKey ? `저장된 키: <code>${esc(maskKey(s.apiKey))}</code>` : '<b class="warn">저장된 키 없음</b> — 영수증 자동 인식을 쓰려면 키를 넣어 주세요.'
-          }</p>
-          <label>${s.apiKey ? '새 키로 바꾸기 (비워 두면 그대로)' : 'API 키'}<input name="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-api03-..."></label>
-          ${s.apiKey ? '<button type="button" class="btn ghost danger-text" data-act="clear-key">이 기기에서 키 지우기</button>' : ''}
-          <p class="muted small">키는 <b>이 기기에만</b> 저장되고 Anthropic API 로만 전송됩니다(앱 코드·주소에는 없음). 키는 platform.claude.com 에서 발급합니다.</p>
-          <p class="muted small">안전하게 쓰려면 Console 에서 <b>자동 충전 끄기</b>, <b>월 사용 한도</b> 정하기, <b>이 앱 전용 키</b>를 쓰세요. 휴대폰을 잃어버리면 Console 에서 키를 바로 삭제하세요.</p>
-          <label>인식 모델<select name="model">${MODELS.map((m) => `<option value="${m.id}" ${m.id === s.model ? 'selected' : ''}>${m.label}</option>`).join('')}</select></label>
+          <h3 class="sub">영수증 자동 인식</h3>
+          <p class="small ocr-usage">사용량 확인 중…</p>
+          <p class="muted small">사진은 코스트노트 서버를 거쳐 Claude 가 읽습니다. 인식이 끝나면 사진은 서버에 남기지 않아요.</p>
 
           <h3 class="sub">항목(분류) 목록</h3>
           <textarea name="cats" rows="6" aria-label="분류 목록, 한 줄에 하나">${esc(store.categories.join('\n'))}</textarea>
@@ -73,19 +82,11 @@ export function openSettings() {
       const form = body.querySelector('form');
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        const newKey = form.elements.apiKey.value.trim();
-        // 새 키를 적었을 때만 바꿈 (저장된 키는 화면에 다시 넣지 않음)
-        store.saveSettings({ ...(newKey ? { apiKey: newKey } : {}), model: form.elements.model.value });
         store.setCategories(form.elements.cats.value.split('\n'));
         toast('설정을 저장했습니다.');
         close();
       });
-      body.querySelector('[data-act=clear-key]')?.addEventListener('click', () => {
-        if (!confirm('이 기기에서 API 키를 지울까요? 영수증 자동 인식이 꺼집니다. (Console 의 키 자체는 지워지지 않습니다)')) return;
-        store.saveSettings({ apiKey: '' });
-        toast('이 기기에서 키를 지웠습니다.');
-        close();
-      });
+      showOcrUsage(body.querySelector('.ocr-usage'));
       const unsubSync = sync.subscribe(() => {
         const el = body.querySelector('.sync-line');
         if (el?.isConnected) el.innerHTML = syncLine();

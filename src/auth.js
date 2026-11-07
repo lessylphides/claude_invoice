@@ -59,6 +59,11 @@ export const auth = {
     if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   },
 
+  /** 서버(/api/...)에 로그인을 증명할 토큰 (만료됐으면 새로 받아 옴) */
+  async accessToken() {
+    const { data } = await (await client()).auth.getSession();
+    return data.session?.access_token ?? null;
+  },
   async signIn(email, password) {
     const { error } = await (await client()).auth.signInWithPassword({ email, password });
     if (error) throw error;

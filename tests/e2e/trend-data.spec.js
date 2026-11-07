@@ -102,16 +102,12 @@ test('이번 달 CSV: 엑셀용 BOM, 할인·용량 열, 수식으로 해석될 
   expect(lines[3]).toContain(`"'+위험"`);
 });
 
-test('설정: API 키·모델·분류 목록 저장', async ({ page }) => {
+test('설정: 분류 목록 저장', async ({ page }) => {
   await openApp(page);
   await page.locator('[data-act=settings]').click();
   const s = sheet(page);
-  await s.locator('[name=apiKey]').fill('  sk-ant-abc  ');  // 앞뒤 공백은 지움
-  await s.locator('[name=model]').selectOption('claude-sonnet-5-5');
   await s.locator('[name=cats]').fill('주류\n\n안주\n주류');
   await s.locator('button[type=submit]').click();
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('maeip.settings.v1')));
-  expect(settings).toMatchObject({ apiKey: 'sk-ant-abc', model: 'claude-sonnet-5-5' });
   // 빈 줄·중복 제거, '기타'는 항상 포함
   await waitSaved(page, (d) => JSON.stringify(d?.categories) === JSON.stringify(['주류', '안주', '기타']));
 });

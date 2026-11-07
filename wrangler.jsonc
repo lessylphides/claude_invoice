@@ -1,11 +1,17 @@
-// Cloudflare Workers 배포 설정: dist/ 의 앱 파일을 Worker 코드 하나에 담아 올림 (scripts/build-worker.mjs)
-// 배포: npm run deploy  (Cloudflare API 토큰 필요. 토큰은 저장소에 넣지 않음)
+// Cloudflare Workers 배포 설정: 앱 화면 파일 + 서버 기능(/api/ocr)
+// 배포: npm run deploy  (Cloudflare API 토큰 필요. 토큰·비밀 값은 저장소에 넣지 않음)
+// 비밀 값 ANTHROPIC_API_KEY 는 Cloudflare 대시보드(costnote → 설정 → 변수 및 비밀)에서 넣음
 {
   "name": "costnote",
   "account_id": "9ecdd9e050cc043f4c41cbef5f0b9853",
-  "main": ".wrangler-build/worker.js",
+  "main": "src/worker/index.js",
   "compatibility_date": "2026-11-07",
   "routes": [{ "pattern": "app.costnote.co.kr", "custom_domain": true }],
   "workers_dev": true,
-  "no_bundle": true
+  "observability": { "enabled": true },
+  "vars": {
+    "OCR_MODEL": "claude-opus-5-5",
+    "OCR_DAILY_LIMIT": "30",
+    "OCR_MONTHLY_LIMIT": "300"
+  }
 }

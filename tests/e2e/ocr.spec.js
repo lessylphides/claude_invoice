@@ -1,6 +1,6 @@
 // 영수증 인식: Claude 요청 형식, 결과 → 입력 화면, 여러 장 합치기, 실패·키 없음, 용량 자동 채우기
 import { test, expect } from '@playwright/test';
-import { openApp, mockClaude, ocrItem, PHOTO, KEY, purchase, item, sheet } from './helpers.js';
+import { openApp, mockClaude, ocrItem, PHOTO, purchase, item, sheet } from './helpers.js';
 
 const costco = {
   documentType: '영수증', date: '2026-10-28', vendor: '(주)코스트코코리아 양재점', paymentHint: 'card', total: 113680,
@@ -14,22 +14,19 @@ const costco = {
 costco.total = costco.items.reduce((s, i) => s + i.amount, 0);
 
 test('사진 한 장: 요청 형식과 인식 결과 → 확인 화면 → 영수증 날짜의 달로 이동', async ({ page }) => {
-  const errors = await openApp(page, { settings: KEY });
+  const errors = await openApp(page);
   const requests = await mockClaude(page, () => costco);
   await page.locator('#cam').setInputFiles(PHOTO);
   const form = page.locator('form.editor');
   await expect(form).toBeVisible();
 
+  // 앱 → 우리 서버: 로그인 토큰 + JPEG 사진 + 분류 목록 (Claude 요청은 서버가 만듦, tests/unit/ocrServer.test.js)
   const req = requests[0];
-  expect(req.model).toBe('claude-opus-5-5');
-  expect(req.fallbacks).toBe('default');
-  expect(req.output_config.format.type).toBe('json_schema');
-  expect(req.output_config.effort).toBe('medium');
-  const images = req.messages[0].content.filter((c) => c.type === 'image');
-  expect(images).toHaveLength(1);
-  expect(images[0].source.media_type).toBe('image/jpeg');
-  const itemSchema = req.output_config.format.schema.properties.items.items;
-  expect(itemSchema.required).toEqual(expect.arrayContaining(['discount', 'packSize', 'packUnit']));
+  expect(req.authorization).toBe('Bearer test-access-token');
+  expect(req.images).toHaveLength(1);
+  expect(atob(req.images[0]).slice(0, 3)).toBe('\xff\xd8\xff'); // JPEG 로 바꿔 보냄
+  expect(req.categories.length).toBeGreaterThan(0);
+  expect(req).not.toHaveProperty('apiKey');
 
   await expect(form.locator('[name=date]')).toHaveValue('2026-10-28');
   await expect(form.locator('[name=vendor]')).toHaveValue('(주)코스트코코리아 양재점');
@@ -51,7 +48,7 @@ test('사진 한 장: 요청 형식과 인식 결과 → 확인 화면 → 영�
 });
 
 test('날짜를 못 읽거나 합계가 다르면 확인 화면에 안내한다', async ({ page }) => {
-  await openApp(page, { settings: KEY });
+  await openApp(page);
   await mockClaude(page, () => ({ ...costco, date: '', total: 999999 }));
   await page.locator('#cam').setInputFiles(PHOTO);
   const notice = page.locator('.sheet-body .notice');
@@ -61,21 +58,19 @@ test('날짜를 못 읽거나 합계가 다르면 확인 화면에 안내한다'
 });
 
 test('여러 장 → "영수증 한 장이에요": 한 번의 요청에 사진을 순서대로 담는다', async ({ page }) => {
-  await openApp(page, { settings: KEY });
+  await openApp(page);
   const requests = await mockClaude(page, () => costco);
   await page.locator('#gallery').setInputFiles([PHOTO, { ...PHOTO, name: 'b.png' }, { ...PHOTO, name: 'c.png' }]);
   await expect(sheet(page).locator('.sheet-head h2')).toHaveText('사진 3장을 골랐습니다');
   await page.locator('[data-merge=merge]').click();
   await expect(page.locator('form.editor')).toBeVisible();
   expect(requests).toHaveLength(1);
-  const content = requests[0].messages[0].content;
-  expect(content.filter((c) => c.type === 'image')).toHaveLength(3);
-  expect(content.filter((c) => c.type === 'text').map((c) => c.text).slice(0, 3)).toEqual(['사진 1/3', '사진 2/3', '사진 3/3']);
+  expect(requests[0].images).toHaveLength(3); // 사진 번호 붙이기는 서버가 함 (tests/unit/ocrServer.test.js)
   await expect(page.locator('.photo summary')).toHaveText('촬영한 사진 보기 (3장)');
 });
 
 test('여러 장 → "각각 다른 영수증": 사진마다 따로 인식하고 차례로 확인한다', async ({ page }) => {
-  await openApp(page, { settings: KEY });
+  await openApp(page);
   const requests = await mockClaude(page, (_, n) => ({ ...costco, vendor: `가게${n}`, items: [ocrItem(`품목${n}`, '기타', 1000 * n)], total: 1000 * n }));
   await page.locator('#gallery').setInputFiles([PHOTO, { ...PHOTO, name: 'b.png' }]);
   await page.locator('[data-merge=separate]').click();
@@ -89,44 +84,37 @@ test('여러 장 → "각각 다른 영수증": 사진마다 따로 인식하고
   await expect(sheet(page).locator('.vendor-card')).toHaveCount(2);
 });
 
-test('인식이 실패하면 사진을 둔 채 직접 입력 화면을 연다', async ({ page }) => {
-  await openApp(page, { settings: KEY });
-  await mockClaude(page, () => ({ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }));
+test('인식이 실패하면 서버의 안내와 함께 사진을 둔 채 직접 입력 화면을 연다', async ({ page }) => {
+  await openApp(page);
+  await mockClaude(page, () => ({ status: 401, body: { error: { code: 'login', message: '로그인이 만료됐어요. 다시 로그인해 주세요.' } } }));
   await page.locator('#cam').setInputFiles(PHOTO);
-  await expect(page.locator('.notice')).toContainText('API 키가 올바르지 않습니다');
+  await expect(page.locator('.notice')).toContainText('자동 인식 실패: 로그인이 만료됐어요');
   await expect(page.locator('.photo')).toBeVisible();
 });
 
-test('크레딧이 떨어지거나 사용 한도에 닿으면 충전 안내와 함께 직접 입력 화면을 연다', async ({ page }) => {
-  await openApp(page, { settings: KEY });
-  let msg = 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.';
-  await mockClaude(page, () => ({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: msg } } }));
+test('사용 한도를 넘거나 서비스를 쓸 수 없으면 서버 안내를 그대로 보여 준다', async ({ page }) => {
+  await openApp(page);
+  let reply = { status: 429, body: { error: { code: 'daily_limit', message: '오늘 영수증 인식(30회)을 다 썼어요. 내일 다시 쓸 수 있어요. 지금은 직접 입력해 주세요.' } } };
+  await mockClaude(page, () => reply);
   await page.locator('#cam').setInputFiles(PHOTO);
-  await expect(page.locator('.notice')).toContainText('API 크레딧이 다 떨어졌어요');
-  await expect(page.locator('.notice')).not.toContainText('credit balance');
-  await expect(page.locator('.photo')).toBeVisible();
+  await expect(page.locator('.notice')).toContainText('오늘 영수증 인식(30회)을 다 썼어요');
   await page.locator('form.editor .cancel').click();
 
-  msg = 'You have reached your specified API usage limits. You will regain access on 2026-12-01 at 00:00 UTC.';
+  reply = { status: 503, body: { error: { code: 'billing', message: '영수증 인식 서비스를 잠시 쓸 수 없어요. 지금은 직접 입력해 주세요.' } } };
   await page.locator('#cam').setInputFiles(PHOTO);
-  await expect(page.locator('.notice')).toContainText('이번 달 API 사용 한도에 닿았어요');
+  await expect(page.locator('.notice')).toContainText('영수증 인식 서비스를 잠시 쓸 수 없어요');
 });
 
-test('다른 요청 오류는 원래 내용을 그대로 보여 준다', async ({ page }) => {
-  await openApp(page, { settings: KEY });
-  await mockClaude(page, () => ({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'image too large' } } }));
-  await page.locator('#cam').setInputFiles(PHOTO);
-  await expect(page.locator('.notice')).toContainText('요청 오류');
-  await expect(page.locator('.notice')).toContainText('image too large');
-});
-
-test('API 키가 없으면 인식 없이 사진과 함께 직접 입력 화면을 연다', async ({ page }) => {
+test('서버가 엉뚱한 응답을 주거나 연결이 끊기면 알아듣기 쉬운 안내', async ({ page }) => {
   await openApp(page);
-  const requests = await mockClaude(page, () => costco);
+  await page.route('**/api/ocr', (r) => r.fulfill({ status: 502, contentType: 'text/html', body: '<html>Bad gateway</html>' }));
   await page.locator('#cam').setInputFiles(PHOTO);
-  await expect(page.locator('form.editor')).toBeVisible();
-  await expect(page.locator('.photo')).toBeVisible();
-  expect(requests).toHaveLength(0);
+  await expect(page.locator('.notice')).toContainText('영수증 인식 서버에 연결하지 못했어요 (502)');
+  await page.locator('form.editor .cancel').click();
+  await page.unroute('**/api/ocr');
+  await page.route('**/api/ocr', (r) => r.abort('internetdisconnected'));
+  await page.locator('#cam').setInputFiles(PHOTO);
+  await expect(page.locator('.notice')).toContainText('인터넷 연결을 확인해 주세요');
 });
 
 test('같은 품목을 전에 산 적이 있으면 그때의 용량을 불러오고 "이전 기록"으로 표시한다', async ({ page }) => {
@@ -134,7 +122,7 @@ test('같은 품목을 전에 산 적이 있으면 그때의 용량을 불러오
     categories: ['주류·음료', '유제품·계란', '채소·과일', '기타'],
     purchases: [purchase('old', '2026-09-20', '코스트코', [item('바스크치즈케이크', '유제품·계란', 17990, { packSize: 7, packUnit: '개' })])],
   };
-  await openApp(page, { data, settings: KEY });
+  await openApp(page, { data });
   await mockClaude(page, () => costco);
   await page.locator('#cam').setInputFiles(PHOTO);
   const cake = page.locator('form.editor .item-edit').nth(2);

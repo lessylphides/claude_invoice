@@ -27,8 +27,7 @@ export function openCaptureMenu(date = null) {
           <button class="menu-btn" data-src="gallery"><span aria-hidden="true">🖼</span>앨범에서 선택<small>여러 장을 한 번에 인식</small></button>
           <button class="menu-btn" data-src="manual"><span aria-hidden="true">✍️</span>직접 입력</button>
         </div>
-        ${date ? `<p class="muted small menu-note">영수증에 날짜가 있으면 그 날짜로, 날짜를 읽지 못하면 ${m}월 ${d}일로 들어갑니다.</p>` : ''}
-        ${store.settings.apiKey ? '' : '<p class="notice">자동 인식을 쓰려면 ⚙ 설정에서 Claude API 키를 입력하세요.</p>'}`;
+        ${date ? `<p class="muted small menu-note">영수증에 날짜가 있으면 그 날짜로, 날짜를 읽지 못하면 ${m}월 ${d}일로 들어갑니다.</p>` : ''}`;
       body.addEventListener('click', (e) => {
         const b = e.target.closest('[data-src]');
         if (!b) return;
@@ -67,7 +66,6 @@ function askMerge(count) {
 
 async function handleFiles(files) {
   if (!files.length) return;
-  const { apiKey, model } = store.settings;
   const fallbackDate = captureDate || view.selectedDate || todayStr();
 
   let groups = files.map((f) => [f]);
@@ -77,22 +75,16 @@ async function handleFiles(files) {
     if (how === 'merge') groups = [files];
   }
 
-  if (!apiKey) {
-    toast('API 키가 없어 자동 인식 없이 직접 입력합니다. (설정에서 키 입력)', 3500);
-    for (const g of groups) await openEditor({ date: fallbackDate }, { imageFiles: g });
-    return;
-  }
-
   const label = groups.length > 1 ? (n) => `영수증 인식 중… (${n}/${groups.length})` : () => `영수증 인식 중… (사진 ${files.length}장)`;
   const busy = showBusy(label(0));
   let results;
   try {
-    // Claude 연결 코드는 처음 인식할 때만 불러옴 (앱 첫 화면을 가볍게)
+    // 인식 코드는 처음 인식할 때만 불러옴 (앱 첫 화면을 가볍게)
     const { extractReceipt } = await import('../ocr.js');
     let done = 0;
     results = await Promise.allSettled(
       groups.map((g) =>
-        extractReceipt(g, { apiKey, model, categories: store.categories, knownVendors: store.vendorNames() }).finally(() => busy.update(label(++done))),
+        extractReceipt(g, { categories: store.categories, knownVendors: store.vendorNames() }).finally(() => busy.update(label(++done))),
       ),
     );
   } catch (err) {
@@ -116,9 +108,8 @@ async function handleFiles(files) {
 
 const withNote = ({ draft, note }, imageFiles) => [draft, { imageFiles, note }];
 
-/** API 키가 있으면 한가할 때 인식 코드를 미리 받아 둠 (첫 촬영이 기다리지 않게, 서비스워커가 오프라인용으로 보관) */
+/** 한가할 때 인식 코드를 미리 받아 둠 (첫 촬영이 기다리지 않게, 서비스워커가 오프라인용으로 보관) */
 export function preloadOcr() {
-  if (!store.settings.apiKey) return;
   const run = () => import('../ocr.js').catch(() => {});
   if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 5000 });
   else setTimeout(run, 2000);

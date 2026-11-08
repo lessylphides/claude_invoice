@@ -3,6 +3,7 @@
 import { db, billingMode, kstDate, isOwner } from './billing.js';
 import { PLANS } from '../lib/plans.js';
 import { json, fail, authUser } from './common.js';
+import { listBackups, readBackup } from './backup.js';
 
 /** 모델별 가격 (미국 달러, 100만 토큰당 입력/출력) — Anthropic 공식 가격표 */
 const PRICES = {
@@ -173,16 +174,30 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
   };
 }
 
-/** GET /api/admin — 운영자(OWNER_EMAILS)만 */
+/** GET /api/admin, /api/admin/backup?date=YYYY-MM-DD — 운영자(OWNER_EMAILS)만 */
 export async function handleAdmin(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (request.method !== 'GET') return fail(405, 'method', 'GET 만 받습니다.');
   const a = await authUser(request, fetchImpl);
   if (a.error) return a.error;
   if (!isOwner(env, a.user.email)) return fail(403, 'forbidden', '운영자만 볼 수 있어요.');
+  const url = new URL(request.url);
+  if (url.pathname === '/api/admin/backup') {
+    const date = url.searchParams.get('date') || '';
+    const data = await readBackup(env, date).catch((e) => (console.error('[admin] backup', String(e)), null));
+    if (!data) return fail(404, 'not_found', '그 날짜의 백업이 없어요.');
+    return new Response(JSON.stringify(data), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'content-disposition': `attachment; filename="costnote-backup-${date}.json"`,
+        'cache-control': 'no-store',
+      },
+    });
+  }
   // 가입자 수는 Supabase 의 운영자 전용 함수(admin_stats)로 (서버에 관리자 키를 두지 않음)
   let users = null;
   const r = await a.sb('/rest/v1/rpc/admin_stats', { method: 'POST', body: '{}' }).catch(() => null);
   if (r?.ok) users = await r.json().catch(() => null);
   else console.error('[admin] admin_stats', r?.status);
-  return json(200, { ...(await adminStats(env, { now })), users });
+  const backups = await listBackups(env).catch(() => []);
+  return json(200, { ...(await adminStats(env, { now })), users, backups });
 }

@@ -2,7 +2,8 @@
 import { auth } from '../auth.js';
 import { esc, num } from '../lib/format.js';
 import { PLANS, PLAN_ORDER } from '../lib/plans.js';
-import { openSheet } from '../ui/sheet.js';
+import { openSheet, toast } from '../ui/sheet.js';
+import { download } from '../ui/download.js';
 
 const won = (n) => (n == null ? '—' : `${num(n)}원`);
 const md = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
@@ -113,8 +114,39 @@ function render(body, s) {
             : '<p class="set-pad muted small">아직 결제가 없어요.</p>'
         }</div>
       </section>
+      <section>
+        <h3 class="set-title">장부 백업 (매일, 14일 보관)</h3>
+        <div class="set-card list">${
+          s.backups?.length
+            ? s.backups
+                .map(
+                  (x) => `<button type="button" class="set-row" data-backup="${esc(x.date)}"><span class="grow">${esc(x.date)}<small>${x.users != null ? `장부 ${num(x.users)}개 · ${num(Math.ceil((x.bytes ?? 0) / 1024))}KB (압축·암호화)` : ''}</small></span><span class="chev" aria-hidden="true">↓</span></button>`,
+                )
+                .join('')
+            : '<p class="set-pad muted small">아직 백업이 없어요. 매일 오전 10시쯤 자동으로 만들어져요.</p>'
+        }</div>
+        <p class="set-note">누르면 그날 모든 장부를 내려받아요(개인 정보가 들어 있으니 안전한 곳에만 보관하세요). 손님 장부를 되살릴 때 써요.</p>
+      </section>
+
       <p class="set-foot">AI 비용은 공식 가격표와 실제 사용 토큰으로 계산한 추정치예요. 정확한 청구액은 Anthropic Console 에서 확인하세요.</p>
     </div>`;
+
+  body.querySelectorAll('[data-backup]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const date = btn.dataset.backup;
+      btn.disabled = true;
+      try {
+        const token = await auth.accessToken();
+        const res = await fetch(`./api/admin/backup?date=${encodeURIComponent(date)}`, { headers: { authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message || `내려받지 못했어요 (${res.status})`);
+        download(`costnote-backup-${date}.json`, await res.text(), 'application/json');
+      } catch (e) {
+        toast(e.message, 4000);
+      } finally {
+        btn.disabled = false;
+      }
+    }),
+  );
 
   const readout = body.querySelector('.chart-readout');
   const show = (btn) => {

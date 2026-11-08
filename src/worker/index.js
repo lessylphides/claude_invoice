@@ -4,6 +4,7 @@ import { FILES, CSP, LANDING } from '../../.wrangler-build/assets.js';
 import { handleOcr } from './ocr.js';
 import { handleBilling, runRenewals } from './billing.js';
 import { handleAdmin } from './stats.js';
+import { runBackup } from './backup.js';
 export { BillingStore } from './billingStore.js';
 
 const cache = new Map();
@@ -39,13 +40,20 @@ export default {
     if (url.hostname === 'www.costnote.co.kr') return Response.redirect(`https://costnote.co.kr${url.pathname}${url.search}`, 301);
     if (url.hostname === 'costnote.co.kr') return serveFile(request, url, LANDING, LANDING_CSP, 'landing');
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
-    if (url.pathname === '/api/admin') return handleAdmin(request, env);
+    if (url.pathname === '/api/admin' || url.pathname === '/api/admin/backup') return handleAdmin(request, env);
     if (url.pathname === '/api/billing' || url.pathname.startsWith('/api/billing/')) return handleBilling(request, env);
     if (url.pathname.startsWith('/api/')) return new Response('Not Found', { status: 404 });
     return serveFile(request, url);
   },
-  // 매일 한 번: 결제일이 된 구독 정기결제 (wrangler.jsonc 의 triggers.crons)
+  // 매일 한 번: 결제일이 된 구독 정기결제, 장부 백업 (wrangler.jsonc 의 triggers.crons)
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runRenewals(env).then((r) => console.log('[billing] renewals', JSON.stringify(r))));
+    ctx.waitUntil(
+      runRenewals(env)
+        .then((r) => console.log('[billing] renewals', JSON.stringify(r)))
+        .catch((e) => console.error('[billing] renewals failed', String(e)))
+        .then(() => runBackup(env))
+        .then((r) => console.log('[backup]', JSON.stringify(r)))
+        .catch((e) => console.error('[backup] failed', String(e))),
+    );
   },
 };

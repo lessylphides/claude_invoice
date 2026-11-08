@@ -6,6 +6,7 @@
 // - BILLING_MODE: off(결제 기능 숨김) | test(시험 결제, 구독자만 요금제 한도) | live(실제 결제, 무료 체험·요금제 한도)
 import { PLANS, TRIAL, planOf, addMonth } from '../lib/plans.js';
 import { json, fail, authUser, usageNow } from './common.js';
+import { sendMail, renewFailedMail, subscriptionEndedMail, ownerRenewalMail } from './mail.js';
 
 const TOSS_API = 'https://api.tosspayments.com/v1';
 const GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 결제 실패 뒤 요금제를 계속 쓸 수 있는 기간
@@ -336,6 +337,7 @@ export async function runRenewals(env, { fetchImpl = fetch, now = Date.now() } =
   const out = { renewed: 0, failed: 0, ended: 0 };
   const d = db(env);
   if (!d || billingMode(env) === 'off' || !env.TOSS_SECRET_KEY) return out;
+  const ownerLines = []; // 운영자에게 보낼 실패·종료 목록
   // 예전 KV 에만 있는 구독을 새 저장소로 옮김 (읽으면 옮겨짐)
   if (d.legacy) {
     let c;
@@ -370,9 +372,16 @@ export async function runRenewals(env, { fetchImpl = fetch, now = Date.now() } =
           if (sub.failCount >= MAX_FAILS) {
             Object.assign(sub, { status: 'ended', billingKey: null, endedAt: now });
             out.ended++;
+            await sendMail(env, fetchImpl, { to: sub.email, ...subscriptionEndedMail({ planName: p.name }) });
+            ownerLines.push(`종료: ${sub.email} (${p.name}, ${r.message})`);
           } else {
             sub.status = 'past_due';
             out.failed++;
+            await sendMail(env, fetchImpl, {
+              to: sub.email,
+              ...renewFailedMail({ planName: p.name, amount: p.price, reason: r.message, retriesLeft: MAX_FAILS - sub.failCount, graceEnd: sub.periodEnd + GRACE_MS }),
+            });
+            ownerLines.push(`실패 ${sub.failCount}회: ${sub.email} (${p.name}, ${r.message})`);
           }
         }
       }
@@ -380,5 +389,7 @@ export async function runRenewals(env, { fetchImpl = fetch, now = Date.now() } =
     }
     cursor = page.next;
   } while (cursor);
+  const owner = String(env.OWNER_EMAILS || '').split(',')[0]?.trim();
+  if (ownerLines.length && owner) await sendMail(env, fetchImpl, { to: owner, ...ownerRenewalMail(out, ownerLines) });
   return out;
 }

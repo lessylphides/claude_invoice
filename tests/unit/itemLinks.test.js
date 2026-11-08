@@ -83,10 +83,12 @@ describe('용량을 보고 같은 품목 판단', async () => {
     expect(isSureSame('러셀 싱글배럴 750ml', '러셀싱글베럴 750ML')).toBe(true); // ㅐ/ㅔ 차이
     expect(isSureSame('서울우유', '서울우유 1L')).toBe(false); // 한쪽만 크기가 있으면 물어봄
     expect(isSureSame('서울우유 흰우유 1L', '서울우유 1L')).toBe(false); // 이름이 다르면 물어봄
+    // 묶음 개수만 다르면 같은 상품 (사는 수량 차이)
+    expect(isSureSame('코카콜라 355ml x24', '코카콜라 355ml x6')).toBe(true);
+    expect(isSureSame('서울우유 1L×12', '서울우유 1L')).toBe(true);
   });
   it('크기가 다르면 다른 상품 (묻지도 않음)', () => {
     expect(nameSimilarity('서울우유 1L', '서울우유 500ml')).toBe(0);
-    expect(nameSimilarity('코카콜라 355ml x24', '코카콜라 355ml x6')).toBe(0);
     expect(nameSimilarity('서울우유 1L', '서울우유 1,000mL')).toBe(1); // 예전엔 쉼표 때문에 0 이었음
   });
 });

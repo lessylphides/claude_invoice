@@ -76,7 +76,7 @@ export function sanitizeNotSame(raw) {
 // 한글은 자모로 나눠 비교(배럴/베럴처럼 ㅐ·ㅔ 차이는 같게 봄), 용량·개수 표기(750ml, x24 등)는 빼고 비교
 
 // 용량·묶음 표기만 지움: 700ML, 2.2kg, X24, 끝에 붙은 세 자리 이상 숫자(750). '12년', '1호' 같은 숫자는 남김
-const UNIT = /x\d+|\d+(?:\.\d+)?\s*(?:ml|l|kg|g|개입|개|입|병|캔|봉|ea|매|팩)(?![a-z])|\b\d{3,}\b/gi;
+const UNIT = /[x×*]\s*\d+|\d+(?:\.\d+)?\s*(?:ml|l|kg|g|개입|개|입|병|캔|봉|ea|매|팩)(?![a-z])|\b\d{3,}\b/gi;
 
 // 1,000mL 처럼 천 단위 쉼표가 든 숫자는 쉼표를 뺌
 const noThousands = (s) => String(s ?? '').replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
@@ -101,11 +101,15 @@ export function sizeOf(name) {
   return out;
 }
 
-/** 두 이름의 크기 비교: 'same' 같은 종류가 있고 모두 같음, 'diff' 같은 종류인데 다름, null 비교할 게 없음 */
+/**
+ * 두 이름의 낱개 크기 비교: 'same' 낱개 용량·무게가 적혀 있고 같음, 'diff' 다름, null 비교할 게 없음
+ * 묶음 개수(x24·x6, 24입)는 사는 수량 차이일 뿐 같은 상품이므로 비교하지 않음
+ * (콜라 355ml x24 = 콜라 355ml x6, 서울우유 1L = 서울우유 1L×12, 서울우유 1L ≠ 서울우유 500ml)
+ */
 function compareSize(a, b) {
   const sa = sizeOf(a);
   const sb = sizeOf(b);
-  const common = ['ml', 'g', 'ea'].filter((k) => sa[k] && sb[k]);
+  const common = ['ml', 'g'].filter((k) => sa[k] && sb[k]);
   if (!common.length) return null;
   return common.every((k) => sa[k] === sb[k]) ? 'same' : 'diff';
 }
@@ -150,7 +154,7 @@ export function nameSimilarity(a, b) {
   const ka = simKey(a);
   const kb = simKey(b);
   if (!ka || !kb) return 0;
-  // 용량·무게·개수가 둘 다 적혀 있는데 다르면 다른 상품 (서울우유 1L ≠ 서울우유 500ml)
+  // 낱개 용량·무게가 둘 다 적혀 있는데 다르면 다른 상품 (서울우유 1L ≠ 서울우유 500ml). 묶음 개수 차이는 같은 상품
   if (compareSize(a, b) === 'diff') return 0;
   if (ka === kb) return 1;
   // 남은 숫자가 서로 다르면 다른 물건 (조니워커 12년 ≠ 18년, 품목1 ≠ 품목2)

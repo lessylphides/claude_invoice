@@ -3,7 +3,7 @@
 import { esc, num, shortDate, won, todayStr, uid } from '../lib/format.js';
 import { purchaseTotal, itemAmount } from '../lib/model.js';
 import { fillSpec } from '../lib/draft.js';
-import { findSimilar } from '../lib/itemLinks.js';
+import { findSimilar, isSureSame } from '../lib/itemLinks.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { payChoiceHTML } from '../ui/payui.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -35,7 +35,14 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
       onClose: async () => {
         imgUrls.forEach((u) => URL.revokeObjectURL(u));
         // 저장한 새 품목 이름이 기존 품목과 비슷하면 같은 물건인지 물어봄 (다음 영수증 확인 전에)
-        if (saved && suggestions.length) await askSameItems(suggestions, saved.vendor);
+        // 이름·용량이 확실히 같으면(서울우유 1L ↔ 1000ml) 묻지 않고 바로 묶음
+        const sure = suggestions.filter((x) => x.sure);
+        if (saved && sure.length) {
+          sure.forEach(({ name, match }) => store.linkItems(name, match));
+          toast(`같은 품목으로 묶었어요: ${sure.map((x) => `${x.name} → ${x.match}`).join(', ')} (가격 추이에서 풀 수 있어요)`, 4500);
+        }
+        const ask = suggestions.filter((x) => !x.sure);
+        if (saved && ask.length) await askSameItems(ask, saved.vendor);
         // 이번 매입으로 메뉴 원가가 바뀌었으면 알림 (다음 영수증 확인 전에)
         if (saved) await notifyCostImpact(beforeIndex, saved);
         resolve(saved);
@@ -231,7 +238,7 @@ function similarSuggestions(items) {
     const key = store.itemKey(name);
     if (out.some((s) => store.itemKey(s.name) === key)) continue;
     const best = findSimilar(name, candidates, (c) => store.itemKey(c) === key || store.isNotSame(name, c));
-    if (best) out.push({ name, match: best.name });
+    if (best) out.push({ name, match: best.name, sure: isSureSame(name, best.name) });
   }
   return out;
 }

@@ -128,3 +128,23 @@ test('월 요약 항목별에서도 묶인 품목은 한 줄로 합산', async (
   await expect(page.locator('.item-list .item-btn')).toHaveCount(1);
   await expect(page.locator('.item-list .item-btn .iamt')).toContainText('143,000원');
 });
+
+test('이름·용량이 확실히 같으면(1L ↔ 1000ml) 묻지 않고 바로 묶고, 용량이 다르면 묻지 않는다', async ({ page }) => {
+  await openApp(page, { data: { purchases: [purchase('a', '2026-11-01', '우유대리점', [item('서울우유 1L', '유제품·계란', 2500)])] } });
+  const add = async (name) => {
+    await openManualEntry(page);
+    const form = page.locator('form.editor');
+    await form.locator('[name=vendor]').fill('마트');
+    await form.locator('[data-f=name]').fill(name);
+    await form.locator('[data-f=unitPrice]').fill('2700');
+    await form.locator('button[type=submit]').click();
+  };
+  await add('서울우유 1,000mL');
+  await expect(page.locator('.toast').last()).toContainText('같은 품목으로 묶었어요: 서울우유 1,000mL → 서울우유 1L');
+  await expect(page.locator('.sheet-wrap')).toHaveCount(0); // '같은 품목인가요?' 를 묻지 않음
+  await waitSaved(page, (x) => x?.itemLinks?.['서울우유1000ml'] === '서울우유 1L');
+
+  await add('서울우유 500ml');
+  await page.waitForTimeout(300);
+  await expect(page.locator('.sheet-wrap')).toHaveCount(0); // 용량이 다르면 다른 상품 → 묻지 않음
+});

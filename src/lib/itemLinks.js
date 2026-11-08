@@ -78,8 +78,36 @@ export function sanitizeNotSame(raw) {
 // 용량·묶음 표기만 지움: 700ML, 2.2kg, X24, 끝에 붙은 세 자리 이상 숫자(750). '12년', '1호' 같은 숫자는 남김
 const UNIT = /x\d+|\d+(?:\.\d+)?\s*(?:ml|l|kg|g|개입|개|입|병|캔|봉|ea|매|팩)(?![a-z])|\b\d{3,}\b/gi;
 
+// 1,000mL 처럼 천 단위 쉼표가 든 숫자는 쉼표를 뺌
+const noThousands = (s) => String(s ?? '').replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+
 function simKey(name) {
-  return normKey(String(name ?? '').replace(UNIT, ' '));
+  return normKey(noThousands(name).replace(UNIT, ' '));
+}
+
+/**
+ * 이름에 적힌 용량·무게·개수를 같은 단위로: 1L·1000ml·1,000mL → {ml:1000}, 2.2kg → {g:2200}, x24·24입 → {ea:24}
+ * 적힌 게 없으면 빈 객체
+ */
+export function sizeOf(name) {
+  const s = noThousands(name).toLowerCase();
+  const out = {};
+  const vol = s.match(/(\d+(?:\.\d+)?)\s*(ml|l|리터)(?![a-z])/);
+  if (vol) out.ml = Math.round(Number(vol[1]) * (vol[2] === 'ml' ? 1 : 1000));
+  const wt = s.match(/(\d+(?:\.\d+)?)\s*(kg|g|그램|키로)(?![a-z])/);
+  if (wt) out.g = Math.round(Number(wt[1]) * (wt[2] === 'kg' || wt[2] === '키로' ? 1000 : 1));
+  const cnt = s.match(/x\s*(\d+)|(\d+)\s*(?:개입|입|ea|구)(?![a-z])/);
+  if (cnt) out.ea = Number(cnt[1] ?? cnt[2]);
+  return out;
+}
+
+/** 두 이름의 크기 비교: 'same' 같은 종류가 있고 모두 같음, 'diff' 같은 종류인데 다름, null 비교할 게 없음 */
+function compareSize(a, b) {
+  const sa = sizeOf(a);
+  const sb = sizeOf(b);
+  const common = ['ml', 'g', 'ea'].filter((k) => sa[k] && sb[k]);
+  if (!common.length) return null;
+  return common.every((k) => sa[k] === sb[k]) ? 'same' : 'diff';
 }
 
 const digits = (k) => (k.match(/\d+/g) ?? []).join(',');
@@ -122,6 +150,8 @@ export function nameSimilarity(a, b) {
   const ka = simKey(a);
   const kb = simKey(b);
   if (!ka || !kb) return 0;
+  // 용량·무게·개수가 둘 다 적혀 있는데 다르면 다른 상품 (서울우유 1L ≠ 서울우유 500ml)
+  if (compareSize(a, b) === 'diff') return 0;
   if (ka === kb) return 1;
   // 남은 숫자가 서로 다르면 다른 물건 (조니워커 12년 ≠ 18년, 품목1 ≠ 품목2)
   if (digits(ka) && digits(kb) && digits(ka) !== digits(kb)) return 0;
@@ -138,6 +168,17 @@ export function nameSimilarity(a, b) {
 export const SIMILAR_THRESHOLD = 0.8;
 
 /**
+ * 묻지 않고 바로 묶어도 될 만큼 확실한지: 크기 표기를 뺀 이름이 (ㅐ/ㅔ 차이까지) 같고, 크기도 적혀 있고 같음
+ * 예) 서울우유 1L ↔ 서울우유 1000ml ↔ 서울우유1,000mL
+ */
+export function isSureSame(a, b) {
+  const ka = simKey(a);
+  const kb = simKey(b);
+  if (!ka || !kb || compareSize(a, b) !== 'same') return false;
+  return ka === kb || jamo(ka).join('') === jamo(kb).join('');
+}
+
+/**
  * 새 품목 이름과 가장 비슷한 기존 품목 (없으면 null)
  * @param {string} name
  * @param {string[]} candidates 기존 품목(묶음 대표) 이름들
@@ -148,7 +189,7 @@ export function findSimilar(name, candidates, skip = () => false) {
   for (const c of candidates) {
     if (skip(c)) continue;
     const score = nameSimilarity(name, c);
-    if (score >= SIMILAR_THRESHOLD && (!best || score > best.score)) best = { name: c, score };
+    if (score >= SIMILAR_THRESHOLD && (!best || score > best.score || (score === best.score && isSureSame(name, c)))) best = { name: c, score };
   }
   return best;
 }

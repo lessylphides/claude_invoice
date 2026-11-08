@@ -8,6 +8,7 @@ import { openSheet, toast } from '../ui/sheet.js';
 import { payChoiceHTML } from '../ui/payui.js';
 import { unitSelectHTML } from '../ui/units.js';
 import { store } from '../store.js';
+import { notifyCostImpact } from './costImpact.js';
 
 const specOf = (name) => store.index.spec(name);
 
@@ -24,6 +25,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
   if (!p.items.length) p.items.push(blankItem());
   p.items.forEach((i) => (i.id ||= uid()));
   const imgUrls = imageFiles.map((f) => URL.createObjectURL(f));
+  const beforeIndex = store.index; // 저장 뒤 원가가 바뀐 메뉴를 찾으려고 지금 상태를 기억
 
   return new Promise((resolve) => {
     let saved = null;
@@ -34,6 +36,8 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
         imgUrls.forEach((u) => URL.revokeObjectURL(u));
         // 저장한 새 품목 이름이 기존 품목과 비슷하면 같은 물건인지 물어봄 (다음 영수증 확인 전에)
         if (saved && suggestions.length) await askSameItems(suggestions, saved.vendor);
+        // 이번 매입으로 메뉴 원가가 바뀌었으면 알림 (다음 영수증 확인 전에)
+        if (saved) await notifyCostImpact(beforeIndex, saved);
         resolve(saved);
       },
       render(body, close) {

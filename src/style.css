@@ -589,3 +589,17 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .set-row.static b { white-space: nowrap; }
 .backup-now { margin-top: 8px; }
 .acc-bars { margin-top: 12px; } .acc-bars .hbar-row { grid-template-columns: 76px 1fr 44px; } .chart-card + .chart-card { margin-top: 8px; }
+
+/* 원가 변동 알림 */
+.ci p { margin: 0; }
+.ci-head { font-size: 15px; line-height: 1.6; margin-bottom: 12px !important; }
+.ci-items { list-style: none; padding: 10px 12px; margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+.ci-items li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-variant-numeric: tabular-nums; }
+.ci-items li > span:last-child { white-space: nowrap; }
+.ci-menus { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.ci-menu { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.ci-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 15px; }
+.ci-line { font-size: 13px; color: var(--ink-2); line-height: 1.5; font-variant-numeric: tabular-nums; }
+.ci-advice { font-size: 13px; background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 8px 10px; margin-top: 4px !important; line-height: 1.5; }
+.ci .btn-row { margin-top: 12px; }
+.ci em { font-style: normal; font-weight: 700; }

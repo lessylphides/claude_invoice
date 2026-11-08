@@ -500,3 +500,22 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .sync-line { color: var(--ink-2); }
 .auth-card label.agree { flex-direction: row; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; }
 .auth-card label.agree input { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+
+/* 요금제 */
+.plans p { margin: 0 0 10px; }
+.plan-test { background: var(--accent-soft); color: var(--ink); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.plan-current { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; background: var(--surface); }
+.plan-current p { margin: 0 0 4px; }
+.plan-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.plan-opt { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface); cursor: pointer; }
+.plan-opt.on { border: 2px solid var(--accent); padding: 11px; }
+.plan-opt input { margin: 0; flex: none; accent-color: var(--accent); width: 18px; height: 18px; }
+.plan-main { flex: 1; min-width: 0; line-height: 1.5; }
+.plan-price { font-weight: 800; white-space: nowrap; }
+.plan-price small { font-weight: 500; color: var(--muted); }
+.plan-opt .tag { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 1px 6px; }
+.plans .agree { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; margin: 4px 0 12px; }
+.plans .agree input { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.plan-manage { margin-top: 12px; }
+.pay-list { list-style: none; padding: 0; margin: 0 0 12px; font-size: 13px; }
+.pay-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }

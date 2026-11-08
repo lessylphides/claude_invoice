@@ -2,6 +2,7 @@
 // 앱 화면 파일은 배포할 때 scripts/build-worker.mjs 가 .wrangler-build/assets.js 로 만듦
 import { FILES, CSP, LANDING } from '../../.wrangler-build/assets.js';
 import { handleOcr } from './ocr.js';
+import { handleBilling, runRenewals } from './billing.js';
 
 const cache = new Map();
 const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -36,7 +37,12 @@ export default {
     if (url.hostname === 'www.costnote.co.kr') return Response.redirect(`https://costnote.co.kr${url.pathname}${url.search}`, 301);
     if (url.hostname === 'costnote.co.kr') return serveFile(request, url, LANDING, LANDING_CSP, 'landing');
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
+    if (url.pathname === '/api/billing' || url.pathname.startsWith('/api/billing/')) return handleBilling(request, env);
     if (url.pathname.startsWith('/api/')) return new Response('Not Found', { status: 404 });
     return serveFile(request, url);
+  },
+  // 매일 한 번: 결제일이 된 구독 정기결제 (wrangler.jsonc 의 triggers.crons)
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runRenewals(env).then((r) => console.log('[billing] renewals', JSON.stringify(r))));
   },
 };

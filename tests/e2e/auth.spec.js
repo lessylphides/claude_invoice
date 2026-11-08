@@ -164,7 +164,13 @@ test('소개 페이지의 [지금 써 보기](?start=signup)로 오면 회원가
   expect(await page.evaluate(() => location.search)).toBe('');
 });
 
-test('회원 탈퇴: "탈퇴"를 입력해야 진행, 서버 계정 삭제 후 이 기기 장부도 지우고 로그인 화면', async ({ page }) => {
+test('회원 탈퇴: "탈퇴"를 입력해야 진행, 자동 결제를 먼저 멈추고 서버 계정 삭제 후 이 기기 장부도 지우고 로그인 화면', async ({ page }) => {
+  const order = [];
+  await page.route('**/api/billing**', (route) => {
+    order.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"closed":true}' });
+  });
+  page.on('request', (r) => r.url().includes('delete_my_account') && order.push('delete_my_account'));
   await openApp(page, {
     data: { purchases: [] , menus: [{ id: 'm', name: '아메리카노', price: 4500, ingredients: [{ id: 'g', type: 'manual', name: '원두', cost: 500 }] }] },
     auth: (path, body, method) => (path.startsWith('/rest/v1/rpc/delete_my_account') ? { status: 200, body: null } : null),
@@ -179,4 +185,5 @@ test('회원 탈퇴: "탈퇴"를 입력해야 진행, 서버 계정 삭제 후 �
   expect(page.authCalls.some((c) => c.path.includes('delete_my_account'))).toBe(true);
   expect(await page.evaluate(() => localStorage.getItem('costnote.auth'))).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem('costnote.sync'))).toBeNull();
+  expect(order.filter((p) => p !== '/api/billing')).toEqual(['/api/billing/close', 'delete_my_account']);
 });

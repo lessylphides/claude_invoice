@@ -43,8 +43,8 @@ describe('서버 영수증 인식', () => {
     const r = await read(await handleOcr(req(), env, f));
     expect(r.status).toBe(200);
     expect(r.body.result).toEqual(RESULT);
-    expect(r.body.usage).toEqual({ day: 3, month: 11 });
-    expect(r.body.limits).toEqual({ day: 30, month: 300 });
+    expect(r.body.usage).toMatchObject({ day: 3, month: 11 });
+    expect(r.body.limits).toMatchObject({ day: 30, month: 300, kind: 'legacy' });
     expect(f.calls.map((c) => new URL(c.url).pathname)).toEqual(['/auth/v1/user', '/rest/v1/rpc/ocr_usage_now', '/v1/messages', '/rest/v1/rpc/record_ocr_use']);
     // Supabase 는 사용자 본인 토큰으로, Claude 는 서버 키로
     expect(f.calls[0].init.headers.authorization).toBe('Bearer jwt');

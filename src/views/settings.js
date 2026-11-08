@@ -1,4 +1,4 @@
-// 설정: Claude API 키·모델, 분류 목록, CSV 내보내기, 백업/복원
+// 설정: 계정·동기화, 요금제·인식 사용량, 분류 목록, CSV 내보내기, 백업/복원, 탈퇴
 import { dotDate, esc, num, todayStr } from '../lib/format.js';
 import { purchasesCsv } from '../lib/csv.js';
 import { daysBetween } from '../lib/backup.js';
@@ -8,9 +8,12 @@ import { storageInfo } from '../persist.js';
 import { store } from '../store.js';
 import { monthKey } from '../state.js';
 import { monthPurchases, backupNow } from './purchase.js';
-import { auth, client } from '../auth.js';
+import { auth } from '../auth.js';
 import { setAuthNotice } from './authScreen.js';
 import { sync } from '../sync.js';
+import { billing } from '../billing.js';
+import { PLANS } from '../lib/plans.js';
+import { openPlans } from './plans.js';
 
 function syncLine() {
   const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -23,15 +26,24 @@ function syncLine() {
   return map[sync.status] ?? (sync.dirty ? '서버에 올릴 변경이 있어요' : t ? `서버에 저장됨 · ${t}` : '서버와 맞추는 중…');
 }
 
-/** 오늘·이번 달 영수증 인식 횟수 (한도는 마지막 인식 때 서버가 알려 준 값) */
-async function showOcrUsage(el) {
+/** 요금제·영수증 인식 사용량 한 줄 */
+async function showOcrUsage(el, planBtn) {
   try {
-    const { data, error } = await (await client()).rpc('ocr_usage_now');
-    if (error) throw error;
-    const { lastUsage } = await import('../ocr.js');
-    const lim = lastUsage?.limits;
-    if (el.isConnected)
-      el.textContent = `오늘 ${num(data.day)}회${lim ? ` / ${num(lim.day)}회` : ''} · 이번 달 ${num(data.month)}회${lim ? ` / ${num(lim.month)}회` : ''} 사용`;
+    const st = await billing.status();
+    if (!el.isConnected) return;
+    const { entitlement: e, usage: u, subscription: sub, mode } = st;
+    const day = `오늘 ${num(u.day)}/${num(e.day)}회`;
+    if (e.kind === 'plan') {
+      const p = PLANS[e.plan];
+      el.innerHTML = `<b>${esc(p.name)} 요금제</b> · ${day} · 이번 결제 기간 ${num(u.period)}${p.month == null ? '회' : `/${num(p.month)}회`}${
+        sub?.status === 'past_due' ? ' · <b class="warn">결제 실패 — 카드를 다시 등록해 주세요</b>' : sub?.cancelAtPeriodEnd ? ' · 해지 예약됨' : ''
+      }`;
+    } else if (e.kind === 'trial') {
+      el.innerHTML = `<b>무료 체험</b> · ${num(Math.min(u.total, e.total))}/${num(e.total)}장 사용 (${day})`;
+    } else {
+      el.textContent = `${day} · 이번 달 ${num(u.month)}/${num(e.month)}회 사용`;
+    }
+    if (mode !== 'off' && planBtn) planBtn.hidden = false;
   } catch {
     if (el.isConnected) el.textContent = '사용량을 불러오지 못했어요.';
   }
@@ -59,7 +71,7 @@ export function openSettings() {
           <p class="muted small">장부는 계정에 저장되어 다른 기기에서 로그인해도 볼 수 있어요.</p>
 
           <h3 class="sub">영수증 자동 인식</h3>
-          <p class="small ocr-usage">사용량 확인 중…</p>
+          <div class="account-row"><p class="small ocr-usage">사용량 확인 중…</p><button type="button" class="btn ghost small-btn" data-act="plans" hidden>요금제</button></div>
           <p class="muted small">사진은 코스트노트 서버를 거쳐 Claude 가 읽습니다. 인식이 끝나면 사진은 서버에 남기지 않아요.</p>
 
           <h3 class="sub">항목(분류) 목록</h3>
@@ -90,17 +102,23 @@ export function openSettings() {
         toast('설정을 저장했습니다.');
         close();
       });
-      showOcrUsage(body.querySelector('.ocr-usage'));
+      const planBtn = body.querySelector('[data-act=plans]');
+      showOcrUsage(body.querySelector('.ocr-usage'), planBtn);
+      planBtn.addEventListener('click', () => {
+        close();
+        openPlans();
+      });
       const unsubSync = sync.subscribe(() => {
         const el = body.querySelector('.sync-line');
         if (el?.isConnected) el.innerHTML = syncLine();
         else unsubSync();
       });
       body.querySelector('[data-act=delete-account]').addEventListener('click', async () => {
-        const typed = prompt('탈퇴하면 계정과 서버의 장부가 모두 지워지고 되돌릴 수 없어요.\n계속하려면 "탈퇴"라고 입력하세요.');
+        const typed = prompt('탈퇴하면 계정과 서버의 장부가 모두 지워지고 되돌릴 수 없어요. 구독 중이면 바로 해지되고 등록한 카드도 지워져요.\n계속하려면 "탈퇴"라고 입력하세요.');
         if (typed?.trim() !== '탈퇴') return;
         setAuthNotice('탈퇴가 끝났어요. 그동안 이용해 주셔서 감사합니다.'); // 로그인 화면이 그려질 때 보이도록 먼저
         try {
+          await billing.close(); // 자동 결제부터 멈춤 (실패하면 탈퇴도 하지 않음)
           await auth.deleteAccount();
           sync.forget();
           close();

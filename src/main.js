@@ -10,6 +10,8 @@ import { auth, landing } from './auth.js';
 import { renderAuth, handleAuthEvent } from './views/authScreen.js';
 import { closeTopSheet, toast } from './ui/sheet.js';
 import { sync } from './sync.js';
+import { takeBillingReturn } from './billing.js';
+import { finishCardRegistration } from './views/plans.js';
 
 const app = document.getElementById('app');
 
@@ -32,6 +34,13 @@ function staleBanner() {
 
 // 시작 상태: 로그인 확인 → 장부 불러오기
 const boot = { auth: 'loading', data: 'loading', dataError: null, authError: null };
+
+/** 카드 등록창에서 돌아왔으면 (로그인된 뒤에) 구독 마무리 */
+function finishBillingReturn() {
+  if (!auth.user || auth.recovery) return;
+  const ret = takeBillingReturn();
+  if (ret) finishCardRegistration(ret);
+}
 
 /** 로그인했고 장부를 불러왔으면 서버 동기화 시작, 로그아웃하면 멈춤 */
 function syncWithAuth() {
@@ -125,9 +134,11 @@ auth.init().then(
     auth.subscribe(() => {
       render();
       syncWithAuth();
+      finishBillingReturn();
     });
     render();
     syncWithAuth();
+    finishBillingReturn();
     // 메일의 인증 링크로 들어온 경우 (아이폰은 메일 링크가 Safari 로 열려 홈 화면 앱과 로그인이 따로임)
     if (landing.type === 'signup' && auth.user) toast('이메일 인증이 끝났어요. 홈 화면의 코스트노트 앱에서도 로그인해 주세요.', 5000);
   },

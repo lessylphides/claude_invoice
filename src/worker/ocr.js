@@ -3,48 +3,32 @@
 // 1) Supabase 로그인 확인  2) 계정별 하루·한 달 사용량 확인  3) 사진 확인  4) Claude 호출  5) 성공한 인식만 사용량에 기록
 import Anthropic from '@anthropic-ai/sdk';
 import { validateOcrInput, buildOcrRequest, parseOcrResponse } from '../lib/ocrRequest.js';
-import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
+import { fail, json, authUser, usageNow } from './common.js';
+import { entitlement, overLimit, getSub } from './billing.js';
 
 export const DEFAULTS = { model: 'claude-opus-5-5', daily: 30, monthly: 300 };
 
-const json = (status, body) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
-const fail = (status, code, message, extra = {}) => json(status, { error: { code, message, ...extra } });
-
 /**
  * @param {Request} request
- * @param {{ANTHROPIC_API_KEY?: string, OCR_MODEL?: string, OCR_DAILY_LIMIT?: string, OCR_MONTHLY_LIMIT?: string}} env
- * @param {{fetchImpl?: typeof fetch}} deps 테스트에서 가짜 fetch 를 넣을 수 있게
+ * @param {{ANTHROPIC_API_KEY?: string, OCR_MODEL?: string, OCR_DAILY_LIMIT?: string, OCR_MONTHLY_LIMIT?: string, BILLING?: KVNamespace, BILLING_MODE?: string}} env
+ * @param {{fetchImpl?: typeof fetch, now?: number}} deps 테스트에서 가짜 fetch 를 넣을 수 있게
  */
-export async function handleOcr(request, env, { fetchImpl = fetch } = {}) {
+export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (request.method !== 'POST') return fail(405, 'method', 'POST 만 받습니다.');
   if (!env.ANTHROPIC_API_KEY) return fail(503, 'not_configured', '영수증 인식 서버가 아직 준비되지 않았어요. 지금은 직접 입력해 주세요.');
 
-  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (!token) return fail(401, 'login', '로그인이 필요해요.');
-  // 사용자 본인 권한으로만 Supabase 를 부름 (서버에 관리자 키를 두지 않음)
-  const sb = (path, init = {}) =>
-    fetchImpl(`${SUPABASE_URL}${path}`, {
-      ...init,
-      headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    });
-
   // 1. 로그인 확인
-  const userRes = await sb('/auth/v1/user');
-  if (!userRes.ok) return fail(401, 'login', '로그인이 만료됐어요. 다시 로그인해 주세요.');
+  const a = await authUser(request, fetchImpl);
+  if (a.error) return a.error;
+  const { user, sb } = a;
 
-  // 2. 사용량 확인
-  const limits = { day: Number(env.OCR_DAILY_LIMIT) || DEFAULTS.daily, month: Number(env.OCR_MONTHLY_LIMIT) || DEFAULTS.monthly };
-  const usageRes = await sb('/rest/v1/rpc/ocr_usage_now', { method: 'POST', body: '{}' });
-  if (!usageRes.ok) {
-    console.error('[ocr] usage check', usageRes.status, await usageRes.text().catch(() => ''));
-    return fail(503, 'usage', '사용량을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
-  }
-  const usage = await usageRes.json();
-  if (usage.day >= limits.day)
-    return fail(429, 'daily_limit', `오늘 영수증 인식(${limits.day}회)을 다 썼어요. 내일 다시 쓸 수 있어요. 지금은 직접 입력해 주세요.`, { usage, limits });
-  if (usage.month >= limits.month)
-    return fail(429, 'monthly_limit', `이번 달 영수증 인식(${limits.month}회)을 다 썼어요. 지금은 직접 입력해 주세요.`, { usage, limits });
+  // 2. 사용량 확인 (요금제·무료 체험에 따라 한도가 다름)
+  const ent = entitlement(env, user, await getSub(env, user.id).catch(() => null), now);
+  const usage = await usageNow(sb, ent.since ?? null);
+  if (!usage) return fail(503, 'usage', '사용량을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+  const limits = { day: ent.day, month: ent.month, total: ent.total ?? null, kind: ent.kind, plan: ent.plan ?? null };
+  const over = overLimit(ent, usage);
+  if (over) return fail(429, over.code, over.message, { usage, limits });
 
   // 3. 사진 확인
   let input;
@@ -78,5 +62,6 @@ export async function handleOcr(request, env, { fetchImpl = fetch } = {}) {
   // 5. 성공한 인식만 기록 (기록에 실패해도 결과는 돌려줌)
   const rec = await sb('/rest/v1/rpc/record_ocr_use', { method: 'POST', body: '{}' }).catch((e) => ({ ok: false, status: String(e) }));
   if (!rec.ok) console.error('[ocr] record usage failed', rec.status);
-  return json(200, { result, usage: { day: usage.day + 1, month: usage.month + 1 }, limits });
+  const after = { day: usage.day + 1, month: usage.month + 1, total: usage.total + 1, period: usage.period + 1 };
+  return json(200, { result, usage: after, limits });
 }

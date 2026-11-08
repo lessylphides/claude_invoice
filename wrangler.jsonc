@@ -15,9 +15,18 @@
   "preview_urls": false,
   "workers_dev": true,
   "observability": { "enabled": true },
+  // 구독 정보(빌링키·결제 내역)를 두는 저장소
+  "kv_namespaces": [{ "binding": "BILLING", "id": "5592f6bf8d43431f8cef8e0a3ef07a0b" }],
+  // 매일 한국 시간 오전 10시 7분에 정기결제
+  "triggers": { "crons": ["7 1 * * *"] },
+  // 비밀 값(대시보드에서 넣음): ANTHROPIC_API_KEY, TOSS_SECRET_KEY
   "vars": {
     "OCR_MODEL": "claude-opus-5-5",
+    // 결제 시작 전(BILLING_MODE off/test)과 운영자 계정의 한도
     "OCR_DAILY_LIMIT": "30",
-    "OCR_MONTHLY_LIMIT": "300"
+    "OCR_MONTHLY_LIMIT": "300",
+    // off: 결제 숨김 | test: 시험 결제(구독자만 요금제 한도) | live: 실제 결제(무료 체험 20장·요금제 한도)
+    "BILLING_MODE": "test",
+    "OWNER_EMAILS": "hanguk.soek@me.com"
   }
 }

@@ -603,3 +603,9 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .ci-advice { font-size: 13px; background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 8px 10px; margin-top: 4px !important; line-height: 1.5; }
 .ci .btn-row { margin-top: 12px; }
 .ci em { font-style: normal; font-weight: 700; }
+.mem-search { display: flex; gap: 8px; }
+.mem-search input { flex: 1; }
+.mem-email { font-weight: 600; overflow-wrap: anywhere; }
+.mem-email.big { font-size: 16px; margin: 0 0 6px; }
+.mem-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.mem-badges:empty { display: none; }

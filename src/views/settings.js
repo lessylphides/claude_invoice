@@ -23,6 +23,7 @@ function syncLine() {
     offline: '<b class="warn">인터넷 연결이 없어 이 기기에만 저장됨</b> (연결되면 자동으로 올림)',
     error: '<b class="warn">서버 저장에 실패했어요</b> — [지금 동기화]로 다시 시도해 주세요',
     conflict: '<b class="warn">다른 기기와 내용이 달라요</b> — [지금 동기화]를 눌러 고르세요',
+    blocked: '<b class="warn">이용이 정지된 계정이라 서버에 저장할 수 없어요</b> (이 기기에는 저장됨)',
   };
   return map[sync.status] ?? (sync.dirty ? '서버에 올릴 변경이 있어요' : t ? `서버에 저장됨 · ${t}` : '서버와 맞추는 중…');
 }
@@ -62,6 +63,11 @@ async function showOcrUsage(el, planBtn, adminSec) {
       title = `<b>${e.kind === 'owner' ? '운영자 계정' : '시범 운영'}</b>`;
       meters = meter('오늘', u.day, e.day) + meter('이번 달', u.month, e.month);
     }
+    const acc = u.account ?? {};
+    if (acc.suspended) {
+      title = '<b class="warn">이용 정지</b>';
+      meters = `<p class="ci-advice">이용이 정지된 계정이에요.${acc.reason ? ` 사유: ${esc(acc.reason)}` : ''} 문의: hanguk.soek@me.com</p>`;
+    } else if (acc.bonus) meters += `<p class="set-note">추가 인식 <b>${num(acc.bonus)}장</b> 남음 (한도를 다 쓰면 여기서 써요)</p>`;
     el.innerHTML = `<p class="usage-title">${title}</p>${meters}`;
     if (mode !== 'off' && planBtn) planBtn.hidden = false;
     if (st.owner && adminSec) adminSec.hidden = false;

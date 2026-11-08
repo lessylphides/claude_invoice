@@ -18,7 +18,7 @@ const PUSH_DELAY = 1500;
 // owner: 이 기기 장부가 어느 계정 것인지, rev: 마지막으로 서버와 맞춘 번호, dirty: 아직 못 올린 변경이 있음
 let st = readState();
 let uid = null;
-let status = 'idle'; // idle | syncing | offline | error | conflict
+let status = 'idle'; // idle | syncing | offline | error | conflict | blocked
 let timer = null;
 let pushing = null;
 let pushAgain = false;
@@ -74,7 +74,8 @@ async function updateRow(payload, expected) {
 
 const isNetwork = (err) => !navigator.onLine || err?.name === 'TypeError' || /fetch|network|load failed/i.test(err?.message || '');
 function failed(err) {
-  setStatus(isNetwork(err) ? 'offline' : 'error');
+  // 42501: 서버 규칙이 막음 (운영자가 이용을 정지한 계정)
+  setStatus(err?.code === '42501' ? 'blocked' : isNetwork(err) ? 'offline' : 'error');
   console.warn('[sync]', err);
 }
 

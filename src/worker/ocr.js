@@ -28,8 +28,12 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   const usage = await usageNow(sb, ent.since ?? null);
   if (!usage) return fail(503, 'usage', '사용량을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
   const limits = { day: ent.day, month: ent.month, total: ent.total ?? null, kind: ent.kind, plan: ent.plan ?? null };
+  if (usage.account.suspended)
+    return fail(403, 'suspended', `이용이 정지된 계정이에요.${usage.account.reason ? ` (사유: ${usage.account.reason})` : ''} 문의: hanguk.soek@me.com`);
   const over = overLimit(ent, usage);
-  if (over) return fail(429, over.code, over.message, { usage, limits });
+  // 한도를 넘었어도 운영자가 준 추가 인식이 남아 있으면 거기서 1회 차감하고 진행
+  const useBonus = !!over && usage.account.bonus > 0;
+  if (over && !useBonus) return fail(429, over.code, over.message, { usage, limits });
 
   // 3. 사진 확인
   let input;
@@ -69,6 +73,11 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   // 5. 성공한 인식만 기록 (기록에 실패해도 결과는 돌려줌)
   const rec = await sb('/rest/v1/rpc/record_ocr_use', { method: 'POST', body: '{}' }).catch((e) => ({ ok: false, status: String(e) }));
   if (!rec.ok) console.error('[ocr] record usage failed', rec.status);
-  const after = { day: usage.day + 1, month: usage.month + 1, total: usage.total + 1, period: usage.period + 1 };
+  const after = { day: usage.day + 1, month: usage.month + 1, total: usage.total + 1, period: usage.period + 1, account: { ...usage.account } };
+  if (useBonus) {
+    const b = await sb('/rest/v1/rpc/use_bonus', { method: 'POST', body: '{}' }).catch(() => null);
+    if (!b?.ok) console.error('[ocr] use_bonus failed', b?.status);
+    after.account.bonus = Math.max(0, usage.account.bonus - 1);
+  }
   return json(200, { result, usage: after, limits });
 }

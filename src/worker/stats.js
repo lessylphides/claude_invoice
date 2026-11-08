@@ -222,14 +222,48 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
   };
 }
 
+/** 회원 목록 (Supabase 운영자 함수) + 요금제 정보(서버 저장소) */
+async function adminUsers(env, sb, q, now) {
+  const r = await sb('/rest/v1/rpc/admin_users', { method: 'POST', body: JSON.stringify({ q: String(q).slice(0, 100), lim: 50 }) });
+  if (!r.ok) {
+    console.error('[admin] admin_users', r.status, await r.text().catch(() => ''));
+    return fail(502, 'admin_users', '회원 목록을 불러오지 못했어요. Supabase 에서 accounts.sql 을 실행했는지 확인해 주세요.');
+  }
+  const users = (await r.json()) ?? [];
+  const d = db(env);
+  for (const u of users) {
+    const s = d ? await d.get(`sub:${u.id}`) : null;
+    const live = s && (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
+    u.plan = live ? { id: s.plan, name: PLANS[s.plan]?.name ?? s.plan, status: s.status, cancelAtPeriodEnd: !!s.cancelAtPeriodEnd, periodEnd: s.periodEnd } : null;
+  }
+  return json(200, { users });
+}
+
+/** 회원 한 명: 추가 인식 주기·정지/해제 */
+async function adminSetAccount(sb, id, body) {
+  const add = Math.trunc(Number(body.addBonus) || 0);
+  if (Math.abs(add) > 10000) return fail(400, 'bad_request', '한 번에 10,000회까지만 줄 수 있어요.');
+  const payload = { target: id, add_bonus: add, set_suspended: typeof body.suspended === 'boolean' ? body.suspended : null, reason: body.reason ? String(body.reason).slice(0, 200) : null };
+  const r = await sb('/rest/v1/rpc/admin_set_account', { method: 'POST', body: JSON.stringify(payload) });
+  if (!r.ok) {
+    console.error('[admin] admin_set_account', r.status, await r.text().catch(() => ''));
+    return fail(502, 'admin_set', '바꾸지 못했어요. Supabase 에서 accounts.sql 을 실행했는지 확인해 주세요.');
+  }
+  return json(200, { account: await r.json() });
+}
+
 /** GET /api/admin, /api/admin/backup?date=YYYY-MM-DD — 운영자(OWNER_EMAILS)만 */
 export async function handleAdmin(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
   const url = new URL(request.url);
   const backupNow = url.pathname === '/api/admin/backup-now';
-  if (request.method !== (backupNow ? 'POST' : 'GET')) return fail(405, 'method', '허용되지 않은 요청이에요.');
+  const userAction = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})$/);
+  const wantPost = backupNow || !!userAction;
+  if (request.method !== (wantPost ? 'POST' : 'GET')) return fail(405, 'method', '허용되지 않은 요청이에요.');
   const a = await authUser(request, fetchImpl);
   if (a.error) return a.error;
   if (!isOwner(env, a.user.email)) return fail(403, 'forbidden', '운영자만 볼 수 있어요.');
+  if (url.pathname === '/api/admin/users') return adminUsers(env, a.sb, url.searchParams.get('q') || '', now);
+  if (userAction) return adminSetAccount(a.sb, userAction[1], await request.json().catch(() => ({})));
   if (backupNow) {
     const r = await runBackup(env, { fetchImpl, now }).catch((e) => ({ ok: false, error: String(e) }));
     if (r.skipped) return fail(503, 'not_configured', '백업 비밀 값(BACKUP_SECRET)이 서버에 없어요.');

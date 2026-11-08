@@ -4,6 +4,7 @@ import { esc, num } from '../lib/format.js';
 import { PLANS, PLAN_ORDER } from '../lib/plans.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { download } from '../ui/download.js';
+import { openMembers } from './members.js';
 
 const won = (n) => (n == null ? '—' : `${num(n)}원`);
 const md = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
@@ -97,6 +98,9 @@ function render(body, s) {
   const models = Object.entries(o.models).map(([k, v]) => `${esc(k)} ${num(v)}회`).join(' · ') || '—';
   body.innerHTML = `
     <div class="admin">
+      <div class="set-card list">
+        <button type="button" class="set-row" data-act="members"><span class="set-ic" aria-hidden="true">👥</span><span class="grow">회원 관리<small>추가 인식 횟수 주기 · 이용 정지</small></span><span class="chev" aria-hidden="true">›</span></button>
+      </div>
       <p class="muted small">결제 모드: <b>${s.mode === 'live' ? '실제 결제' : s.mode === 'test' ? '시험 결제' : '꺼짐'}</b> · 인식 모델 ${esc(s.model)} · 환율 1달러 ${num(s.fx)}원 기준</p>
 
       <section>
@@ -182,6 +186,7 @@ function render(body, s) {
       <p class="set-foot">AI 비용은 공식 가격표와 실제 사용 토큰으로 계산한 추정치예요. 정확한 청구액은 Anthropic Console 에서 확인하세요.</p>
     </div>`;
 
+  body.querySelector('[data-act=members]').addEventListener('click', openMembers);
   body.querySelectorAll('[data-backup]').forEach((btn) =>
     btn.addEventListener('click', async () => {
       const date = btn.dataset.backup;

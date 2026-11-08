@@ -238,6 +238,11 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
 
   const active = liveSub(sub, now);
 
+  if (action === 'subscribe' || action === 'change') {
+    const acc = (await usageNow(sb))?.account;
+    if (acc?.suspended) return fail(403, 'suspended', '이용이 정지된 계정이라 결제할 수 없어요. 문의: hanguk.soek@me.com');
+  }
+
   if (action === 'subscribe') {
     // 결제창에서 카드 등록을 마치고 돌아온 경우: authKey → 빌링키 발급 → (새 구독이면) 첫 결제
     const plan = planOf(body.plan);

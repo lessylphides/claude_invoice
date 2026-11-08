@@ -33,5 +33,13 @@ export async function usageNow(sb, since = null) {
   }
   const u = await res.json();
   // billing.sql 을 아직 실행하지 않은 경우: total·period 가 없음 → 이번 달 횟수로 대신 (한도를 넉넉하게 주지 않도록)
-  return { day: u.day ?? 0, month: u.month ?? 0, total: u.total ?? u.month ?? 0, period: u.period ?? u.month ?? 0 };
+  const acc = u.account ?? {};
+  return {
+    day: u.day ?? 0,
+    month: u.month ?? 0,
+    total: u.total ?? u.month ?? 0,
+    period: u.period ?? u.month ?? 0,
+    // 운영자가 준 추가 인식·정지 (accounts.sql 실행 전이면 없음)
+    account: { suspended: !!acc.suspended, reason: acc.reason ?? null, bonus: Number(acc.bonus) || 0 },
+  };
 }

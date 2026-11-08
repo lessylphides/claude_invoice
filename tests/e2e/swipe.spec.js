@@ -4,6 +4,7 @@ import { openApp, sheet } from './helpers.js';
 
 /** 시트 안의 selector 요소에서 시작해 아래로 dy 만큼 끌기 (터치 이벤트) */
 async function drag(page, selector, dy, { steps = 8, ms = 300 } = {}) {
+  await expect(page.locator('.sheet-wrap.open').last()).toBeVisible(); // 열리는 동작이 끝난 뒤에만 끌 수 있음
   await page.evaluate(
     async ({ selector, dy, steps, ms }) => {
       const el = document.querySelector(`.sheet-wrap:last-of-type ${selector}`);

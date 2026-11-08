@@ -26,23 +26,42 @@ function syncLine() {
   return map[sync.status] ?? (sync.dirty ? '서버에 올릴 변경이 있어요' : t ? `서버에 저장됨 · ${t}` : '서버와 맞추는 중…');
 }
 
-/** 요금제·영수증 인식 사용량 한 줄 */
+/** 사용량 막대 하나 */
+function meter(label, used, max) {
+  const pct = max ? Math.min(100, Math.round((used / max) * 100)) : 0;
+  const full = max && used >= max;
+  return `<div class="meter${full ? ' full' : ''}">
+    <div class="meter-top"><span>${label}</span><span><b>${num(used)}</b>${max ? ` / ${num(max)}회` : '회'}</span></div>
+    ${max ? `<div class="meter-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>` : ''}
+  </div>`;
+}
+
+/** 요금제·영수증 인식 사용량 */
 async function showOcrUsage(el, planBtn) {
   try {
     const st = await billing.status();
     if (!el.isConnected) return;
     const { entitlement: e, usage: u, subscription: sub, mode } = st;
-    const day = `오늘 ${num(u.day)}/${num(e.day)}회`;
+    let title;
+    let meters;
     if (e.kind === 'plan') {
       const p = PLANS[e.plan];
-      el.innerHTML = `<b>${esc(p.name)} 요금제</b> · ${day} · 이번 결제 기간 ${num(u.period)}${p.month == null ? '회' : `/${num(p.month)}회`}${
-        sub?.status === 'past_due' ? ' · <b class="warn">결제 실패 — 카드를 다시 등록해 주세요</b>' : sub?.cancelAtPeriodEnd ? ' · 해지 예약됨' : ''
-      }`;
+      const badge =
+        sub?.status === 'past_due'
+          ? '<span class="badge warn-badge">결제 실패 — 카드를 다시 등록해 주세요</span>'
+          : sub?.cancelAtPeriodEnd
+            ? '<span class="badge">해지 예약됨</span>'
+            : '<span class="badge ok-badge">이용 중</span>';
+      title = `<b>${esc(p.name)} 요금제</b> ${badge}`;
+      meters = meter('오늘', u.day, e.day) + meter('이번 결제 기간', u.period, p.month);
     } else if (e.kind === 'trial') {
-      el.innerHTML = `<b>무료 체험</b> · ${num(Math.min(u.total, e.total))}/${num(e.total)}장 사용 (${day})`;
+      title = '<b>무료 체험</b> <span class="badge">영수증 자동 인식 20장</span>';
+      meters = meter('무료 체험', Math.min(u.total, e.total), e.total) + meter('오늘', u.day, e.day);
     } else {
-      el.textContent = `${day} · 이번 달 ${num(u.month)}/${num(e.month)}회 사용`;
+      title = `<b>${e.kind === 'owner' ? '운영자 계정' : '시범 운영'}</b>`;
+      meters = meter('오늘', u.day, e.day) + meter('이번 달', u.month, e.month);
     }
+    el.innerHTML = `<p class="usage-title">${title}</p>${meters}`;
     if (mode !== 'off' && planBtn) planBtn.hidden = false;
   } catch {
     if (el.isConnected) el.textContent = '사용량을 불러오지 못했어요.';
@@ -65,35 +84,65 @@ export function openSettings() {
       const s = store.settings;
       body.innerHTML = `
         <form class="settings">
-          <h3 class="sub">계정</h3>
-          <div class="account-row"><p class="small">로그인: <b class="account-email">${esc(auth.user?.email ?? '')}</b></p><button type="button" class="btn ghost small-btn" data-act="logout">로그아웃</button></div>
-          <div class="account-row"><p class="small sync-line">${syncLine()}</p><button type="button" class="btn ghost small-btn" data-act="sync-now">지금 동기화</button></div>
-          <p class="muted small">장부는 계정에 저장되어 다른 기기에서 로그인해도 볼 수 있어요.</p>
+          <section>
+            <h3 class="set-title">계정</h3>
+            <div class="set-card">
+              <div class="set-account">
+                <span class="avatar" aria-hidden="true">${esc((auth.user?.email ?? '?').slice(0, 1).toUpperCase())}</span>
+                <div class="set-account-text">
+                  <b class="account-email">${esc(auth.user?.email ?? '')}</b>
+                  <span class="small sync-line">${syncLine()}</span>
+                </div>
+              </div>
+              <div class="set-actions">
+                <button type="button" class="btn ghost small-btn" data-act="sync-now">지금 동기화</button>
+                <button type="button" class="btn ghost small-btn" data-act="logout">로그아웃</button>
+              </div>
+            </div>
+            <p class="set-note">장부는 계정에 저장되어 다른 기기에서 로그인해도 볼 수 있어요.</p>
+          </section>
 
-          <h3 class="sub">영수증 자동 인식</h3>
-          <div class="account-row"><p class="small ocr-usage">사용량 확인 중…</p><button type="button" class="btn ghost small-btn" data-act="plans" hidden>요금제</button></div>
-          <p class="muted small">사진은 코스트노트 서버를 거쳐 Claude 가 읽습니다. 인식이 끝나면 사진은 서버에 남기지 않아요.</p>
+          <section>
+            <h3 class="set-title">영수증 자동 인식</h3>
+            <div class="set-card list">
+              <div class="set-pad ocr-usage" aria-live="polite">사용량 확인 중…</div>
+              <button type="button" class="set-row" data-act="plans" hidden><span class="set-ic" aria-hidden="true">💳</span><span class="grow">요금제 관리</span><span class="chev" aria-hidden="true">›</span></button>
+            </div>
+            <p class="set-note">사진은 코스트노트 서버를 거쳐 Claude 가 읽고, 인식이 끝나면 서버에 남기지 않아요.</p>
+          </section>
 
-          <h3 class="sub">항목(분류) 목록</h3>
-          <textarea name="cats" rows="6" aria-label="분류 목록, 한 줄에 하나">${esc(store.categories.join('\n'))}</textarea>
-          <p class="muted small">한 줄에 하나씩. 촬영 시 품목이 이 분류 중 하나로 자동 분류됩니다.</p>
-          <div class="actions"><button class="btn primary" type="submit">저장</button></div>
+          <section>
+            <h3 class="set-title">항목(분류) 목록</h3>
+            <div class="set-card">
+              <textarea name="cats" rows="6" aria-label="분류 목록, 한 줄에 하나">${esc(store.categories.join('\n'))}</textarea>
+              <button class="btn primary set-save" type="submit">분류 저장</button>
+            </div>
+            <p class="set-note">한 줄에 하나씩. 영수증을 찍으면 품목이 이 분류 중 하나로 자동 분류돼요.</p>
+          </section>
 
-          <h3 class="sub">데이터</h3>
-          <div class="btn-col">
-            <button class="btn ghost" type="button" data-act="csv">이번 달 CSV 내보내기 (엑셀)</button>
-            <button class="btn ghost" type="button" data-act="backup">전체 백업 파일 저장</button>
-            <button class="btn ghost" type="button" data-act="restore">백업 파일 불러오기</button>
-          </div>
-          <input type="file" accept="application/json,.json" hidden class="restore-file">
-          <p class="small backup-line">${backupLine()}</p>
-          <p class="muted small storage-line">매입 ${num(store.purchases.length)}건 · 메뉴 ${num(store.menus.length)}개</p>
-          <p class="muted small">장부는 서버(계정)와 이 기기에 함께 저장됩니다. 백업 파일은 만일을 위한 추가 사본이에요.</p>
+          <section>
+            <h3 class="set-title">데이터</h3>
+            <div class="set-card list">
+              <button class="set-row" type="button" data-act="csv"><span class="set-ic" aria-hidden="true">📄</span><span class="grow">이번 달 CSV 내보내기<small>엑셀에서 열 수 있어요</small></span><span class="chev" aria-hidden="true">›</span></button>
+              <button class="set-row" type="button" data-act="backup"><span class="set-ic" aria-hidden="true">💾</span><span class="grow">전체 백업 파일 저장<small class="backup-line">${backupLine()}</small></span><span class="chev" aria-hidden="true">›</span></button>
+              <button class="set-row" type="button" data-act="restore"><span class="set-ic" aria-hidden="true">📂</span><span class="grow">백업 파일 불러오기<small>지금 장부를 백업 파일 내용으로 바꿔요</small></span><span class="chev" aria-hidden="true">›</span></button>
+            </div>
+            <input type="file" accept="application/json,.json" hidden class="restore-file">
+            <p class="set-note storage-line">매입 ${num(store.purchases.length)}건 · 메뉴 ${num(store.menus.length)}개</p>
+          </section>
 
-          <h3 class="sub">약관·탈퇴</h3>
-          <p class="small"><a href="https://costnote.co.kr/terms" target="_blank" rel="noopener">이용약관</a> · <a href="https://costnote.co.kr/privacy" target="_blank" rel="noopener">개인정보처리방침</a></p>
-          <button class="btn ghost danger-text" type="button" data-act="delete-account">회원 탈퇴</button>
-          <p class="muted small">탈퇴하면 계정과 서버에 저장된 장부가 바로 지워지고 되돌릴 수 없어요. 필요하면 먼저 백업 파일을 저장하세요.</p>
+          <section>
+            <h3 class="set-title">약관·탈퇴</h3>
+            <div class="set-card list">
+              <a class="set-row" href="https://costnote.co.kr/terms" target="_blank" rel="noopener"><span class="grow">이용약관</span><span class="chev" aria-hidden="true">↗</span></a>
+              <a class="set-row" href="https://costnote.co.kr/privacy" target="_blank" rel="noopener"><span class="grow">개인정보처리방침</span><span class="chev" aria-hidden="true">↗</span></a>
+              <a class="set-row" href="https://costnote.co.kr/refund" target="_blank" rel="noopener"><span class="grow">환불정책</span><span class="chev" aria-hidden="true">↗</span></a>
+              <button class="set-row danger" type="button" data-act="delete-account"><span class="grow">회원 탈퇴</span></button>
+            </div>
+            <p class="set-note">탈퇴하면 계정과 서버에 저장된 장부가 바로 지워지고 되돌릴 수 없어요. 필요하면 먼저 백업 파일을 저장하세요.</p>
+          </section>
+
+          <p class="set-foot">코스트노트 · 문의 hanguk.soek@me.com</p>
         </form>`;
       const form = body.querySelector('form');
       form.addEventListener('submit', (e) => {

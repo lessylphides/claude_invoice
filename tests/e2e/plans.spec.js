@@ -115,7 +115,8 @@ test('결제 기능이 꺼져 있으면 요금제 버튼을 보여 주지 않는
   await fakeBilling(page, { mode: 'off', entitlement: { kind: 'legacy', day: 30, month: 300 } });
   await openApp(page);
   await page.locator('[data-act=settings]').click();
-  await expect(sheet(page).locator('.ocr-usage')).toContainText('오늘 2/30회 · 이번 달 5/300회');
+  await expect(sheet(page).locator('.ocr-usage .meter').first()).toContainText('오늘2 / 30회');
+  await expect(sheet(page).locator('.ocr-usage .meter').nth(1)).toContainText('이번 달5 / 300회');
   await expect(sheet(page).locator('[data-act=plans]')).toBeHidden();
 });
 

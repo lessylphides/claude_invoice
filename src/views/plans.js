@@ -166,12 +166,13 @@ function render(body, st, close) {
   );
 }
 
-export function openPlans() {
+/** @param {object} [known] 방금 받은 상태가 있으면 다시 묻지 않고 그대로 보여 줌 */
+export function openPlans(known = null) {
   openSheet({
     title: '요금제',
     render(body, close) {
       body.innerHTML = '<p class="muted" role="status">불러오는 중…</p>';
-      billing.status().then(
+      (known ? Promise.resolve(known) : billing.status()).then(
         (st) => body.isConnected && render(body, st, close),
         (e) => {
           if (body.isConnected) body.innerHTML = `<p class="warn" role="alert">${esc(e?.message || String(e))}</p>`;
@@ -188,14 +189,15 @@ export async function finishCardRegistration(ret) {
     return toast(`카드를 등록하지 못했어요. ${ret.message ?? ''}`, 5000);
   }
   toast('결제하는 중…', 10000);
+  let st = null;
   try {
     const before = await billing.status().catch(() => null);
     const wasActive = before?.subscription && ['active', 'past_due'].includes(before.subscription.status);
-    const st = await billing.subscribe(ret.plan, ret.authKey, ret.customerKey);
+    st = await billing.subscribe(ret.plan, ret.authKey, ret.customerKey);
     const p = PLANS[st.subscription?.plan];
-    toast(wasActive ? '카드를 바꿨어요.' : `${p?.name ?? ''} 요금제를 시작했어요. 고마워요!`, 4000);
+    toast(wasActive ? '카드를 바꿨어요.' : `${p?.name ?? ''} 요금제를 시작했어요. 고마워요!`, 5000);
   } catch (e) {
     toast(e?.message || String(e), 6000);
   }
-  openPlans();
+  openPlans(st);
 }

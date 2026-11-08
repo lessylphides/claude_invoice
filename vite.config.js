@@ -36,6 +36,7 @@ export default defineConfig({
   plugins: [securityHeaders],
   test: {
     include: ['tests/unit/**/*.test.js'],
+    alias: { 'cloudflare:workers': new URL('./tests/unit/stubs/cloudflare-workers.js', import.meta.url).pathname },
     environment: 'node',
   },
 });

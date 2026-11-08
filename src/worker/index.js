@@ -3,6 +3,7 @@
 import { FILES, CSP, LANDING } from '../../.wrangler-build/assets.js';
 import { handleOcr } from './ocr.js';
 import { handleBilling, runRenewals } from './billing.js';
+export { BillingStore } from './billingStore.js';
 
 const cache = new Map();
 const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));

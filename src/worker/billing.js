@@ -27,11 +27,46 @@ const isOwner = (env, email) =>
     .filter(Boolean)
     .includes(email.toLowerCase());
 
-export async function getSub(env, uid) {
-  if (!env.BILLING || !uid) return null;
-  return (await env.BILLING.get(subKey(uid), 'json')) ?? null;
+/**
+ * 구독 저장소: Durable Object(BILLING_DO, 바로 최신 값) 우선. 예전 KV(BILLING)에만 있는 값은 읽을 때 옮겨 옴.
+ * 테스트에서는 KV 모양의 메모리 저장소만 씀.
+ */
+export function db(env) {
+  if (env.BILLING_DO) {
+    const stub = env.BILLING_DO.get(env.BILLING_DO.idFromName('billing'));
+    return {
+      async get(k) {
+        let v = await stub.read(k);
+        if (v == null && env.BILLING) {
+          v = await env.BILLING.get(k, 'json');
+          if (v != null) await stub.write(k, v);
+        }
+        return v ?? null;
+      },
+      put: (k, v) => stub.write(k, v),
+      list: (prefix, after) => stub.keys(prefix, after),
+      legacy: env.BILLING ?? null,
+    };
+  }
+  if (env.BILLING)
+    return {
+      get: (k) => env.BILLING.get(k, 'json'),
+      put: (k, v) => env.BILLING.put(k, JSON.stringify(v)),
+      async list(prefix, cursor) {
+        const p = await env.BILLING.list({ prefix, cursor: cursor ?? undefined });
+        return { keys: p.keys.map((x) => x.name), next: p.list_complete ? null : p.cursor };
+      },
+      legacy: null,
+    };
+  return null;
 }
-const putSub = (env, sub) => env.BILLING.put(subKey(sub.uid), JSON.stringify(sub));
+
+export async function getSub(env, uid) {
+  const d = db(env);
+  if (!d || !uid) return null;
+  return (await d.get(subKey(uid))) ?? null;
+}
+const putSub = (env, sub) => db(env).put(subKey(sub.uid), sub);
 
 /** 지금 요금제를 쓸 수 있는 구독인지 */
 function liveSub(sub, now) {
@@ -96,6 +131,14 @@ async function toss(env, fetchImpl, path, body, idempotencyKey) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// 토스페이먼츠 카드사 코드 → 이름 (빌링키 발급 응답에 이름 대신 코드만 올 때)
+const CARD_COMPANIES = {
+  '3K': '기업BC', 46: '광주', 71: '롯데', 30: 'KDB산업', 31: 'BC', 51: '삼성', 38: '새마을', 41: '신한', 62: '신협', 36: '씨티',
+  33: '우리', 37: '우체국', 39: '저축', 35: '전북', 42: '제주', 15: '카카오뱅크', '3A': '케이뱅크', 24: '토스뱅크', 21: '하나',
+  61: '현대', 11: 'KB국민', 91: 'NH농협', 34: 'Sh수협',
+};
+export const cardCompanyName = (v) => (v == null ? null : CARD_COMPANIES[v] ?? String(v));
+
 const newOrderId = (now) => `cn-${now.toString(36)}-${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
 
 /** 빌링키로 결제. 성공하면 {ok, payment}, 실패하면 {ok:false, code, message} */
@@ -131,7 +174,7 @@ function publicSub(sub, now) {
     periodEnd: sub.periodEnd,
     cancelAtPeriodEnd: !!sub.cancelAtPeriodEnd,
     nextPlan: sub.nextPlan ?? null,
-    card: sub.card ?? null,
+    card: sub.card ? { ...sub.card, company: cardCompanyName(sub.card.company) } : null,
     lastError: sub.status === 'past_due' ? sub.lastError ?? null : null,
     payments: (sub.payments || []).slice(0, 6).map(({ amount, orderName, at, receipt }) => ({ amount, orderName, at, receipt })),
   };
@@ -164,7 +207,7 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
   if (a.error) return a.error;
   const { user, sb } = a;
   if (!user.id) return fail(401, 'login', '로그인이 만료됐어요. 다시 로그인해 주세요.');
-  if (!env.BILLING) return fail(503, 'not_configured', '결제 기능이 아직 준비되지 않았어요.');
+  if (!db(env)) return fail(503, 'not_configured', '결제 기능이 아직 준비되지 않았어요.');
 
   let sub = await getSub(env, user.id);
   const ok = async () => json(200, await statusBody(env, user, sb, sub, now));
@@ -204,7 +247,7 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
     if (!issued.ok || !issued.data?.billingKey)
       return fail(402, 'card_failed', `카드를 등록하지 못했어요. ${issued.data?.message || '다시 시도해 주세요.'}`);
     const card = {
-      company: issued.data.cardCompany ?? issued.data.card?.issuerCode ?? null,
+      company: cardCompanyName(issued.data.cardCompany ?? issued.data.card?.issuerCode),
       number: issued.data.cardNumber ?? issued.data.card?.number ?? null,
     };
 
@@ -290,12 +333,22 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
 /** 결제일이 지난 구독을 결제·종료. 처리 결과 개수를 돌려줌 (로그용) */
 export async function runRenewals(env, { fetchImpl = fetch, now = Date.now() } = {}) {
   const out = { renewed: 0, failed: 0, ended: 0 };
-  if (!env.BILLING || billingMode(env) === 'off' || !env.TOSS_SECRET_KEY) return out;
-  let cursor;
+  const d = db(env);
+  if (!d || billingMode(env) === 'off' || !env.TOSS_SECRET_KEY) return out;
+  // 예전 KV 에만 있는 구독을 새 저장소로 옮김 (읽으면 옮겨짐)
+  if (d.legacy) {
+    let c;
+    do {
+      const p = await d.legacy.list({ prefix: 'sub:', cursor: c });
+      for (const { name } of p.keys) await d.get(name);
+      c = p.list_complete ? undefined : p.cursor;
+    } while (c);
+  }
+  let cursor = null;
   do {
-    const page = await env.BILLING.list({ prefix: 'sub:', cursor });
-    for (const { name } of page.keys) {
-      const sub = await env.BILLING.get(name, 'json');
+    const page = await d.list('sub:', cursor);
+    for (const name of page.keys) {
+      const sub = await d.get(name);
       if (!sub || (sub.status !== 'active' && sub.status !== 'past_due') || now < sub.periodEnd) continue;
 
       if (sub.cancelAtPeriodEnd || !sub.billingKey) {
@@ -322,9 +375,9 @@ export async function runRenewals(env, { fetchImpl = fetch, now = Date.now() } =
           }
         }
       }
-      await env.BILLING.put(name, JSON.stringify(sub));
+      await d.put(name, sub);
     }
-    cursor = page.list_complete ? undefined : page.cursor;
+    cursor = page.next;
   } while (cursor);
   return out;
 }

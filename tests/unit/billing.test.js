@@ -240,3 +240,34 @@ describe('날짜', () => {
     expect(kstDate(Date.UTC(2026, 10, 30, 16, 0))).toBe('2026-12-01');
   });
 });
+
+describe('구독 저장소', () => {
+  /** Durable Object 흉내: 같은 저장소를 바로 읽고 씀 */
+  function fakeDO() {
+    const m = new Map();
+    const stub = {
+      read: async (k) => m.get(k) ?? null,
+      write: async (k, v) => void m.set(k, structuredClone(v)),
+      keys: async (prefix) => ({ keys: [...m.keys()].filter((k) => k.startsWith(prefix)).sort(), next: null }),
+    };
+    return { m, idFromName: (n) => n, get: () => stub };
+  }
+
+  it('저장하면 바로 읽히고(카드사 코드는 이름으로), 예전 KV 에만 있던 구독은 옮겨 와서 정기결제도 됨', async () => {
+    const BILLING_DO = fakeDO();
+    const kv = memKV();
+    const old = { uid: 'old', email: 'o@x', customerKey: 'cn_old', billingKey: 'bk_old', card: { company: '24', number: '1234' }, plan: 'lite', status: 'active', periodStart: NOW - 1, periodEnd: NOW, payments: [] };
+    await kv.put('sub:old', JSON.stringify(old));
+    const e = env({ BILLING: kv, BILLING_DO });
+
+    const f = fakeFetch();
+    const r = await subscribe(e, f, 'basic');
+    expect(r.body.subscription.card.company).toBe('신한');
+    expect((await call(e, f, '')).body.subscription).toMatchObject({ plan: 'basic', status: 'active' });
+
+    const out = await runRenewals(e, { fetchImpl: f.fetchImpl, now: NOW + 1000 });
+    expect(out.renewed).toBe(1); // 옮겨 온 예전 구독(결제일 지남)
+    expect(BILLING_DO.m.get('sub:old')).toMatchObject({ plan: 'lite', periodStart: NOW });
+    expect(f.toss().at(-1).url).toContain('/billing/bk_old');
+  });
+});

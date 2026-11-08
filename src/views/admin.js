@@ -125,7 +125,8 @@ function render(body, s) {
                 .join('')
             : '<p class="set-pad muted small">아직 백업이 없어요. 매일 오전 10시쯤 자동으로 만들어져요.</p>'
         }</div>
-        <p class="set-note">누르면 그날 모든 장부를 내려받아요(개인 정보가 들어 있으니 안전한 곳에만 보관하세요). 손님 장부를 되살릴 때 써요.</p>
+        <button type="button" class="btn ghost set-save backup-now">지금 백업하기</button>
+        <p class="set-note">날짜를 누르면 그날 모든 장부를 내려받아요(개인 정보가 들어 있으니 안전한 곳에만 보관하세요). 손님 장부를 되살릴 때 써요.</p>
       </section>
 
       <p class="set-foot">AI 비용은 공식 가격표와 실제 사용 토큰으로 계산한 추정치예요. 정확한 청구액은 Anthropic Console 에서 확인하세요.</p>
@@ -147,6 +148,24 @@ function render(body, s) {
       }
     }),
   );
+
+  body.querySelector('.backup-now')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = '백업하는 중…';
+    try {
+      const token = await auth.accessToken();
+      const res = await fetch('./api/admin/backup-now', { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+      const r = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(r?.error?.message || `백업하지 못했어요 (${res.status})`);
+      toast(`백업했어요: 장부 ${num(r.users)}개 · ${num(Math.ceil(r.bytes / 1024))}KB`, 4000);
+      render(body, await load());
+    } catch (err) {
+      toast(err.message, 6000);
+      btn.disabled = false;
+      btn.textContent = '지금 백업하기';
+    }
+  });
 
   const readout = body.querySelector('.chart-readout');
   const show = (btn) => {

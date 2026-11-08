@@ -80,3 +80,22 @@ describe('운영자 화면 숫자', () => {
     expect((await ok.json()).users).toEqual({ total: 12, confirmed: 10 });
   });
 });
+
+describe('지금 백업하기', () => {
+  it('운영자만, 백업 비밀 값이 없으면 안내', async () => {
+    const fetchImpl = async (url) => {
+      const u = String(url);
+      if (u.endsWith('/auth/v1/user')) return new Response(JSON.stringify({ id: 'u', email: 'boss@x.com' }), { status: 200 });
+      if (u.endsWith('/rpc/backup_ledgers')) return new Response('[]', { status: 200 });
+      throw new Error(u);
+    };
+    const req = () => new Request('https://app.costnote.co.kr/api/admin/backup-now', { method: 'POST', headers: { authorization: 'Bearer t' } });
+    const noSecret = await handleAdmin(req(), { BILLING: memKV(), OWNER_EMAILS: 'boss@x.com' }, { fetchImpl, now: NOW });
+    expect(noSecret.status).toBe(503);
+    const kv = memKV();
+    kv.put = async (k, v) => void kv.m.set(k, v);
+    const ok = await handleAdmin(req(), { BILLING: kv, BACKUP_SECRET: 's', OWNER_EMAILS: 'boss@x.com' }, { fetchImpl, now: NOW });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ ok: true, users: 0, date: '2026-11-10' });
+  });
+});

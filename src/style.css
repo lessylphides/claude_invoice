@@ -587,3 +587,4 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .set-row.static { cursor: default; }
 .set-row.static:active { background: none; }
 .set-row.static b { white-space: nowrap; }
+.backup-now { margin-top: 8px; }

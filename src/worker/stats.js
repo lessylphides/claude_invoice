@@ -3,7 +3,7 @@
 import { db, billingMode, kstDate, isOwner } from './billing.js';
 import { PLANS } from '../lib/plans.js';
 import { json, fail, authUser } from './common.js';
-import { listBackups, readBackup } from './backup.js';
+import { listBackups, readBackup, runBackup } from './backup.js';
 
 /** 모델별 가격 (미국 달러, 100만 토큰당 입력/출력) — Anthropic 공식 가격표 */
 const PRICES = {
@@ -176,11 +176,18 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
 
 /** GET /api/admin, /api/admin/backup?date=YYYY-MM-DD — 운영자(OWNER_EMAILS)만 */
 export async function handleAdmin(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
-  if (request.method !== 'GET') return fail(405, 'method', 'GET 만 받습니다.');
+  const url = new URL(request.url);
+  const backupNow = url.pathname === '/api/admin/backup-now';
+  if (request.method !== (backupNow ? 'POST' : 'GET')) return fail(405, 'method', '허용되지 않은 요청이에요.');
   const a = await authUser(request, fetchImpl);
   if (a.error) return a.error;
   if (!isOwner(env, a.user.email)) return fail(403, 'forbidden', '운영자만 볼 수 있어요.');
-  const url = new URL(request.url);
+  if (backupNow) {
+    const r = await runBackup(env, { fetchImpl, now }).catch((e) => ({ ok: false, error: String(e) }));
+    if (r.skipped) return fail(503, 'not_configured', '백업 비밀 값(BACKUP_SECRET)이 서버에 없어요.');
+    if (!r.ok) return fail(502, 'backup_failed', `백업하지 못했어요 (${r.status ?? r.error}). Supabase 의 backup.sql 실행과 Cloudflare 의 BACKUP_SECRET 값이 같은지 확인해 주세요.`);
+    return json(200, r);
+  }
   if (url.pathname === '/api/admin/backup') {
     const date = url.searchParams.get('date') || '';
     const data = await readBackup(env, date).catch((e) => (console.error('[admin] backup', String(e)), null));

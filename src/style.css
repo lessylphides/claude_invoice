@@ -519,3 +519,5 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .plan-manage { margin-top: 12px; }
 .pay-list { list-style: none; padding: 0; margin: 0 0 12px; font-size: 13px; }
 .pay-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.account-row .btn { flex: none; white-space: nowrap; }
+.pay-list li > span:last-child { flex: none; white-space: nowrap; }

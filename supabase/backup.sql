@@ -7,6 +7,7 @@
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 create table if not exists private.settings (k text primary key, v text not null);
+alter table private.settings enable row level security; -- 정책 없음 = 앱에서는 아무도 못 읽음 (함수만 읽음)
 
 -- 비밀 값이 맞을 때만 모든 장부를 돌려줌
 create or replace function public.backup_ledgers(secret text) returns json

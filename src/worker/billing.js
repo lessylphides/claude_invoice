@@ -19,7 +19,7 @@ const subKey = (uid) => `sub:${uid}`;
 /** 한국 날짜 'YYYY-MM-DD' */
 export const kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
-const isOwner = (env, email) =>
+export const isOwner = (env, email) =>
   !!email &&
   String(env.OWNER_EMAILS || '')
     .split(',')
@@ -185,6 +185,7 @@ async function statusBody(env, user, sb, sub, now) {
   const usage = await usageNow(sb, ent.since ?? null);
   return {
     mode: billingMode(env),
+    owner: isOwner(env, user.email),
     customerKey: customerKeyFor(user.id),
     subscription: publicSub(sub, now),
     entitlement: ent,

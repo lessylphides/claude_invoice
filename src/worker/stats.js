@@ -1,0 +1,188 @@
+// 서버 운영 통계: 영수증 인식마다 실제 AI 비용을 기록하고, 운영자 화면(/api/admin)에 모아 보여 줌
+// 기록은 서버 저장소(Durable Object)에만 남고, 사진·인식 내용은 기록하지 않음 (횟수·토큰·비용만)
+import { db, billingMode, kstDate, isOwner } from './billing.js';
+import { PLANS } from '../lib/plans.js';
+import { json, fail, authUser } from './common.js';
+
+/** 모델별 가격 (미국 달러, 100만 토큰당 입력/출력) — Anthropic 공식 가격표 */
+const PRICES = {
+  'claude-opus-5-5': [4, 20],
+  'claude-opus-5': [5, 25],
+  'claude-opus-4-8': [5, 25],
+  'claude-sonnet-5-5': [2, 10],
+  'claude-sonnet-5': [2, 10],
+  'claude-haiku-5-5': [0.1, 0.5],
+  'claude-fable-5-1': [10, 50],
+};
+
+/** 응답 사용량(usage)으로 이번 호출 비용(달러) 계산. 캐시 쓰기 1.25배, 캐시 읽기 0.1배 */
+export function costUsd(model, usage = {}) {
+  const [inP, outP] = PRICES[model] ?? PRICES['claude-opus-5-5'];
+  const input = usage.input_tokens ?? 0;
+  const cw = usage.cache_creation_input_tokens ?? 0;
+  const cr = usage.cache_read_input_tokens ?? 0;
+  const output = usage.output_tokens ?? 0;
+  return (input * inP + cw * inP * 1.25 + cr * inP * 0.1 + output * outP) / 1e6;
+}
+
+/** 통계 한 건을 더함 (Durable Object 안에서 순서대로 처리되어 동시에 와도 빠지지 않음) */
+export function applyOcrStat(day, month, s) {
+  day.count += s.ok ? 1 : 0;
+  day.failed += s.ok ? 0 : 1;
+  day.input += s.input;
+  day.output += s.output;
+  day.cost += s.cost;
+  day.models[s.model] = (day.models[s.model] || 0) + 1;
+  if (s.ok) month.users[s.uid] = (month.users[s.uid] || 0) + 1;
+  month.count += s.ok ? 1 : 0;
+  month.cost += s.cost;
+}
+export const emptyDay = () => ({ count: 0, failed: 0, input: 0, output: 0, cost: 0, models: {} });
+export const emptyMonth = () => ({ count: 0, cost: 0, users: {} });
+
+/**
+ * 인식 한 번(성공이든 실패든 Claude 를 부른 경우)을 기록. 실패해도 인식 결과에는 영향 없음
+ * @param {{uid: string, model: string, usage: object, ok: boolean, now?: number}} s
+ */
+export async function recordOcrStat(env, { uid, model, usage, ok, now = Date.now() }) {
+  const d = db(env);
+  if (!d) return;
+  const date = kstDate(now);
+  const stat = {
+    uid,
+    model: model || 'unknown',
+    ok,
+    input: (usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0),
+    output: usage?.output_tokens ?? 0,
+    cost: costUsd(model, usage),
+  };
+  if (env.BILLING_DO) {
+    await env.BILLING_DO.get(env.BILLING_DO.idFromName('billing')).addOcrStat(date, date.slice(0, 7), stat);
+    return;
+  }
+  // 테스트(메모리 저장소)용
+  const dk = `stat:day:${date}`;
+  const mk = `stat:month:${date.slice(0, 7)}`;
+  const day = (await d.get(dk)) ?? emptyDay();
+  const month = (await d.get(mk)) ?? emptyMonth();
+  applyOcrStat(day, month, stat);
+  await d.put(dk, day);
+  await d.put(mk, month);
+}
+
+async function listAll(d, prefix) {
+  const out = [];
+  let after = null;
+  do {
+    const page = await d.list(prefix, after);
+    out.push(...page.keys);
+    after = page.next;
+  } while (after);
+  return out;
+}
+
+/** 이번 달 사용자별 인식 횟수를 구간으로 */
+function distribution(users) {
+  const counts = Object.values(users);
+  const buckets = [
+    ['1~20장', 1, 20],
+    ['21~50장', 21, 50],
+    ['51~120장', 51, 120],
+    ['121~250장', 121, 250],
+    ['251장 이상', 251, Infinity],
+  ].map(([label, lo, hi]) => ({ label, users: counts.filter((c) => c >= lo && c <= hi).length }));
+  const sorted = [...counts].sort((a, b) => a - b);
+  return {
+    users: counts.length,
+    avg: counts.length ? counts.reduce((a, b) => a + b, 0) / counts.length : 0,
+    median: sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0,
+    max: sorted.at(-1) ?? 0,
+    buckets,
+  };
+}
+
+/** 운영자 화면 숫자 모으기 */
+export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KRW) || 1450 } = {}) {
+  const d = db(env);
+  const today = kstDate(now);
+  const month = today.slice(0, 7);
+  const since30 = kstDate(now - 29 * 86400000);
+
+  // 영수증 인식: 최근 30일 날짜별
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const date = kstDate(now - i * 86400000);
+    days.push({ date, ...((d && (await d.get(`stat:day:${date}`))) || emptyDay()) });
+  }
+  const sum = (k) => days.reduce((a, x) => a + x[k], 0);
+  const ok30 = sum('count');
+  const cost30 = sum('cost');
+  const models = {};
+  for (const x of days) for (const [m, n] of Object.entries(x.models)) models[m] = (models[m] || 0) + n;
+  const thisMonth = (d && (await d.get(`stat:month:${month}`))) || emptyMonth();
+
+  // 구독
+  const subs = d ? await Promise.all((await listAll(d, 'sub:')).map((k) => d.get(k))) : [];
+  const byPlan = Object.fromEntries(Object.keys(PLANS).map((id) => [id, 0]));
+  let mrr = 0;
+  let canceling = 0;
+  let pastDue = 0;
+  let paid30 = 0;
+  const payments = [];
+  for (const s of subs) {
+    if (!s) continue;
+    const live = (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
+    if (live && PLANS[s.plan]) {
+      byPlan[s.plan]++;
+      if (!s.cancelAtPeriodEnd) mrr += PLANS[s.nextPlan || s.plan].price;
+      if (s.cancelAtPeriodEnd) canceling++;
+      if (s.status === 'past_due') pastDue++;
+    }
+    for (const p of s.payments || []) {
+      if (p.at >= now - 30 * 86400000) paid30 += p.amount;
+      payments.push({ email: s.email, amount: p.amount, orderName: p.orderName, at: p.at });
+    }
+  }
+  payments.sort((a, b) => b.at - a.at);
+
+  return {
+    mode: billingMode(env),
+    fx,
+    model: env.OCR_MODEL || 'claude-opus-5-5',
+    ocr: {
+      days: days.map(({ date, count, failed, cost }) => ({ date, count, failed, costKrw: Math.round(cost * fx) })),
+      count30: ok30,
+      failed30: sum('failed'),
+      costKrw30: Math.round(cost30 * fx),
+      perReceiptKrw: ok30 ? Math.round((cost30 * fx) / ok30) : null,
+      avgInput: ok30 + sum('failed') ? Math.round(sum('input') / (ok30 + sum('failed'))) : null,
+      avgOutput: ok30 + sum('failed') ? Math.round(sum('output') / (ok30 + sum('failed'))) : null,
+      models,
+      since: since30,
+      month: { key: month, count: thisMonth.count, costKrw: Math.round(thisMonth.cost * fx), ...distribution(thisMonth.users) },
+    },
+    billing: {
+      paying: Object.values(byPlan).reduce((a, b) => a + b, 0),
+      byPlan,
+      mrr,
+      canceling,
+      pastDue,
+      paid30,
+      payments: payments.slice(0, 10),
+    },
+  };
+}
+
+/** GET /api/admin — 운영자(OWNER_EMAILS)만 */
+export async function handleAdmin(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
+  if (request.method !== 'GET') return fail(405, 'method', 'GET 만 받습니다.');
+  const a = await authUser(request, fetchImpl);
+  if (a.error) return a.error;
+  if (!isOwner(env, a.user.email)) return fail(403, 'forbidden', '운영자만 볼 수 있어요.');
+  // 가입자 수는 Supabase 의 운영자 전용 함수(admin_stats)로 (서버에 관리자 키를 두지 않음)
+  let users = null;
+  const r = await a.sb('/rest/v1/rpc/admin_stats', { method: 'POST', body: '{}' }).catch(() => null);
+  if (r?.ok) users = await r.json().catch(() => null);
+  else console.error('[admin] admin_stats', r?.status);
+  return json(200, { ...(await adminStats(env, { now })), users });
+}

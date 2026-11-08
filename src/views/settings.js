@@ -14,6 +14,7 @@ import { sync } from '../sync.js';
 import { billing } from '../billing.js';
 import { PLANS } from '../lib/plans.js';
 import { openPlans } from './plans.js';
+import { openAdmin } from './admin.js';
 
 function syncLine() {
   const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -37,7 +38,7 @@ function meter(label, used, max) {
 }
 
 /** 요금제·영수증 인식 사용량 */
-async function showOcrUsage(el, planBtn) {
+async function showOcrUsage(el, planBtn, adminSec) {
   try {
     const st = await billing.status();
     if (!el.isConnected) return;
@@ -63,6 +64,7 @@ async function showOcrUsage(el, planBtn) {
     }
     el.innerHTML = `<p class="usage-title">${title}</p>${meters}`;
     if (mode !== 'off' && planBtn) planBtn.hidden = false;
+    if (st.owner && adminSec) adminSec.hidden = false;
   } catch {
     if (el.isConnected) el.textContent = '사용량을 불러오지 못했어요.';
   }
@@ -84,6 +86,13 @@ export function openSettings() {
       const s = store.settings;
       body.innerHTML = `
         <form class="settings">
+          <section class="admin-sec" hidden>
+            <h3 class="set-title">운영자</h3>
+            <div class="set-card list">
+              <button type="button" class="set-row" data-act="admin"><span class="set-ic" aria-hidden="true">📈</span><span class="grow">운영 현황<small>가입자 · 구독·매출 · 인식량·AI 비용</small></span><span class="chev" aria-hidden="true">›</span></button>
+            </div>
+          </section>
+
           <section>
             <h3 class="set-title">계정</h3>
             <div class="set-card">
@@ -152,7 +161,11 @@ export function openSettings() {
         close();
       });
       const planBtn = body.querySelector('[data-act=plans]');
-      showOcrUsage(body.querySelector('.ocr-usage'), planBtn);
+      showOcrUsage(body.querySelector('.ocr-usage'), planBtn, body.querySelector('.admin-sec'));
+      body.querySelector('[data-act=admin]').addEventListener('click', () => {
+        close();
+        openAdmin();
+      });
       planBtn.addEventListener('click', () => {
         close();
         openPlans();

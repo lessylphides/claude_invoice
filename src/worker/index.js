@@ -3,6 +3,7 @@
 import { FILES, CSP, LANDING } from '../../.wrangler-build/assets.js';
 import { handleOcr } from './ocr.js';
 import { handleBilling, runRenewals } from './billing.js';
+import { handleAdmin } from './stats.js';
 export { BillingStore } from './billingStore.js';
 
 const cache = new Map();
@@ -38,6 +39,7 @@ export default {
     if (url.hostname === 'www.costnote.co.kr') return Response.redirect(`https://costnote.co.kr${url.pathname}${url.search}`, 301);
     if (url.hostname === 'costnote.co.kr') return serveFile(request, url, LANDING, LANDING_CSP, 'landing');
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
+    if (url.pathname === '/api/admin') return handleAdmin(request, env);
     if (url.pathname === '/api/billing' || url.pathname.startsWith('/api/billing/')) return handleBilling(request, env);
     if (url.pathname.startsWith('/api/')) return new Response('Not Found', { status: 404 });
     return serveFile(request, url);

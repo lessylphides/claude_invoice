@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { validateOcrInput, buildOcrRequest, parseOcrResponse } from '../lib/ocrRequest.js';
 import { fail, json, authUser, usageNow } from './common.js';
 import { entitlement, overLimit, getSub } from './billing.js';
+import { recordOcrStat } from './stats.js';
 
 export const DEFAULTS = { model: 'claude-opus-5-5', daily: 30, monthly: 300 };
 
@@ -53,11 +54,17 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
     return fail(502, 'upstream', '영수증 인식 중 문제가 생겼어요. 잠시 후 다시 시도하거나 직접 입력해 주세요.');
   }
   let result;
+  let parseError = null;
   try {
     result = parseOcrResponse(res);
   } catch (e) {
-    return fail(422, e.code || 'bad_result', e.message);
+    parseError = e;
   }
+  // 운영 통계: 실제로 든 AI 비용 (인식이 실패해도 비용은 들었으므로 기록)
+  await recordOcrStat(env, { uid: user.id, model: res.model, usage: res.usage, ok: !parseError, now }).catch((e) =>
+    console.error('[ocr] stat', String(e)),
+  );
+  if (parseError) return fail(422, parseError.code || 'bad_result', parseError.message);
 
   // 5. 성공한 인식만 기록 (기록에 실패해도 결과는 돌려줌)
   const rec = await sb('/rest/v1/rpc/record_ocr_use', { method: 'POST', body: '{}' }).catch((e) => ({ ok: false, status: String(e) }));

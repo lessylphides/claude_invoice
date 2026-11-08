@@ -84,7 +84,11 @@ test('새 영수증에 비슷한 이름이 있으면 저장 후 "같은 품목�
   await expect(ask.locator('.same-ask li')).toContainText('↔ 러셀싱글베럴');
   await expect(ask.locator('.same-ask li')).toContainText('코스트코 · 최근 70,000원');
   await ask.locator('[data-same="0"]').click();
-  await expect(page.locator('.sheet-wrap')).toHaveCount(0); // 다 답하면 닫힘
+  // 같은 품목으로 묶으면 새 매입가(73,000원)가 '러셀 한 잔' 원가에 반영되어 원가 변동 알림이 이어서 뜸
+  await expect(sheet(page).locator('.sheet-head h2')).toHaveText('원가가 바뀐 메뉴');
+  await expect(sheet(page).locator('.ci-menu')).toContainText('러셀 한 잔');
+  await sheet(page).locator('[data-ci=ok]').click();
+  await expect(page.locator('.sheet-wrap')).toHaveCount(0);
   await waitSaved(page, (x) => x?.itemLinks?.['러셀싱글배럴750'] === '러셀싱글베럴');
 
   // 용량도 묶음의 기록(750ml)을 따라감

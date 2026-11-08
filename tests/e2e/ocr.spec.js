@@ -146,3 +146,24 @@ test('직접 입력 중 품목명을 적으면 이전 용량을 채우고 포커
   // 포커스가 문서 밖(body)으로 빠지지 않음
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
 });
+
+test('인식 결과를 저장하면 고친 개수만 서버로 보낸다 (내용은 보내지 않음)', async ({ page }) => {
+  await openApp(page);
+  await mockClaude(page, () => costco);
+  const feedback = [];
+  await page.route('**/api/ocr/feedback', async (route) => {
+    feedback.push({ body: JSON.parse(route.request().postData()), auth: route.request().headers()['authorization'] });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.locator('#cam').setInputFiles(PHOTO);
+  const form = page.locator('form.editor');
+  await form.locator('[name=vendor]').fill('코스트코 양재');
+  await form.locator('.item-edit').first().locator('[data-f=name]').fill('멈 꼬르동루즈 750ml');
+  await form.locator('button[type=submit]').click();
+  await expect.poll(() => feedback.length).toBe(1);
+  expect(feedback[0].auth).toBe('Bearer test-access-token');
+  expect(feedback[0].body).toMatchObject({ receipts: 1, untouched: 0, vendor: 1, name: 1, price: 0, date: 0, items: 4 });
+  const sent = JSON.stringify(feedback[0].body);
+  expect(sent).not.toContain('코스트코');
+  expect(sent).not.toContain('꼬르동');
+});

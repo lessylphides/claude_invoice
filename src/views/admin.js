@@ -21,7 +21,9 @@ const tile = (label, value, sub = '') =>
 
 /** 최근 30일 날짜별 인식 수 막대 (한 계열이라 범례 없음, 누르면 그날 숫자) */
 function dailyChart(days) {
-  const max = Math.max(1, ...days.map((d) => d.count + d.failed));
+  const top = Math.max(...days.map((d) => d.count + d.failed));
+  if (!top) return '<p class="set-note">최근 30일 동안 인식 기록이 아직 없어요.</p>';
+  const max = top;
   const bars = days
     .map((d, i) => {
       const h = Math.round(((d.count + d.failed) / max) * 100);
@@ -34,6 +36,48 @@ function dailyChart(days) {
     <div class="bars" role="group" aria-label="최근 30일 날짜별 영수증 인식 수">${bars}</div>
     <div class="bars-axis"><span>${md(days[0].date)}</span><span>최대 ${num(max)}장</span><span>${md(days.at(-1).date)}</span></div>
   </div>`;
+}
+
+const pct = (n) => `${Math.round(n * 100)}%`;
+
+/** 인식 정확도 (모델별): 고치지 않은 비율과 항목별로 맞은 비율 */
+function accuracyBlock(accuracy) {
+  const models = Object.entries(accuracy || {}).filter(([, a]) => a.receipts);
+  if (!models.length) return '<div class="set-card"><p class="set-note">아직 기록이 없어요. 손님이 인식 결과를 저장하면 쌓여요.</p></div>';
+  return models
+    .map(([model, a]) => {
+      const saved = a.receipts - a.discarded;
+      const kept = Math.max(0, a.items - a.itemsRemoved);
+      const rows = saved
+        ? [
+            ['날짜', 1 - a.date / saved],
+            ['거래처', 1 - a.vendor / saved],
+            ['합계', 1 - a.total / saved],
+            ...(kept
+              ? [
+                  ['품목 이름', 1 - a.name / kept],
+                  ['단가·금액', 1 - a.price / kept],
+                  ['수량', 1 - a.qty / kept],
+                  ['분류', 1 - a.category / kept],
+                ]
+              : []),
+          ]
+        : [];
+      return `<div class="set-card chart-card">
+        <p class="usage-title"><b>${esc(model)}</b></p>
+        <div class="stat-grid">
+          ${tile('고치지 않고 저장', saved ? pct(a.untouched / saved) : '—', `저장 ${num(saved)}건 · 취소 ${num(a.discarded)}건`)}
+          ${tile('품목 빠뜨림 · 잘못 넣음', `${num(a.itemsAdded)} · ${num(a.itemsRemoved)}`, `인식한 품목 ${num(a.items)}개 중`)}
+        </div>
+        <div class="hbars acc-bars">${rows
+          .map(
+            ([label, v]) =>
+              `<div class="hbar-row"><span class="hbar-label">${label}</span><span class="hbar-track"><i style="width:${Math.round(Math.max(0, v) * 100)}%"></i></span><span class="hbar-val">${pct(Math.max(0, v))}</span></div>`,
+          )
+          .join('')}</div>
+      </div>`;
+    })
+    .join('');
 }
 
 /** 사용자별 이번 달 인식량 분포 (가로 막대) */
@@ -89,6 +133,12 @@ function render(body, s) {
         </div>
         <div class="set-card chart-card">${dailyChart(o.days)}</div>
         <p class="set-note">모델별 호출: ${models}</p>
+      </section>
+
+      <section>
+        <h3 class="set-title">인식 정확도 (최근 30일)</h3>
+        ${accuracyBlock(o.accuracy)}
+        <p class="set-note">손님이 인식 결과를 저장할 때 고친 곳을 셌어요(내용은 모으지 않고 개수만). 항목별 %는 고치지 않은 비율이에요. 건수가 적으면 숫자가 크게 흔들려요.</p>
       </section>
 
       <section>

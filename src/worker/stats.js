@@ -2,6 +2,7 @@
 // 기록은 서버 저장소(Durable Object)에만 남고, 사진·인식 내용은 기록하지 않음 (횟수·토큰·비용만)
 import { db, billingMode, kstDate, isOwner } from './billing.js';
 import { PLANS } from '../lib/plans.js';
+import { ACC_FIELDS } from '../lib/ocrAccuracy.js';
 import { json, fail, authUser } from './common.js';
 import { listBackups, readBackup, runBackup } from './backup.js';
 
@@ -71,6 +72,45 @@ export async function recordOcrStat(env, { uid, model, usage, ok, now = Date.now
   await d.put(mk, month);
 }
 
+/** 정확도 통계 한 건 더하기: {모델: {receipts, untouched, ...}} */
+export function applyAccStat(day, model, edits) {
+  const m = (day[model] ||= Object.fromEntries(ACC_FIELDS.map((k) => [k, 0])));
+  for (const k of ACC_FIELDS) m[k] += edits[k] || 0;
+}
+
+/** 받은 숫자 검사 (0~200 정수만, 그 밖은 버림) */
+export function cleanEdits(body) {
+  if (!body || typeof body !== 'object') return null;
+  const out = {};
+  for (const k of ACC_FIELDS) {
+    const v = Number(body[k] ?? 0);
+    if (!Number.isInteger(v) || v < 0 || v > 200) return null;
+    out[k] = v;
+  }
+  return out.receipts === 1 ? out : null;
+}
+
+/** POST /api/ocr/feedback — 인식 결과를 얼마나 고쳤는지 (숫자만) */
+export async function handleOcrFeedback(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
+  if (request.method !== 'POST') return fail(405, 'method', 'POST 만 받습니다.');
+  const a = await authUser(request, fetchImpl);
+  if (a.error) return a.error;
+  const edits = cleanEdits(await request.json().catch(() => null));
+  if (!edits) return fail(400, 'bad_request', '형식이 올바르지 않아요.');
+  const model = env.OCR_MODEL || 'claude-opus-5-5';
+  const date = kstDate(now);
+  if (env.BILLING_DO) await env.BILLING_DO.get(env.BILLING_DO.idFromName('billing')).addAccStat(date, model, edits);
+  else {
+    const d = db(env);
+    if (!d) return json(200, { ok: false });
+    const k = `stat:acc:${date}`;
+    const day = (await d.get(k)) ?? {};
+    applyAccStat(day, model, edits);
+    await d.put(k, day);
+  }
+  return json(200, { ok: true });
+}
+
 async function listAll(d, prefix) {
   const out = [];
   let after = null;
@@ -122,6 +162,13 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
   for (const x of days) for (const [m, n] of Object.entries(x.models)) models[m] = (models[m] || 0) + n;
   const thisMonth = (d && (await d.get(`stat:month:${month}`))) || emptyMonth();
 
+  // 인식 정확도: 최근 30일 모델별 합계
+  const accuracy = {};
+  for (const x of days) {
+    const acc = (d && (await d.get(`stat:acc:${x.date}`))) || {};
+    for (const [model, v] of Object.entries(acc)) applyAccStat(accuracy, model, v);
+  }
+
   // 구독
   const subs = d ? await Promise.all((await listAll(d, 'sub:')).map((k) => d.get(k))) : [];
   const byPlan = Object.fromEntries(Object.keys(PLANS).map((id) => [id, 0]));
@@ -161,6 +208,7 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
       models,
       since: since30,
       month: { key: month, count: thisMonth.count, costKrw: Math.round(thisMonth.cost * fx), ...distribution(thisMonth.users) },
+      accuracy,
     },
     billing: {
       paying: Object.values(byPlan).reduce((a, b) => a + b, 0),

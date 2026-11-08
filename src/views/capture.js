@@ -97,16 +97,36 @@ async function handleFiles(files) {
   let lastSaved = null;
   for (let i = 0; i < groups.length; i++) {
     const r = results[i];
-    const saved =
-      r.status === 'fulfilled'
-        ? await openEditor(...withNote(draftFromOcr(r.value, fallbackDate, (n) => store.index.spec(n)), groups[i]))
-        : await openEditor({ date: fallbackDate }, { imageFiles: groups[i], note: `자동 인식 실패: ${r.reason?.message || r.reason}` });
+    let saved;
+    if (r.status === 'fulfilled') {
+      const made = draftFromOcr(r.value, fallbackDate, (n) => store.index.spec(n));
+      const before = structuredClone(made.draft);
+      saved = await openEditor(...withNote(made, groups[i]));
+      sendOcrFeedback(before, saved ?? null); // 인식 정확도 통계 (고친 개수만)
+    } else {
+      saved = await openEditor({ date: fallbackDate }, { imageFiles: groups[i], note: `자동 인식 실패: ${r.reason?.message || r.reason}` });
+    }
     if (saved) lastSaved = saved;
   }
   if (lastSaved && !view.selectedDate) goToMonth(lastSaved.date);
 }
 
 const withNote = ({ draft, note }, imageFiles) => [draft, { imageFiles, note }];
+
+/** 인식 결과를 얼마나 고쳤는지 숫자만 서버로 (실패해도 조용히 넘어감) */
+async function sendOcrFeedback(before, saved) {
+  try {
+    const [{ ocrEdits }, { auth }] = await Promise.all([import('../lib/ocrAccuracy.js'), import('../auth.js')]);
+    const token = await auth.accessToken();
+    if (!token) return;
+    await fetch('./api/ocr/feedback', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify(ocrEdits(before, saved)),
+      keepalive: true,
+    });
+  } catch {}
+}
 
 /** 한가할 때 인식 코드를 미리 받아 둠 (첫 촬영이 기다리지 않게, 서비스워커가 오프라인용으로 보관) */
 export function preloadOcr() {

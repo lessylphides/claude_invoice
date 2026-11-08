@@ -588,3 +588,4 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .set-row.static:active { background: none; }
 .set-row.static b { white-space: nowrap; }
 .backup-now { margin-top: 8px; }
+.acc-bars { margin-top: 12px; } .acc-bars .hbar-row { grid-template-columns: 76px 1fr 44px; } .chart-card + .chart-card { margin-top: 8px; }

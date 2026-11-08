@@ -58,3 +58,17 @@ test('값이 그대로면 알림 없음, 내리기만 하면 짧은 안내만', 
   await expect(page.locator('.toast').last()).toContainText('메뉴 2개의 원가가 낮아졌어요');
   await expect(page.locator('.sheet-wrap')).toHaveCount(0);
 });
+
+test('박스로 산 거래명세서(1L×12)도 병 기준으로 맞춰 비교하고 가격 추이에 환산 안내', async ({ page }) => {
+  await openApp(page, { data: data() });
+  await mockClaude(page, () => ({ documentType: '거래명세서', date: '2026-11-04', vendor: '우유대리점', paymentHint: 'tax', total: 33600,
+    items: [ocrItem('서울우유 1L', '유제품·계란', 33600, { unit: 'BOX', packSize: 12000, packUnit: 'ml' })] }));
+  await page.locator('#cam').setInputFiles(PHOTO);
+  const form = page.locator('form.editor');
+  await expect(form.locator('[data-f=packSize]')).toHaveValue('12000'); // 예전 1L 기록으로 덮어쓰지 않음
+  await form.locator('button[type=submit]').click();
+  const s = sheet(page);
+  await expect(s.locator('.ci-items')).toContainText('30,000원 → 33,600원');
+  await expect(s.locator('.ci-items')).toContainText('용량 환산');
+  await expect(s.locator('.ci-menu', { hasText: '카페라떼' })).toContainText('▲60');
+});

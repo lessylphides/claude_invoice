@@ -1,12 +1,16 @@
 // 가격 추이: 같은 품목의 매입 단가 그래프·요약·이력 (거래처별로 거르기)
 import { esc, normKey, num, shortDate, won } from '../lib/format.js';
-import { pricePoints, priceStats } from '../lib/aggregate.js';
+import { pricePoints, priceStats, normalizePoints } from '../lib/aggregate.js';
 import { renderTrendChart } from '../ui/chart.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { view, goToMonth } from '../state.js';
 import { openDay } from './day.js';
 import { pickItem } from './itemPicker.js';
+
+/** 1000ml → 1L, 12000ml → 12L, 500g → 500g */
+const packLabel = ({ packSize, packUnit }) =>
+  packUnit === 'ml' && packSize >= 1000 ? `${num(packSize / 1000)}L` : packUnit === 'g' && packSize >= 1000 ? `${num(packSize / 1000)}kg` : `${num(packSize)}${packUnit}`;
 
 /** @param {string|null} vendor 날짜 화면에서 그 거래처 품목을 눌렀으면 그 거래처 기준으로 시작 */
 export function openTrend(name, vendor = null) {
@@ -20,7 +24,9 @@ export function openTrend(name, vendor = null) {
     render(body, close, redraw) {
       const all = pricePoints(store.index, name);
       const vendors = [...new Set(all.map((p) => p.vendor))];
-      const pts = scope === 'all' ? all : all.filter((p) => sameVendor(p.vendor));
+      const raw = scope === 'all' ? all : all.filter((p) => sameVendor(p.vendor));
+      // 병·박스처럼 용량이 다른 매입이 섞이면 최근 용량 기준으로 단가를 맞춰 비교
+      const { points: pts, base } = normalizePoints(raw);
       const s = priceStats(pts);
       const dir = s.diff > 0 ? 'up' : s.diff < 0 ? 'down' : '';
 
@@ -43,6 +49,7 @@ export function openTrend(name, vendor = null) {
         </div>
         <div class="chart-host"></div>
         <p class="muted small center">그래프를 누르면 날짜별 단가를 볼 수 있습니다 · 쿠폰·할인을 뺀 실제 매입 단가(수량 1당) 기준</p>
+        ${base ? `<p class="notice small">용량이 다른 매입(낱개·박스)이 섞여 있어 <b>${packLabel(base)}</b> 기준으로 단가를 환산해 비교했어요.</p>` : ''}
         ${sameItemSection(name)}
         <table class="hist">
           <caption class="sr-only">${esc(name)} 매입 이력</caption>
@@ -51,8 +58,8 @@ export function openTrend(name, vendor = null) {
             .reverse()
             .map(
               (p) => `<tr><td><button class="link" data-date="${p.date}">${shortDate(p.date)}</button></td><td>${esc(p.vendor)}</td><td>${p.qty ? num(p.qty) + esc(p.unit || '') : ''}</td><td>${num(p.price)}${
-                p.discount ? `<small class="disc">정가 ${num(p.listPrice)}<br>-${num(p.discount)}</small>` : ''
-              }</td><td>${num(p.amount)}</td></tr>`,
+                p.origPrice != null ? `<small class="disc">${packLabel(p)} ${num(p.origPrice)}원에서 환산</small>` : ''
+              }${p.discount ? `<small class="disc">정가 ${num(p.listPrice)}<br>-${num(p.discount)}</small>` : ''}</td><td>${num(p.amount)}</td></tr>`,
             )
             .join('')}</tbody>
         </table>`;

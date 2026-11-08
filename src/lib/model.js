@@ -79,18 +79,33 @@ export function netUnitPrice(i) {
 
 export const purchaseTotal = (p) => p.items.reduce((s, i) => s + toNum(i.amount), 0);
 
-/** 품목 이름에서 용량 추정: '몽키숄더700ML' → 700 ml, '휘핑크림 2L' → 2000 ml, '블루베리510G' → 510 g */
+/**
+ * 품목 이름에서 용량 추정: '몽키숄더700ML' → 700 ml, '휘핑크림 2L' → 2000 ml, '블루베리510G' → 510 g
+ * 낱개 용량 × 개수 묶음이면 전체 양: '서울우유 1L×12' → 12000 ml, '생수500ml*20' → 10000 ml
+ */
 export function guessPack(name) {
+  const s = String(name ?? '').replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
   // 단위 뒤에 다른 글자가 붙으면 단위가 아님(예: 5Lemon). 단, 묶음 표시 X(330MLX24)는 허용
-  const all = [...String(name ?? '').matchAll(/(\d+(?:\.\d+)?)\s*(ml|l|kg|g)(?![a-wyz])/gi)];
+  const all = [...s.matchAll(/(\d+(?:\.\d+)?)\s*(ml|l|kg|g)(?![a-wyz])(?:\s*[x×*]\s*(\d+)(?!\s*(?:ml|l|kg|g)))?/gi)];
   if (!all.length) return null;
-  const [, n, u] = all.at(-1);
-  const v = Number(n);
+  const [, n, u, times] = all.at(-1);
+  const v = Number(n) * (Number(times) > 1 ? Number(times) : 1);
   const unit = u.toLowerCase();
   if (!v) return null;
   if (unit === 'l') return { packSize: v * 1000, packUnit: 'ml' };
   if (unit === 'kg') return { packSize: v * 1000, packUnit: 'g' };
   return { packSize: v, packUnit: unit };
+}
+
+/**
+ * 묶음(박스) 매입인지: 이번 용량이 예전 낱개 용량의 정수배(2배 이상)이고 단위가 같으면 true
+ * 예) 예전 1000ml(1병), 이번 12000ml(1박스) → 박스로 산 것이므로 이번 용량을 그대로 씀
+ */
+export function isBulkOf(spec, prev) {
+  const a = Number(spec?.packSize) || 0;
+  const b = Number(prev?.packSize) || 0;
+  if (!a || !b || a <= b || (spec.packUnit || '') !== (prev.packUnit || '')) return false;
+  return Math.abs(a / b - Math.round(a / b)) < 1e-6 && Math.round(a / b) >= 2;
 }
 
 export function sanitizeItem(raw) {

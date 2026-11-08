@@ -67,3 +67,14 @@ describe('원가 변동', () => {
     expect(r.menus.find((m) => m.id === 'milk')).toMatchObject({ recovered: true });
   });
 });
+
+describe('박스로 산 경우', () => {
+  it('예전엔 1L 병, 이번엔 1L×12 박스면 용량을 맞춰 비교 (가짜 1100% 상승이 아님)', () => {
+    const old = [buy('p1', '2026-11-01', [item('우유 1L', 2500)])];
+    const after = buildItemIndex([...old, buy('p2', '2026-11-08', [item('우유 1L', 33600, { packSize: 12000 })])]);
+    const r = costImpact(menus, buildItemIndex(old), after, opts(['우유 1L']));
+    expect(r.items[0]).toMatchObject({ from: 30000, to: 33600, scaled: true }); // 2,500원×12 → 33,600원 (병당 2,800원)
+    expect(r.items[0].pct).toBeCloseTo(12);
+    expect(r.menus.find((m) => m.id === 'latte').delta).toBeCloseTo(60); // 원가 변화는 병으로 샀을 때와 같음
+  });
+});

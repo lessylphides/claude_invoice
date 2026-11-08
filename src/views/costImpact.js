@@ -63,7 +63,7 @@ function showImpact(r) {
                 ? `<ul class="ci-items">${r.items
                     .map(
                       (i) =>
-                        `<li><span>${esc(i.name)}</span><span>${i.from != null ? `${won(i.from)} → ` : ''}<b>${won(i.to)}</b>${i.pct != null ? ` <em class="${i.pct > 0 ? 'up' : 'down'}">${i.pct > 0 ? '▲' : '▼'}${Math.abs(Math.round(i.pct * 10) / 10)}%</em>` : ''}</span></li>`,
+                        `<li><span>${esc(i.name)}</span><span>${i.from != null ? `${won(i.from)} → ` : ''}<b>${won(i.to)}</b>${i.scaled ? ' <small class="muted">(용량 환산)</small>' : ''}${i.pct != null ? ` <em class="${i.pct > 0 ? 'up' : 'down'}">${i.pct > 0 ? '▲' : '▼'}${Math.abs(Math.round(i.pct * 10) / 10)}%</em>` : ''}</span></li>`,
                     )
                     .join('')}</ul>`
                 : ''

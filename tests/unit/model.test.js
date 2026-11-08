@@ -35,7 +35,10 @@ describe('이름에서 용량 추정', () => {
     ['블루베리510G', 510, 'g'],
     ['양파 20kg', 20000, 'g'],
     ['위스키 0.7l', 700, 'ml'],
-    ['오비라거330MLX24', 330, 'ml'],
+    ['오비라거330MLX24', 7920, 'ml'], // 한 케이스(330ml × 24캔)의 전체 양
+    ['서울우유 1L×12', 12000, 'ml'],
+    ['생수500ml*20', 10000, 'ml'],
+    ['설탕 1kg x 10', 10000, 'g'],
   ])('%s → %d %s', (name, size, unit) => {
     expect(guessPack(name)).toEqual({ packSize: size, packUnit: unit });
   });
@@ -165,5 +168,33 @@ describe('저장 형식 변환 (migrate)', () => {
   it('이미 정리된 데이터는 다시 넣어도 같다', () => {
     const once = migrate({ purchases: [{ id: 'a', date: '2026-10-28', vendor: 'x', createdAt: 1, items: [{ id: 'i', name: 'y', qty: 1, unitPrice: 10, amount: 10 }] }] });
     expect(migrate(JSON.parse(JSON.stringify(once)))).toEqual(once);
+  });
+});
+
+describe('묶음(박스) 매입', async () => {
+  const { isBulkOf } = await import('../../src/lib/model.js');
+  const { draftFromOcr } = await import('../../src/lib/draft.js');
+  const { normalizePoints } = await import('../../src/lib/aggregate.js');
+  it('이번 용량이 예전 낱개 용량의 정수배면 박스로 봄', () => {
+    expect(isBulkOf({ packSize: 12000, packUnit: 'ml' }, { packSize: 1000, packUnit: 'ml' })).toBe(true);
+    expect(isBulkOf({ packSize: 1500, packUnit: 'ml' }, { packSize: 1000, packUnit: 'ml' })).toBe(false);
+    expect(isBulkOf({ packSize: 12000, packUnit: 'g' }, { packSize: 1000, packUnit: 'ml' })).toBe(false);
+  });
+  it('인식 결과가 박스(1L×12)면 예전 1L 기록으로 덮어쓰지 않음, 낱개면 예전 기록 우선', () => {
+    const specOf = () => ({ packSize: 1000, packUnit: 'ml' });
+    const r = (name, packSize = 0) => ({ date: '2026-11-08', vendor: 'x', items: [{ name, category: '기타', qty: 2, unitPrice: 30000, amount: 60000, packSize, packUnit: packSize ? 'ml' : '' }] });
+    expect(draftFromOcr(r('서울우유 1L×12', 12000), '2026-11-08', specOf).draft.items[0]).toMatchObject({ packSize: 12000 });
+    expect(draftFromOcr(r('서울우유 1L×12'), '2026-11-08', specOf).draft.items[0]).toMatchObject({ packSize: 12000 }); // 이름에서 추정
+    expect(draftFromOcr(r('서울우유 1L', 900), '2026-11-08', specOf).draft.items[0]).toMatchObject({ packSize: 1000, _specFrom: 'history' });
+  });
+  it('가격 추이: 병과 박스가 섞이면 최근 용량 기준으로 환산', () => {
+    const pts = [
+      { price: 30000, packSize: 12000, packUnit: 'ml' },
+      { price: 2800, packSize: 1000, packUnit: 'ml' },
+    ];
+    const n = normalizePoints(pts);
+    expect(n.base).toEqual({ packSize: 1000, packUnit: 'ml' });
+    expect(n.points[0]).toMatchObject({ price: 2500, origPrice: 30000 });
+    expect(normalizePoints([pts[1], pts[1]]).base).toBeNull();
   });
 });

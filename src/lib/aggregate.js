@@ -84,8 +84,30 @@ export function pricePoints(index, name) {
       qty: Number(r.item.qty) || 0,
       unit: r.item.unit,
       amount: Number(r.item.amount) || 0,
+      packSize: Number(r.item.packSize) || 0,
+      packUnit: r.item.packUnit || '',
     }))
     .reverse();
+}
+
+/**
+ * 용량이 다른 매입(1병 vs 1박스)이 섞여 있으면 가장 최근 매입의 용량 기준으로 단가를 환산
+ * 환산한 점에는 origPrice(원래 단가)를 남김. 용량을 모르는 점은 그대로 둠
+ * @returns {{points, base: {packSize, packUnit}|null}} base 가 null 이면 환산하지 않음
+ */
+export function normalizePoints(points) {
+  const last = [...points].reverse().find((p) => p.packSize);
+  if (!last) return { points, base: null };
+  const mixed = points.some((p) => p.packSize && p.packUnit === last.packUnit && p.packSize !== last.packSize);
+  if (!mixed) return { points, base: null };
+  return {
+    base: { packSize: last.packSize, packUnit: last.packUnit },
+    points: points.map((p) =>
+      p.packSize && p.packUnit === last.packUnit && p.packSize !== last.packSize
+        ? { ...p, origPrice: p.price, price: (p.price * last.packSize) / p.packSize }
+        : p,
+    ),
+  };
 }
 
 /** 가격 추이 요약: 최근·직전·평균·최저·최고 */

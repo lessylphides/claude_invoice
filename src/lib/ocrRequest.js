@@ -31,7 +31,7 @@ export function buildSchema(categories) {
             unitPrice: { type: 'number', description: '할인 전 정가 단가(원)' },
             discount: { type: 'number', description: '이 품목에 붙은 쿠폰·할인 금액의 합(원, 양수). 없으면 0' },
             amount: { type: 'number', description: '할인을 뺀 실제 지불 금액(원) = qty×unitPrice - discount. 부가세 포함' },
-            packSize: { type: 'number', description: '수량 1개(1병·1봉·1박스)에 든 용량. 품목명·규격에서 읽음. 모르면 0' },
+            packSize: { type: 'number', description: '수량 1개(1병·1봉·1박스)에 든 전체 용량. 1L×12 박스면 12000. 품목명·규격에서 읽음. 모르면 0' },
             packUnit: { type: 'string', enum: ['ml', 'g', '개', '병', ''], description: 'packSize 의 단위. L→ml, kg→g 로 환산. 모르면 빈 문자열' },
           },
         },
@@ -50,7 +50,7 @@ export const SYSTEM = `당신은 한국 식당·소상공인의 매입 장부 �
 - 품목 amount 의 합이 문서의 최종 합계와 같은지 확인합니다.
 - 수량이나 단가가 없으면 qty=1, unitPrice=amount 로 둡니다.
 - 품목명은 문서에 적힌 그대로 씁니다(규격 표기도 이름에 그대로 둠).
-- 용량(packSize/packUnit)은 수량 1개에 든 양입니다. 품목명이나 규격 칸의 '700ML'→700 ml, '2L'→2000 ml, '510G'→510 g, '20kg'→20000 g 처럼 환산합니다. 'X24', '20입'처럼 낱개 묶음이면 낱개 수를 packSize 로, packUnit 은 병 음료(맥주·탄산수 등)면 '병', 그 밖에는 '개'로 둡니다. 알 수 없으면 0 과 빈 문자열로 둡니다.
+- 용량(packSize/packUnit)은 수량 1개(단가 1개에 해당하는 단위: 1병·1봉·1박스)에 든 전체 양입니다. 품목명이나 규격 칸의 '700ML'→700 ml, '2L'→2000 ml, '510G'→510 g, '20kg'→20000 g 처럼 환산합니다. 거래명세서에서 박스(BOX)·케이스 단위로 샀고 규격이 '1L×12', '500ml*20'처럼 낱개 용량×개수면 곱해서 전체 양을 적습니다('1L×12'→12000 ml). 용량 없이 'X24', '20입'처럼 낱개 수만 있으면 낱개 수를 packSize 로, packUnit 은 병 음료(맥주·탄산수 등)면 '병', 그 밖에는 '개'로 둡니다. 알 수 없으면 0 과 빈 문자열로 둡니다.
 - 각 품목을 주어진 분류 중 가장 알맞은 것으로 분류합니다.
 - 읽을 수 없는 값은 추측하지 말고 빈 문자열 또는 0 으로 둡니다.`;
 

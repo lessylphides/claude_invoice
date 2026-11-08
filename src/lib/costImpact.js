@@ -36,8 +36,13 @@ export function costImpact(menus, before, after, { itemNames, target, minMarginO
       seen.add(k);
       const [b] = before.history(g.itemName);
       const [a] = after.history(g.itemName);
-      if (a && (!b || Math.abs(a.price - b.price) >= 1))
-        items.push({ name: a.name, from: b?.price ?? null, to: a.price, pct: b ? pctChange(b.price, a.price) : null, vendor: a.vendor });
+      // 병·박스처럼 용량이 다르면 이번 용량 기준으로 예전 단가를 환산해 비교
+      const pa = Number(a?.item.packSize) || 0;
+      const pb = Number(b?.item.packSize) || 0;
+      const scaled = b && pa && pb && pa !== pb && (a.item.packUnit || '') === (b.item.packUnit || '');
+      const from = b ? (scaled ? (b.price * pa) / pb : b.price) : null;
+      if (a && (from == null || Math.abs(a.price - from) >= 1))
+        items.push({ name: a.name, from, to: a.price, pct: from != null ? pctChange(from, a.price) : null, vendor: a.vendor, scaled: !!scaled });
     }
 
     const c0 = menuCost(m, before);

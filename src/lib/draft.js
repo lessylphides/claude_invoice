@@ -1,6 +1,6 @@
 // Claude 인식 결과(JSON) → 입력 화면 초안
 import { isYmd, num, uid } from './format.js';
-import { guessPack } from './model.js';
+import { guessPack, isBulkOf } from './model.js';
 
 /**
  * 용량 채우기: 같은 품목의 이전 매입 기록 → 이름에서 추정(700ML 등) 순.
@@ -8,6 +8,11 @@ import { guessPack } from './model.js';
  */
 export function fillSpec(it, specOf) {
   const prev = specOf(it.name);
+  const named = guessPack(it.name);
+  if (prev && isBulkOf(named, prev)) {
+    Object.assign(it, named, { _specFrom: '' }); // 이름에 1L×12 처럼 박스가 적혀 있으면 그 양
+    return true;
+  }
   if (prev) {
     Object.assign(it, prev, { _specFrom: 'history' });
     return true;
@@ -47,7 +52,9 @@ export function draftFromOcr(r, fallbackDate, specOf = () => null) {
     };
     // 같은 품목을 전에 산 적이 있으면 그때 확인한 용량을 우선 (없으면 인식값, 그것도 없으면 이름에서 추정)
     const prev = specOf(it.name);
-    if (prev) Object.assign(it, prev, { _specFrom: 'history' });
+    const read = it.packSize ? { packSize: it.packSize, packUnit: it.packUnit } : guessPack(it.name);
+    if (prev && isBulkOf(read, prev)) Object.assign(it, read, { _specFrom: '' }); // 이번엔 박스로 산 것 → 박스 전체 양
+    else if (prev) Object.assign(it, prev, { _specFrom: 'history' });
     else if (!it.packSize) Object.assign(it, guessPack(it.name) ?? {});
     return it;
   });

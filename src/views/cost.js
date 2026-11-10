@@ -387,7 +387,8 @@ function openMenuEditor(menu) {
             <label>메뉴 이름<input name="name" required placeholder="예: 몽키숄더 한 잔" value="${esc(m.name)}"></label>
             <label>판매가 (잔, 원)<input name="price" type="number" inputmode="numeric" required placeholder="12000" value="${m.price || ''}"></label>
           </div>
-          <label class="bottle-price">보틀 판매가 (원, 선택)
+          <button type="button" class="link bottle-open">+ 보틀로도 판매</button>
+          <label class="bottle-price" hidden>보틀 판매가 (원, 선택)
             <input name="bottlePrice" type="number" inputmode="numeric" placeholder="보틀로 안 팔면 비워 두세요" value="${m.bottlePrice || ''}">
           </label>
           <fieldset class="cat-pick">
@@ -415,6 +416,18 @@ function openMenuEditor(menu) {
       const form = body.querySelector('form');
       const ingsEl = body.querySelector('.ings');
       const sumEl = body.querySelector('.sum');
+      // 보틀 칸·참고 가격은 보틀 판매가가 있거나, 분류에 보틀 최소 마진이 있거나, [+ 보틀로도 판매]를 눌렀을 때만
+      let bottleWanted = !!m.bottlePrice;
+      const bottleOpen = () => {
+        const cat = form.elements.category?.value ?? m.category;
+        return bottleWanted || !!Number(form.elements.bottlePrice.value) || !!store.minMarginOf(cat, 'bottle');
+      };
+      const drawBottleToggle = () => {
+        const open = bottleOpen();
+        body.querySelector('.bottle-price').hidden = !open;
+        body.querySelector('.bottle-open').hidden = open;
+        return open;
+      };
 
       const updateSum = () => {
         const c = costOf({ ...m, price: Number(form.elements.price.value) || 0 });
@@ -425,9 +438,10 @@ function openMenuEditor(menu) {
         sumEl.innerHTML = `${won(c.cost)} · <span class="${j.status === 'over' ? 'warn' : j.status === 'margin' ? 'ok' : ''}">${pct(c.rate)}</span>${
           price ? `<small class="sum-margin">마진 ${won(j.margin)}${j.status === 'margin' ? ' ✔' : ''}</small>` : ''
         }`;
-        // 보틀: 첫 번째 매입 품목 한 병 기준. 판매가를 안 적었어도 참고 가격은 보여 줌
+        // 보틀: 첫 번째 매입 품목 한 병 기준. 보틀 칸이 열려 있으면 판매가를 안 적었어도 참고 가격은 보여 줌
+        const open = drawBottleToggle();
         const bottlePrice = Number(form.elements.bottlePrice.value) || 0;
-        const b = bottleCost(m, store.index);
+        const b = open ? bottleCost(m, store.index) : null;
         const bBar = body.querySelector('.bottle-bar');
         const bInfo = body.querySelector('.bottle-info');
         bBar.hidden = !(bottlePrice && b);
@@ -482,7 +496,7 @@ function openMenuEditor(menu) {
                    <div class="ing-row">
                      <span>1개 용량</span><input data-f="packSize" type="number" inputmode="decimal" step="any" placeholder="${spec ? spec.packSize : '700'}" value="${g.packSize || ''}">
                      ${unitSelectHTML('data-f="unit"', g.unit, spec?.packUnit ? `${spec.packUnit}` : '단위')}
-                     <span>중</span><input data-f="use" type="number" inputmode="decimal" step="any" placeholder="30" value="${g.use || ''}">
+                     <span>중</span><input data-f="use" type="number" inputmode="decimal" step="any" aria-label="한 잔에 쓰는 양" value="${g.use || ''}">
                      <span class="unit-echo">${esc(u)}</span>
                    </div>
                    ${spec && !g.packSize ? `<p class="muted small spec-note">1개 용량은 매입 기록(${num(spec.packSize)}${esc(spec.packUnit)})을 사용합니다. 매입 기록에서 바꾸면 여기도 따라 바뀝니다.</p>` : ''}
@@ -559,6 +573,11 @@ function openMenuEditor(menu) {
       );
       form.elements.price.addEventListener('input', updateSum);
       form.elements.bottlePrice.addEventListener('input', updateSum);
+      body.querySelector('.bottle-open').addEventListener('click', () => {
+        bottleWanted = true;
+        updateSum();
+        form.elements.bottlePrice.focus();
+      });
       body.querySelector('.bottle-info').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-fill-bottle]');
         if (!btn) return;

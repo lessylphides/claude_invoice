@@ -610,3 +610,5 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .mem-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .mem-badges:empty { display: none; }
 .sum-foot { text-align: right; padding: 10px 2px 2px; }
+.menu-editor .bottle-open { align-self: flex-start; margin: -4px 0 4px; }
+.menu-editor .bottle-price[hidden], .menu-editor .bottle-open[hidden] { display: none; }

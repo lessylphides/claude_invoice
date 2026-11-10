@@ -96,3 +96,29 @@ test('보틀 최소 마진을 정했으면: 합격선 버튼이 맨 앞, 못 미
   await s.locator('[data-fill-bottle="189800"]').click();
   await expect(s.locator('.bsum')).toContainText('21.0%마진 150,010원');
 });
+
+test('보틀로 안 파는 메뉴(커피)는 보틀 칸·추천이 숨겨져 있고, [+ 보틀로도 판매]로 펼침 · 사용량 칸은 비어 있음', async ({ page }) => {
+  const d = data();
+  d.menuCategories = ['위스키', '커피'];
+  d.purchases.push(purchase('q', '2026-10-29', '커피상인', [item('바닐라시럽 1kg', '기타', 11400, { packSize: 1000, packUnit: 'g' })]));
+  d.menus.push({ id: 'latte', name: '바닐라라떼', price: 6000, category: '커피', ingredients: [{ id: 'v', type: 'item', itemName: '바닐라시럽 1kg', use: 12 }] });
+  await openApp(page, { data: d, tab: 'cost' });
+  await page.locator('.menu-card', { hasText: '바닐라라떼' }).click();
+  await sheet(page).locator('[data-edit]').click();
+  const form = page.locator('.menu-editor');
+  await expect(form.locator('.bottle-price')).toBeHidden();
+  await expect(form.locator('.bottle-info')).toBeHidden(); // '보틀 기준… 1병 ≈ 잔' 추천 없음
+  // 사용량 칸에 30 같은 예시 숫자를 미리 보여 주지 않음 (진짜 값으로 착각)
+  expect(await form.locator('[data-f=use]').evaluateAll((els) => els.map((e) => e.getAttribute('placeholder')))).toEqual([null]);
+  await form.locator('.bottle-open').click();
+  await expect(form.locator('.bottle-price')).toBeVisible();
+  await expect(form.locator('.bottle-info')).toBeVisible();
+});
+
+test('보틀 최소 마진이 있는 분류(위스키)나 보틀 판매가가 있는 메뉴는 보틀 칸이 바로 보임', async ({ page }) => {
+  await openApp(page, { data: data(), tab: 'cost' });
+  await page.locator('.menu-card', { hasText: '몽키숄더' }).click();
+  await sheet(page).locator('[data-edit]').click();
+  await expect(page.locator('.menu-editor .bottle-price')).toBeVisible();
+  await expect(page.locator('.menu-editor .bottle-open')).toBeHidden();
+});

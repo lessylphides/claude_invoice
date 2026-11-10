@@ -1,4 +1,4 @@
-// 설정: 계정·동기화, 요금제·인식 사용량, 분류 목록, CSV 내보내기, 백업/복원, 탈퇴
+// 설정: 계정·동기화, 요금제·인식 사용량, CSV 내보내기, 백업/복원, 탈퇴 (매입 품목 분류는 매입 탭 → 항목별)
 import { dotDate, esc, num, todayStr } from '../lib/format.js';
 import { purchasesCsv } from '../lib/csv.js';
 import { daysBetween } from '../lib/backup.js';
@@ -127,15 +127,6 @@ export function openSettings() {
           </section>
 
           <section>
-            <h3 class="set-title">항목(분류) 목록</h3>
-            <div class="set-card">
-              <textarea name="cats" rows="6" aria-label="분류 목록, 한 줄에 하나">${esc(store.categories.join('\n'))}</textarea>
-              <button class="btn primary set-save" type="submit">분류 저장</button>
-            </div>
-            <p class="set-note">한 줄에 하나씩. 영수증을 찍으면 품목이 이 분류 중 하나로 자동 분류돼요.</p>
-          </section>
-
-          <section>
             <h3 class="set-title">데이터</h3>
             <div class="set-card list">
               <button class="set-row" type="button" data-act="csv"><span class="set-ic" aria-hidden="true">📄</span><span class="grow">이번 달 CSV 내보내기<small>엑셀에서 열 수 있어요</small></span><span class="chev" aria-hidden="true">›</span></button>
@@ -159,13 +150,7 @@ export function openSettings() {
 
           <p class="set-foot">코스트노트 · 문의 hanguk.soek@me.com</p>
         </form>`;
-      const form = body.querySelector('form');
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        store.setCategories(form.elements.cats.value.split('\n'));
-        toast('설정을 저장했습니다.');
-        close();
-      });
+      body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
       const planBtn = body.querySelector('[data-act=plans]');
       showOcrUsage(body.querySelector('.ocr-usage'), planBtn, body.querySelector('.admin-sec'));
       body.querySelector('[data-act=admin]').addEventListener('click', () => {

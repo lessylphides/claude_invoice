@@ -102,11 +102,17 @@ test('이번 달 CSV: 엑셀용 BOM, 할인·용량 열, 수식으로 해석될 
   expect(lines[3]).toContain(`"'+위험"`);
 });
 
-test('설정: 분류 목록 저장', async ({ page }) => {
+test('매입 탭 항목별: 매입 품목 분류 저장 (설정에는 없음)', async ({ page }) => {
   await openApp(page);
   await page.locator('[data-act=settings]').click();
+  await expect(sheet(page).locator('[name=cats]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.locator('[data-summary=category]').click();
+  await page.locator('[data-act=edit-pcats]').click();
   const s = sheet(page);
+  await expect(s.locator('.sheet-head h2')).toHaveText('매입 품목 분류');
   await s.locator('[name=cats]').fill('주류\n\n안주\n주류');
+  page.once('dialog', (d) => d.accept());
   await s.locator('button[type=submit]').click();
   // 빈 줄·중복 제거, '기타'는 항상 포함
   await waitSaved(page, (d) => JSON.stringify(d?.categories) === JSON.stringify(['주류', '안주', '기타']));

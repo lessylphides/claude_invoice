@@ -2,7 +2,7 @@
 import { compact, dotDate, esc, num, pad, todayStr, won } from '../lib/format.js';
 import { backupReminder, addDays, SNOOZE_DAYS } from '../lib/backup.js';
 import { saveFile } from '../ui/download.js';
-import { toast } from '../ui/sheet.js';
+import { toast, openSheet } from '../ui/sheet.js';
 import { purchaseTotal } from '../lib/model.js';
 import { groupByVendor, groupByCategory, paySummary, aggregateItems } from '../lib/aggregate.js';
 import { payBreakdownHTML } from '../ui/payui.js';
@@ -127,9 +127,14 @@ function itemAggLi(a) {
 }
 
 function summaryBody(mp, total, pay) {
-  if (!mp.length) return `<p class="empty-msg">이번 달 매입 내역이 없습니다.<br>아래 <b>영수증 촬영</b> 버튼으로 시작하세요.</p>`;
+  const editCats = '<div class="sum-foot"><button class="link" data-act="edit-pcats">✎ 매입 품목 분류 편집</button></div>';
+  if (!mp.length)
+    return `<p class="empty-msg">이번 달 매입 내역이 없습니다.<br>아래 <b>영수증 촬영</b> 버튼으로 시작하세요.</p>${view.summary === 'category' ? editCats : ''}`;
   if (view.summary === 'vendor') return groupByVendor(mp).map((g) => barRow(g, total, `v:${g.key}`)).join('');
-  if (view.summary === 'category') return groupByCategory(mp).map((g) => barRow(g, total, `c:${g.key}`)).join('');
+  if (view.summary === 'category')
+    return (
+      groupByCategory(mp).map((g) => barRow(g, total, `c:${g.key}`)).join('') + editCats
+    );
   return payPanel(pay, total);
 }
 
@@ -174,6 +179,36 @@ export function handlePurchaseClick(e, { openSettings }) {
   else if (t.dataset.act === 'capture') openCaptureMenu();
   else if (t.dataset.act === 'backup-now') backupNow();
   else if (t.dataset.act === 'backup-later') store.snoozeBackup(addDays(todayStr(), SNOOZE_DAYS));
+  else if (t.dataset.act === 'edit-pcats') openPurchaseCategoryEditor();
   else return false;
   return true;
+}
+
+/** 매입 품목 분류 편집 (영수증 인식 때 품목에 붙는 분류, 항목별 합계의 기준) */
+function openPurchaseCategoryEditor() {
+  openSheet({
+    title: '매입 품목 분류',
+    render(body, close) {
+      body.innerHTML = `
+        <form class="editor pcats-form">
+          <p class="muted small">사 온 품목을 나누는 분류예요. 영수증을 찍으면 품목마다 이 중 하나가 붙고, 매입 탭 <b>항목별</b> 합계가 이 분류로 묶여요. (메뉴 분류는 원가 탭에서 바꿔요)</p>
+          <textarea name="cats" rows="9" aria-label="매입 품목 분류, 한 줄에 하나">${esc(store.categories.join('\n'))}</textarea>
+          <p class="muted small">한 줄에 하나씩. 지운 분류가 붙어 있던 지난 매입은 그대로 남아요. '기타'는 항상 있어요.</p>
+          <div class="actions">
+            <button type="button" class="btn ghost cancel">취소</button>
+            <button type="submit" class="btn primary">저장</button>
+          </div>
+        </form>`;
+      const form = body.querySelector('form');
+      body.querySelector('.cancel').addEventListener('click', close);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const list = form.elements.cats.value.split('\n');
+        if (!confirm('매입 품목 분류를 바꿀까요?\n다음에 찍는 영수증부터 바뀐 분류로 정리돼요.')) return;
+        store.setCategories(list);
+        toast('매입 품목 분류를 저장했어요.');
+        close();
+      });
+    },
+  });
 }

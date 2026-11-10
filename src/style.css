@@ -609,3 +609,4 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .mem-email.big { font-size: 16px; margin: 0 0 6px; }
 .mem-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .mem-badges:empty { display: none; }
+.sum-foot { text-align: right; padding: 10px 2px 2px; }

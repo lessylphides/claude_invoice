@@ -9,6 +9,7 @@ import { payChoiceHTML } from '../ui/payui.js';
 import { unitSelectHTML } from '../ui/units.js';
 import { store } from '../store.js';
 import { notifyCostImpact } from './costImpact.js';
+import { findDuplicate } from '../lib/duplicate.js';
 
 const specOf = (name) => store.index.spec(name);
 
@@ -49,7 +50,14 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
       },
       render(body, close) {
         const cats = store.categories;
+        // 새로 넣는 매입이 이미 등록된 영수증과 같아 보이면 맨 위에 안내
+        const dup = isEdit ? null : findDuplicate(store.purchases, p);
         body.innerHTML = `
+          ${
+            dup
+              ? `<p class="notice warn-notice dup-notice">⚠ <b>이미 등록된 영수증</b>일 수 있어요: ${esc(shortDate(dup.date))} ${esc(dup.vendor)} ${num(purchaseTotal(dup))}원 (같은 날짜·거래처·합계). 같은 영수증이면 저장하지 말고 닫아 주세요.</p>`
+              : ''
+          }
           ${note ? `<p class="notice">${esc(note)}</p>` : ''}
           ${
             imgUrls.length
@@ -214,6 +222,9 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           if (!p.vendor) return toast('거래처를 입력해 주세요.');
           p.items = p.items.filter((i) => String(i.name || '').trim() || Number(i.amount));
           if (!p.items.length) return toast('품목을 하나 이상 입력해 주세요.');
+          // 저장 직전에도 한 번 더 (날짜·거래처·금액을 고쳤을 수 있음)
+          const twin = findDuplicate(store.purchases, p);
+          if (twin && !confirm(`이미 등록된 영수증 같아요.\n${shortDate(twin.date)} ${twin.vendor} ${num(purchaseTotal(twin))}원\n\n같은 날 실제로 한 번 더 산 거라면 [확인]을 눌러 저장하세요.`)) return;
           suggestions = similarSuggestions(p.items);
           saved = store.upsert(p);
           toast('저장했습니다.');

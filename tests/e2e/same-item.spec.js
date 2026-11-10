@@ -97,6 +97,7 @@ test('새 영수증에 비슷한 이름이 있으면 저장 후 "같은 품목�
 });
 
 test('"다른 품목"이라고 답하면 기억해서 다시 묻지 않음, 처음 보는 이름이 아니면 묻지 않음', async ({ page }) => {
+  page.on('dialog', (d) => d.accept()); // 같은 날·같은 거래처·같은 금액이라 '이미 등록된 영수증' 확인이 뜸 → 이 테스트는 품목 묶기만 봄
   const d = data();
   d.purchases = d.purchases.slice(0, 1);
   await openApp(page, { data: d });
@@ -130,6 +131,7 @@ test('월 요약 항목별에서도 묶인 품목은 한 줄로 합산', async (
 });
 
 test('이름·용량이 확실히 같으면(1L ↔ 1000ml) 묻지 않고 바로 묶고, 용량이 다르면 묻지 않는다', async ({ page }) => {
+  page.on('dialog', (d) => d.accept()); // 같은 날·같은 거래처·같은 금액이라 '이미 등록된 영수증' 확인이 뜸 → 이 테스트는 품목 묶기만 봄
   await openApp(page, { data: { purchases: [purchase('a', '2026-11-01', '우유대리점', [item('서울우유 1L', '유제품·계란', 2500)])] } });
   const add = async (name) => {
     await openManualEntry(page);

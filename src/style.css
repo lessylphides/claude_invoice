@@ -612,3 +612,4 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .sum-foot { text-align: right; padding: 10px 2px 2px; }
 .menu-editor .bottle-open { align-self: flex-start; margin: -4px 0 4px; }
 .menu-editor .bottle-price[hidden], .menu-editor .bottle-open[hidden] { display: none; }
+.dup-notice { background: var(--warn-soft); color: var(--ink); }

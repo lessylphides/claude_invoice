@@ -167,3 +167,21 @@ test('인식 결과를 저장하면 고친 개수만 서버로 보낸다 (내용
   expect(sent).not.toContain('코스트코');
   expect(sent).not.toContain('꼬르동');
 });
+
+test('같은 영수증을 또 올리면 "이미 등록된 영수증" 안내, 저장할 때 한 번 더 묻는다', async ({ page }) => {
+  const prev = purchase('p1', '2026-10-28', '(주)코스트코코리아 양재점', costco.items.map((i, n) => item(i.name, i.category, i.unitPrice, { discount: i.discount, amount: i.amount, id: `o${n}` })));
+  await openApp(page, { data: { purchases: [prev] } });
+  await mockClaude(page, () => costco);
+  await page.locator('#cam').setInputFiles(PHOTO);
+  const form = page.locator('form.editor');
+  await expect(page.locator('.dup-notice')).toContainText('이미 등록된 영수증');
+  await expect(page.locator('.dup-notice')).toContainText('132,670원');
+  // 저장 → 묻는 창에서 취소하면 저장 안 함
+  page.once('dialog', (d) => d.dismiss());
+  await form.locator('button[type=submit]').click();
+  await expect(form).toBeVisible();
+  // 다시 저장 → 확인하면 저장
+  page.once('dialog', (d) => d.accept());
+  await form.locator('button[type=submit]').click();
+  await expect(page.locator('.cell[data-date="2026-10-28"] .amt')).toHaveText('26.5만');
+});

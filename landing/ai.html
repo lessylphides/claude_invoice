@@ -111,6 +111,15 @@
     .url { display: block; font-family: ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px; word-break: break-all; user-select: all; margin: 10px 0 0; }
     .tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 3px 10px; margin-bottom: 10px; }
     .legal { color: var(--muted); font-size: 13px; }
+    .pic { position: relative; display: block; }
+    .ring { position: absolute; border: 3px solid #ff2d78; border-radius: 12px; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); animation: ring 1.6s ease-in-out infinite; pointer-events: none; }
+    .ring .arrow { position: absolute; right: -6px; top: 50%; width: 46px; height: 24px; transform: translate(0, -50%); animation: nudge 1.6s ease-in-out infinite; }
+    .ring .arrow path { fill: none; stroke: #ff2d78; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; paint-order: stroke; filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff); }
+    .ring.out .arrow { right: -54px; }
+    @keyframes ring { 50% { box-shadow: 0 0 0 6px rgba(255, 45, 120, 0.18); } }
+    @keyframes nudge { 50% { transform: translate(-6px, -50%); } }
+    @media (prefers-reduced-motion: reduce) { .ring, .ring .arrow { animation: none; } }
+
 </style>
 </head>
 <body>
@@ -190,14 +199,14 @@
         <p class="sub">클로드 앱(휴대폰·데스크톱)이나 claude.ai 웹에서 그대로 따라 하세요. 연결 주소:</p>
         <code class="url">https://app.costnote.co.kr/mcp</code>
         <div class="shots" style="margin-top:20px">
-          <div class="shot"><h3>설정 → 커넥터</h3><p>클로드 설정에서 <b>커넥터</b>를 눌러요.</p><img src="/assets/ai/g1.webp" alt="클로드 설정 화면의 커넥터 메뉴" width="600" height="900" loading="lazy"></div>
-          <div class="shot"><h3>맞춤 커넥터 추가</h3><p>오른쪽 위 <b>+</b> → <b>맞춤 커넥터 추가</b>.</p><img src="/assets/ai/g2.webp" alt="커넥터 화면에서 맞춤 커넥터 추가 메뉴" width="600" height="520" loading="lazy"></div>
-          <div class="shot"><h3>이름·주소 입력</h3><p>이름 <b>코스트노트</b>, 주소는 위 연결 주소를 붙여 넣고 <b>계속</b>.</p><img src="/assets/ai/g3.webp" alt="커넥터 이름과 서버 주소 입력 화면" width="600" height="680" loading="lazy"></div>
-          <div class="shot"><h3>설정은 그대로 → 추가</h3><p>‘감지됨’ 표시 그대로 두고 아래 <b>추가</b>를 눌러요. 요청 헤더는 비워 두세요.</p><img src="/assets/ai/g4.webp" alt="인증 설정이 자동으로 감지된 화면" width="600" height="860" loading="lazy"></div>
-          <div class="shot"><h3>코스트노트 로그인</h3><p><b>연결</b>을 누르면 이 화면이 열려요. 코스트노트 이메일·비밀번호로 로그인.</p><img src="/assets/ai/g5.webp" alt="코스트노트 클로드 연결 로그인 화면" width="600" height="900" loading="lazy"></div>
-          <div class="shot"><h3>허락하기</h3><p>클로드가 할 수 있는 일을 확인하고 <b>허락하기</b>.</p><img src="/assets/ai/g6.webp" alt="클로드가 할 수 있는 일과 허락하기 버튼" width="600" height="1100" loading="lazy"></div>
-          <div class="shot"><h3>연결 끝</h3><p>커넥터 목록에 <b>코스트노트</b>가 생기면 완료. 이제 아무 대화에서나 물어보세요.</p><img src="/assets/ai/g7.webp" alt="커넥터 목록에 코스트노트가 추가된 화면" width="600" height="720" loading="lazy"></div>
-          <div class="shot"><h3>(선택) 확인받기 설정</h3><p>코스트노트를 누르면 도구별로 <b>묻기</b>·항상 허용을 고를 수 있어요. 판매가 입력은 ‘묻기’를 추천해요.</p><img src="/assets/ai/g8.webp" alt="코스트노트 도구별 허용 설정 화면" width="600" height="760" loading="lazy"></div>
+          <div class="shot"><h3>설정 → 커넥터</h3><p>클로드 설정에서 <b>커넥터</b>를 눌러요.</p><span class="pic"><img src="/assets/ai/g1.webp" alt="클로드 설정 화면의 커넥터 메뉴" width="600" height="900" loading="lazy"><span class="ring" style="left:3.3%;top:86.1%;width:93.3%;height:7.8%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>맞춤 커넥터 추가</h3><p>오른쪽 위 <b>+</b> → <b>맞춤 커넥터 추가</b>.</p><span class="pic"><img src="/assets/ai/g2.webp" alt="커넥터 화면에서 맞춤 커넥터 추가 메뉴" width="600" height="520" loading="lazy"><span class="ring" style="left:38.3%;top:19.2%;width:58.3%;height:10.0%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>이름·주소 입력</h3><p>이름 <b>코스트노트</b>, 주소는 위 연결 주소를 붙여 넣고 <b>계속</b>.</p><span class="pic"><img src="/assets/ai/g3.webp" alt="커넥터 이름과 서버 주소 입력 화면" width="600" height="680" loading="lazy"><span class="ring" style="left:4.0%;top:44.7%;width:91.7%;height:9.1%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span><span class="ring" style="left:4.0%;top:87.4%;width:91.7%;height:8.5%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>설정은 그대로 → 추가</h3><p>‘감지됨’ 표시 그대로 두고 아래 <b>추가</b>를 눌러요. 요청 헤더는 비워 두세요.</p><span class="pic"><img src="/assets/ai/g4.webp" alt="인증 설정이 자동으로 감지된 화면" width="600" height="860" loading="lazy"><span class="ring out" style="left:3.3%;top:39.1%;width:46.7%;height:5.1%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span><span class="ring out" style="left:3.3%;top:84.2%;width:63.3%;height:4.7%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>코스트노트 로그인</h3><p><b>연결</b>을 누르면 이 화면이 열려요. 코스트노트 이메일·비밀번호로 로그인.</p><span class="pic"><img src="/assets/ai/g5.webp" alt="코스트노트 클로드 연결 로그인 화면" width="600" height="900" loading="lazy"><span class="ring" style="left:9.3%;top:82.2%;width:81.3%;height:8.9%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>허락하기</h3><p>클로드가 할 수 있는 일을 확인하고 <b>허락하기</b>.</p><span class="pic"><img src="/assets/ai/g6.webp" alt="클로드가 할 수 있는 일과 허락하기 버튼" width="600" height="1100" loading="lazy"><span class="ring" style="left:9.3%;top:74.9%;width:81.3%;height:6.9%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>연결 끝</h3><p>커넥터 목록에 <b>코스트노트</b>가 생기면 완료. 이제 아무 대화에서나 물어보세요.</p><span class="pic"><img src="/assets/ai/g7.webp" alt="커넥터 목록에 코스트노트가 추가된 화면" width="600" height="720" loading="lazy"><span class="ring" style="left:3.3%;top:75.7%;width:93.3%;height:7.6%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
+          <div class="shot"><h3>(선택) 확인받기 설정</h3><p>코스트노트를 누르면 도구별로 <b>묻기</b>·항상 허용을 고를 수 있어요. 판매가 입력은 ‘묻기’를 추천해요.</p><span class="pic"><img src="/assets/ai/g8.webp" alt="코스트노트 도구별 허용 설정 화면" width="600" height="760" loading="lazy"><span class="ring" style="left:3.3%;top:17.9%;width:93.3%;height:7.4%"><svg class="arrow" viewBox="0 0 64 32" aria-hidden="true"><path d="M60 16H10M22 4 8 16l14 12"/></svg></span></span></div>
         </div>
       </section>
 

@@ -24,7 +24,7 @@ end $$;
 create or replace function public.mcp_ledger_put(secret text, uid uuid, payload jsonb, expected bigint) returns bigint
   language plpgsql volatile security definer set search_path = '' as $$
 declare
-  next bigint;
+  new_rev bigint;
 begin
   if secret is null or encode(sha256(convert_to(secret, 'UTF8')), 'hex')
        is distinct from (select v from private.settings where k = 'backup_hash') then
@@ -35,8 +35,8 @@ begin
   end if;
   update public.ledgers set data = payload, rev = expected + 1
     where user_id = uid and rev = expected
-    returning rev into next;
-  return next;
+    returning rev into new_rev;
+  return new_rev;
 end $$;
 
 revoke execute on function public.mcp_ledger_get(text, uuid) from public, authenticated;

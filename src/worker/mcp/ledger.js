@@ -42,6 +42,7 @@ export async function updateLedger(env, uid, change, fetchImpl = fetch) {
     const { rev, data } = await readLedger(env, uid, fetchImpl);
     if (!rev) throw new LedgerError('empty', '아직 서버에 저장된 장부가 없어요. 코스트노트 앱에서 로그인해 장부를 한 번 저장해 주세요.');
     const result = await change(data);
+    if (Array.isArray(result?.changes) && !result.changes.length) return { rev, result }; // 바뀐 게 없으면 저장하지 않음
     const next = await rpc(env, fetchImpl, 'mcp_ledger_put', { uid, payload: data, expected: rev });
     if (next != null) return { rev: Number(next), result };
   }

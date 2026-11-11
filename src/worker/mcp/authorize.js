@@ -5,6 +5,20 @@
 import { AuthorizationError, CimdFetchError } from '@cloudflare/workers-oauth-provider';
 import { SUPABASE_URL, SUPABASE_KEY } from '../../config.js';
 
+/**
+ * 클로드에게만 연결 허용: 클로드 앱(웹·데스크톱·휴대폰)의 돌아갈 주소, 또는 Claude Code(이 컴퓨터) 주소.
+ * 다른 곳으로 토큰이 가면(가짜 "Claude" 이름을 단 피싱 등) 장부가 새어 나갈 수 있어서 막음
+ */
+export function allowedRedirect(uri) {
+  try {
+    const u = new URL(uri);
+    if (u.href === 'https://claude.ai/api/mcp/auth_callback') return true;
+    return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.pathname === '/callback';
+  } catch {
+    return false;
+  }
+}
+
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const SESSION_KEY = 'costnote.auth'; // 앱의 로그인 저장 이름 (src/auth.js AUTH_STORAGE_KEY 와 같아야 함)
 
@@ -64,6 +78,7 @@ export async function handleAuthorize(request, env, { fetchImpl = fetch } = {}) 
 
 async function showPage(request, oauth) {
   const req = await oauth.parseAuthRequest(request);
+  if (!allowedRedirect(req.redirectUri)) return errorPage('코스트노트는 클로드(Claude)에만 연결할 수 있어요.');
   const d = await oauth.describeConsent(req);
   const consent = await oauth.beginConsent(req);
   const nonce = crypto.randomUUID().replace(/-/g, '');
@@ -145,6 +160,7 @@ async function decide(request, oauth, fetchImpl) {
   const user = await userOf(String(form.get('token') || ''), fetchImpl);
   if (!user) return errorPage('로그인이 만료됐어요. 클로드에서 다시 연결해 주세요.');
   const approved = await oauth.approveConsent(request, handle, { scope: form.getAll('scope').map(String) });
+  if (!allowedRedirect(approved.request.redirectUri)) return errorPage('코스트노트는 클로드(Claude)에만 연결할 수 있어요.');
   const { redirectTo } = await oauth.completeAuthorization({
     request: approved.request,
     userId: user.id,

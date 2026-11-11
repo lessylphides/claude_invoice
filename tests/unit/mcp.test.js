@@ -202,6 +202,24 @@ describe('클로드 연결: 로그인부터 도구까지', () => {
     expect(as.registration_endpoint).toBe(`${ORIGIN}/oauth/register`);
   });
 
+  it('클로드가 아닌 곳으로 돌아가는 클라이언트는 등록부터 거절 (가짜 "Claude" 피싱 차단)', async () => {
+    const reg = await call('/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'Claude', redirect_uris: ['https://evil.example/cb'], token_endpoint_auth_method: 'none' }),
+    });
+    expect(reg.status).toBe(400);
+    expect((await reg.json()).error).toBe('invalid_redirect_uri');
+    const mixed = await call('/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'Claude', redirect_uris: [CALLBACK, 'https://evil.example/cb'], token_endpoint_auth_method: 'none' }),
+    });
+    expect(mixed.status).toBe(400);
+    const { allowedRedirect } = await import('../../src/worker/mcp/authorize.js');
+    expect([CALLBACK, 'http://localhost:3118/callback', 'http://127.0.0.1:5/callback', 'https://claude.ai/other', 'http://evil.com/callback'].map(allowedRedirect)).toEqual([true, true, true, false, false]);
+  });
+
   it('거절하면 클로드에 access_denied, 로그인 토큰이 틀리면 연결 안 됨', async () => {
     const d = await connect('sb-token', 'deny');
     expect(new URL(d.post.headers.get('location')).searchParams.get('error')).toBe('access_denied');

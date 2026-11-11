@@ -718,3 +718,8 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .ms-pt { color: var(--accent); font-size: 13px; }
 .ms-list li.done .ms-pt { color: var(--muted); }
 .ft-tag { font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 7px; }
+/* 매입 탭 윗줄: 달 이동 화살표를 날짜에 붙여 레벨 이름이 잘리지 않게 */
+.top [data-act=prev], .top [data-act=next] { width: 26px; font-size: 24px; flex: none; }
+.top [data-act=prev] { margin-left: -4px; }
+.top .month-title { padding: 4px 2px; }
+.top .settings { width: 34px; flex: none; }

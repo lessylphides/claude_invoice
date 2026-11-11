@@ -110,40 +110,73 @@ async function loadGifts() {
   return res.json();
 }
 
-const starsHtml = (n) => `<span class="ft-stars" aria-label="별 ${n}개">${'★'.repeat(n)}<span>${'★'.repeat(5 - n)}</span></span>`;
+// 별: 하나씩 채워지게 (애니메이션 때 순서대로)
+const starsHtml = (n, base = 0) =>
+  `<span class="ft-stars" aria-label="별 ${n}개">${Array.from({ length: 5 }, (_, i) =>
+    i < n ? `<i class="on" style="--d:${base + i * 0.09}s">★</i>` : '<i>★</i>',
+  ).join('')}</span>`;
 
-/** 오늘의 운세 화면 */
+const ANIM_KEY = 'costnote:fortune-printed';
+/** 오늘 첫 번째로 열 때만 프린터 연출 (같은 날 다시 열면 바로) */
+function firstPrintToday() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
+  try {
+    if (localStorage.getItem(ANIM_KEY) === kstToday()) return false;
+    localStorage.setItem(ANIM_KEY, kstToday());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 오늘의 운세: 영수증으로 출력되는 화면 */
 export function openFortuneSheet() {
   const who = auth.user?.id || 'local';
   const day = kstToday();
   const f = todayFortune(who, day);
   const tip = todayTip({ purchases: store.purchases, menus: store.menus }, who, day);
-  const [, m, d] = day.split('-').map(Number);
+  const [y, m, d] = day.split('-').map(Number);
+  const anim = firstPrintToday();
   markFortuneSeen();
   openSheet({
     title: '오늘의 운세',
     render(body) {
       body.innerHTML = `
-        <div class="ft">
-          <p class="ft-date">${m}월 ${d}일 사장님 운세</p>
-          <p class="ft-head">${esc(f.headline)}</p>
-          <div class="set-card ft-list">
-            <div class="ft-row"><p class="ft-cat">💰 재물운 ${starsHtml(f.money.stars)}</p><p>${esc(f.money.text)}</p></div>
-            <div class="ft-row"><p class="ft-cat">🙋 손님운 ${starsHtml(f.guest.stars)}</p><p>${esc(f.guest.text)}</p></div>
-            <div class="ft-row"><p class="ft-cat">🤝 거래처운 ${starsHtml(f.vendor.stars)}</p><p>${esc(f.vendor.text)}</p></div>
+        <div class="ft${anim ? ' ft-anim' : ''}">
+          <div class="ft-printer" aria-hidden="true">
+            <div class="ft-slot"></div>
+            <p class="ft-printing">오늘의 운세를 뽑는 중…</p>
           </div>
-          <div class="set-card ft-advice">
-            <p class="ft-cat">☕ 사장님께 한마디</p>
-            <p>${esc(f.advice)}</p>
-          </div>
-          <div class="set-card ft-tip">
-            <p class="ft-cat">${tip.fromLedger ? '📒 내 장부에서 찾은 오늘의 팁' : '💡 오늘의 장사 팁'}</p>
-            <p>${tip.icon} ${esc(tip.text)}</p>
-          </div>
-          <p class="ft-lucky">오늘의 키워드 <b>${esc(f.keyword)}</b> · 행운의 시간 <b>${esc(f.luckyTime)}</b></p>
-          <p class="set-note center">재미로 보는 운세예요. 내일 또 새로운 운세가 기다려요.</p>
+          <article class="ft-paper" aria-label="${m}월 ${d}일 오늘의 운세">
+            <p class="ft-shop">COSTNOTE · 오늘의 운세</p>
+            <p class="ft-date">${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')} 사장님 운세</p>
+            <hr class="ft-cut" />
+            <p class="ft-head ft-s" style="--d:.9s">${esc(f.headline)}</p>
+            <hr class="ft-cut" />
+            <div class="ft-row ft-s" style="--d:1.15s"><p class="ft-cat">💰 재물운 ${starsHtml(f.money.stars, 1.25)}</p><p>${esc(f.money.text)}</p></div>
+            <div class="ft-row ft-s" style="--d:1.45s"><p class="ft-cat">🙋 손님운 ${starsHtml(f.guest.stars, 1.55)}</p><p>${esc(f.guest.text)}</p></div>
+            <div class="ft-row ft-s" style="--d:1.75s"><p class="ft-cat">🤝 거래처운 ${starsHtml(f.vendor.stars, 1.85)}</p><p>${esc(f.vendor.text)}</p></div>
+            <hr class="ft-cut" />
+            <div class="ft-row ft-s" style="--d:2.1s"><p class="ft-cat">☕ 사장님께 한마디</p><p>${esc(f.advice)}</p></div>
+            <div class="ft-row ft-tip ft-s" style="--d:2.3s">
+              <p class="ft-cat">${tip.fromLedger ? '📒 내 장부에서 찾은 오늘의 팁' : '💡 오늘의 장사 팁'}</p>
+              <p>${tip.fromLedger ? `${tip.icon} ` : ''}${esc(tip.text)}</p>
+            </div>
+            <hr class="ft-cut" />
+            <div class="ft-total ft-s" style="--d:2.5s">
+              <p><span>오늘의 키워드</span><b>${esc(f.keyword)}</b></p>
+              <p><span>행운의 시간</span><b>${esc(f.luckyTime)}</b></p>
+            </div>
+            <p class="ft-foot">재미로 보는 운세예요 · 내일 또 새로 뽑아 드려요</p>
+          </article>
           <div class="ad-slot" hidden></div>
         </div>`;
+      if (anim) {
+        const box = body.querySelector('.ft');
+        const done = () => box.classList.add('ft-done');
+        box.addEventListener('click', done, { once: true }); // 누르면 바로 끝까지
+        setTimeout(done, 3200);
+      }
     },
   });
 }

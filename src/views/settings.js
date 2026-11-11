@@ -68,6 +68,8 @@ async function showOcrUsage(el, planBtn, adminSec) {
       title = '<b class="warn">이용 정지</b>';
       meters = `<p class="ci-advice">이용이 정지된 계정이에요.${acc.reason ? ` 사유: ${esc(acc.reason)}` : ''} 문의: hanguk.soek@me.com</p>`;
     } else if (acc.bonus) meters += `<p class="set-note">추가 인식 <b>${num(acc.bonus)}장</b> 남음 (한도를 다 쓰면 여기서 써요)</p>`;
+    if (!acc.suspended && st.levelGift && !st.levelGift.usable && st.levelGift.balance)
+      meters += `<p class="set-note">🎁 레벨업 선물 <b>${num(st.levelGift.balance)}장</b>이 쌓여 있어요. 구독하면 바로 쓸 수 있어요.</p>`;
     el.innerHTML = `<p class="usage-title">${title}</p>${meters}`;
     if (mode !== 'off' && planBtn) planBtn.hidden = false;
     if (st.owner && adminSec) adminSec.hidden = false;

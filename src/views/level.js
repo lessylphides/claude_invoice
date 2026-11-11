@@ -142,8 +142,8 @@ export function openLevelSheet() {
             <div class="set-card">
               <ul class="lv-how">
                 <li>영수증 저장 <b>+${POINTS.receipt}</b> (자동 인식·직접 입력 모두, 하루 ${DAILY_RECEIPT_CAP / POINTS.receipt}건까지)</li>
-                <li>새 메뉴 만들기 <b>+${POINTS.menu}</b></li>
-                <li>메뉴에 매입 품목 재료 연결 <b>+${POINTS.ingredient}</b></li>
+                <li>새 메뉴 만들기 <b>+${POINTS.menu}</b> (판매가를 넣은 메뉴)</li>
+                <li>메뉴에 매입 품목 재료 연결 <b>+${POINTS.ingredient}</b> (판매가를 넣은 메뉴)</li>
                 <li>같은 품목 묶기 <b>+${POINTS.link}</b></li>
                 <li>연속 기록 3일째마다 <b>+${POINTS.streak3}</b>, 7일째마다 <b>+${POINTS.streak7}</b></li>
               </ul>
@@ -156,7 +156,7 @@ export function openLevelSheet() {
             <ul>${table
               .map((n) => `<li class="${n === lv.level ? 'on' : ''}"><span>Lv.${n} ${esc(levelName(n))}</span><span>${n > 1 ? `${num(levelStart(n))}점${rewardFor(n) ? ` · 🎁 ${rewardFor(n)}장` : ''}` : '시작'}</span></li>`)
               .join('')}</ul>
-            <p class="set-note">레벨업 선물(추가 인식)은 요금제·무료 체험 한도를 다 쓴 뒤에 1장씩 써요. 하루에 최대 10장까지 받고, 남은 선물은 다음 날 이어서 받아요.</p>
+            <p class="set-note">레벨업 선물(추가 인식)은 구독 중에 요금제 한도를 다 쓴 뒤 1장씩 써요. 무료 체험 중에는 쌓아 두었다가 구독하면 바로 쓸 수 있어요. 하루 10장·한 달 20장까지 받고, 넘는 몫은 다음 날·다음 달에 이어서 받아요.</p>
           </details>
         </div>`;
       const box = body.querySelector('.lv-gifts');
@@ -164,6 +164,8 @@ export function openLevelSheet() {
         (g) => {
           if (!box.isConnected) return;
           box.innerHTML = `<p>지금 남은 선물 <b>${num(g.balance)}장</b> <span class="small muted">(지금까지 ${num(g.granted)}장)</span></p>${
+            g.usable === false && g.balance ? '<p class="small">🔒 무료 체험 중에는 쌓아 두기만 해요. 구독하면 바로 쓸 수 있어요.</p>' : ''
+          }${
             g.history?.length
               ? `<ul class="lv-hist">${g.history
                   .slice(0, 5)

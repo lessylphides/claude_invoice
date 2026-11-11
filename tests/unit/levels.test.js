@@ -48,8 +48,9 @@ describe('장부로 포인트 계산', () => {
       {
         purchases: [buy('2026-11-01', '가락청과', 28000), buy('2026-11-03', '코스트코', 50000)],
         menus: [
-          { ingredients: [{ type: 'item', itemName: '우유 1L' }, { type: 'item', itemName: '우유1L' }, { type: 'manual', name: '얼음' }] },
-          { ingredients: [] },
+          { price: 5000, ingredients: [{ type: 'item', itemName: '우유 1L' }, { type: 'item', itemName: '우유1L' }, { type: 'manual', name: '얼음' }] },
+          { price: 0, bottlePrice: 90000, ingredients: [] },
+          { price: 0, ingredients: [{ type: 'item', itemName: '설탕' }] }, // 판매가 없는 메뉴: 메뉴·재료 점수 없음
         ],
         itemLinks: { a: 'b' },
       },

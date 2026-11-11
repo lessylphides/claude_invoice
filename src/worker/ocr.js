@@ -6,7 +6,7 @@ import { validateOcrInput, buildOcrRequest, parseOcrResponse } from '../lib/ocrR
 import { fail, json, authUser, usageNow } from './common.js';
 import { entitlement, overLimit, getSub } from './billing.js';
 import { recordOcrStat } from './stats.js';
-import { getLevelRec, useGift } from './levels.js';
+import { getLevelRec, useGift, giftUsable } from './levels.js';
 
 export const DEFAULTS = { model: 'claude-opus-5-5', daily: 30, monthly: 300 };
 
@@ -28,8 +28,8 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   const ent = entitlement(env, user, await getSub(env, user.id).catch(() => null), now);
   const usage = await usageNow(sb, ent.since ?? null);
   if (!usage) return fail(503, 'usage', '사용량을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
-  // 레벨업 선물로 받은 추가 인식도 함께 (운영자가 준 추가 인식 + 선물)
-  const gift = (await getLevelRec(env, user.id).catch(() => null))?.balance || 0;
+  // 레벨업 선물로 받은 추가 인식도 함께 (운영자가 준 추가 인식 + 선물). 무료 체험 중에는 선물을 쓰지 않음
+  const gift = giftUsable(ent) ? (await getLevelRec(env, user.id).catch(() => null))?.balance || 0 : 0;
   usage.account.bonus += gift;
   const limits = { day: ent.day, month: ent.month, total: ent.total ?? null, kind: ent.kind, plan: ent.plan ?? null };
   if (usage.account.suspended)

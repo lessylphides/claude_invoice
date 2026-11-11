@@ -1,14 +1,17 @@
 // 서버: 레벨업 선물 (/api/level, /api/level/claim)
 // 앱이 "레벨이 올랐다"고 알려 오면, 서버가 서버에 저장된 장부로 레벨을 다시 계산해 선물(추가 인식)을 줌
-// - 같은 레벨 선물은 한 번만, 하루에 최대 DAILY_GIFT_CAP 장까지 (백업 불러오기 등으로 한꺼번에 오른 경우 다음 날 이어서)
-// - 선물은 서버 저장소(Durable Object)에만 기록, 영수증 인식 한도를 다 쓴 뒤에 1장씩 씀
+// - 같은 레벨 선물은 한 번만, 하루 DAILY_GIFT_CAP 장·한 달 MONTHLY_GIFT_CAP 장까지 (넘는 몫은 다음 날·다음 달에 이어서)
+// - 선물은 서버 저장소(Durable Object)에만 기록, 무료 체험 중에는 쌓이기만 하고 구독 중에 한도를 다 쓴 뒤 1장씩 씀
 import { computeLevel, rewardFor, levelName } from '../lib/levels.js';
 import { json, fail, authUser } from './common.js';
-import { db, kstDate } from './billing.js';
+import { db, kstDate, entitlement, getSub } from './billing.js';
 
 export const DAILY_GIFT_CAP = 10;
+export const MONTHLY_GIFT_CAP = 20;
+/** 선물을 쓸 수 있는지: 무료 체험 중에는 쌓아 두기만 (구독하면 바로 씀) */
+export const giftUsable = (ent) => ent?.kind !== 'trial';
 const key = (uid) => `lvl:${uid}`;
-export const emptyLevelRec = () => ({ rewarded: 1, balance: 0, granted: 0, day: null, dayGranted: 0, history: [] });
+export const emptyLevelRec = () => ({ rewarded: 1, balance: 0, granted: 0, day: null, dayGranted: 0, month: null, monthGranted: 0, history: [] });
 
 /**
  * 선물 계산 (순수 함수: 저장소 안에서 그대로 실행). 레벨을 하나씩 올리며 하루 한도 안에서만 줌
@@ -17,16 +20,21 @@ export const emptyLevelRec = () => ({ rewarded: 1, balance: 0, granted: 0, day: 
 export function applyClaim(rec, level, today, now) {
   const r = { ...emptyLevelRec(), ...(rec || {}) };
   if (r.day !== today) Object.assign(r, { day: today, dayGranted: 0 });
+  const month = today.slice(0, 7);
+  if (r.month !== month) Object.assign(r, { month, monthGranted: 0 });
   const gifts = [];
   while (r.rewarded < level) {
     const n = r.rewarded + 1;
     const amount = rewardFor(n);
-    if (r.dayGranted + amount > DAILY_GIFT_CAP && r.dayGranted > 0) break; // 오늘 몫을 넘으면 내일
+    // 오늘·이번 달 몫을 넘으면 다음 날·다음 달에 (그날·그달 첫 선물은 한도보다 커도 줌: Lv.99 50장)
+    if (amount && r.dayGranted + amount > DAILY_GIFT_CAP && r.dayGranted > 0) break;
+    if (amount && r.monthGranted + amount > MONTHLY_GIFT_CAP && r.monthGranted > 0) break;
     r.rewarded = n;
     if (!amount) continue; // 선물 없는 레벨
     r.balance += amount;
     r.granted += amount;
     r.dayGranted += amount;
+    r.monthGranted += amount;
     gifts.push({ level: n, amount });
     r.history = [{ level: n, amount, at: now }, ...r.history].slice(0, 30);
   }
@@ -84,7 +92,8 @@ export async function handleLevel(request, env, { fetchImpl = fetch, now = Date.
   if (!db(env)) return fail(503, 'not_configured', '레벨 선물 기능이 아직 준비되지 않았어요.');
   const path = new URL(request.url).pathname;
 
-  if (path === '/api/level' && request.method === 'GET') return json(200, view(await getLevelRec(env, user.id)));
+  const usable = giftUsable(entitlement(env, user, await getSub(env, user.id).catch(() => null), now));
+  if (path === '/api/level' && request.method === 'GET') return json(200, { ...view(await getLevelRec(env, user.id)), usable });
   if (path !== '/api/level/claim' || request.method !== 'POST') return fail(404, 'not_found', '없는 요청이에요.');
 
   // 서버에 저장된 장부로 다시 계산 (앱이 알려 준 숫자는 믿지 않음)
@@ -93,5 +102,5 @@ export async function handleLevel(request, env, { fetchImpl = fetch, now = Date.
   const row = (await r.json().catch(() => []))[0];
   const lv = computeLevel(row?.data || {}, now);
   const { rec, gifts } = await claim(env, user.id, lv.level, now);
-  return json(200, { ...view(rec, lv), gifts, giftNames: gifts.map((g) => levelName(g.level)) });
+  return json(200, { ...view(rec, lv), usable, gifts, giftNames: gifts.map((g) => levelName(g.level)) });
 }

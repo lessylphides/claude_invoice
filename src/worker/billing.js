@@ -184,11 +184,11 @@ function publicSub(sub, now) {
 async function statusBody(env, user, sb, sub, now) {
   const ent = entitlement(env, user, sub, now);
   const usage = await usageNow(sb, ent.since ?? null);
-  // 레벨업 선물도 추가 인식에 포함해 보여 줌
-  if (usage) {
-    const rec = await db(env)?.get(`lvl:${user.id}`).catch(() => null);
-    usage.account.bonus += rec?.balance || 0;
-  }
+  // 레벨업 선물: 구독 중이면 추가 인식에 포함, 무료 체험 중이면 쌓인 장수만 따로 보여 줌
+  const rec = usage ? await db(env)?.get(`lvl:${user.id}`).catch(() => null) : null;
+  const giftHeld = rec?.balance || 0;
+  const giftOk = ent.kind !== 'trial';
+  if (usage && giftOk) usage.account.bonus += giftHeld;
   return {
     mode: billingMode(env),
     owner: isOwner(env, user.email),
@@ -196,6 +196,7 @@ async function statusBody(env, user, sb, sub, now) {
     subscription: publicSub(sub, now),
     entitlement: ent,
     usage,
+    levelGift: { balance: giftHeld, usable: giftOk },
   };
 }
 

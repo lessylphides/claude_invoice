@@ -1,6 +1,6 @@
 // 레벨업 선물: 서버가 서버 장부로 레벨을 다시 계산, 같은 레벨은 한 번만, 하루 10장까지, 인식에서 선물부터 씀
 import { describe, it, expect } from 'vitest';
-import { handleLevel, applyClaim, DAILY_GIFT_CAP } from '../../src/worker/levels.js';
+import { handleLevel, applyClaim, DAILY_GIFT_CAP, MONTHLY_GIFT_CAP } from '../../src/worker/levels.js';
 import { handleOcr } from '../../src/worker/ocr.js';
 
 const UID = '11111111-2222-3333-4444-555555555555';
@@ -47,6 +47,21 @@ describe('레벨업 선물', () => {
     expect(DAILY_GIFT_CAP).toBe(10);
   });
 
+  it('한 달 한도 20장: 넘는 몫은 다음 달에', () => {
+    expect(MONTHLY_GIFT_CAP).toBe(20);
+    let rec = null;
+    const got = [];
+    for (let d = 1; d <= 30; d++) {
+      const out = applyClaim(rec, 15, `2026-11-${String(d).padStart(2, '0')}`, NOW);
+      rec = out.rec;
+      got.push(...out.gifts);
+    }
+    expect(got.reduce((s, g) => s + g.amount, 0)).toBeLessThanOrEqual(20);
+    expect(rec.monthGranted).toBe(19); // 3+3+3+5+5 = 19, 다음 5장은 다음 달
+    const dec = applyClaim(rec, 15, '2026-12-01', NOW);
+    expect(dec.gifts[0]).toEqual({ level: 7, amount: 5 });
+  });
+
   it('선물 없는 레벨(21~24)은 지나가고 Lv.25에서 20장', () => {
     const { rec, gifts } = applyClaim({ rewarded: 20, balance: 0, granted: 0 }, 25, '2026-11-11', NOW);
     expect(gifts).toEqual([{ level: 25, amount: 20 }]);
@@ -69,10 +84,20 @@ describe('레벨업 선물', () => {
     expect((await claim(env, fake({ ledger: {} }))).gifts).toEqual([]);
   });
 
-  it('영수증 인식: 무료 체험을 다 써도 선물이 있으면 선물부터 1장 씀', async () => {
+  it('무료 체험 중에는 선물이 쌓이기만 하고 쓰지 않음 (구독하면 바로 씀)', async () => {
     const env = { ANTHROPIC_API_KEY: 'sk', BILLING: memKV(), BILLING_MODE: 'live' };
+    const r = await claim(env, fake({ ledger: ledgerWith(5) }));
+    expect(r).toMatchObject({ balance: 3, usable: false });
+    const req = new Request('https://app.costnote.co.kr/api/ocr', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ images: [IMG], categories: ['기타'] }) });
+    const res = await handleOcr(req, env, { fetchImpl: fake().fetchImpl, now: NOW });
+    expect(res.status).toBe(429);
+    expect(JSON.parse(env.BILLING.m.get(`lvl:${UID}`)).balance).toBe(3);
+  });
+
+  it('영수증 인식: 한도를 다 써도 (구독 중이면) 선물부터 1장 씀', async () => {
+    const env = { ANTHROPIC_API_KEY: 'sk', BILLING: memKV(), BILLING_MODE: 'test' };
     await claim(env, fake({ ledger: ledgerWith(5) })); // 선물 3장
-    const f = fake();
+    const f = fake({ usage: { day: 30, month: 30, total: 30, period: 0, account: { suspended: false, bonus: 0 } } }); // 하루 한도(30) 다 씀
     const req = new Request('https://app.costnote.co.kr/api/ocr', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ images: [IMG], categories: ['기타'] }) });
     const res = await handleOcr(req, env, { fetchImpl: f.fetchImpl, now: NOW });
     expect(res.status).toBe(200);

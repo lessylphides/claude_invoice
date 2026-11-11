@@ -102,6 +102,8 @@ export function computeLevel(data, now = Date.now()) {
   let menus = 0;
   let ingredients = 0;
   for (const m of data?.menus || []) {
+    // 판매가(잔 또는 보틀)를 넣은 메뉴만 인정: 이름만 있는 빈 메뉴로 점수를 받지 않게
+    if (!(Number(m.price) > 0 || Number(m.bottlePrice) > 0)) continue;
     menus++;
     const keys = new Set((m.ingredients || []).filter((g) => g.type !== 'manual' && g.itemName).map((g) => normKey(g.itemName)));
     ingredients += keys.size;

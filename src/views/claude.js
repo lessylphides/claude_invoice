@@ -68,6 +68,7 @@ export function openClaudeConnect() {
                 <li><b>연결</b>을 누르면 코스트노트 로그인 화면이 떠요. 로그인하고 <b>허락하기</b>를 눌러요.</li>
                 <li>이제 클로드와 대화할 때 코스트노트를 쓸 수 있어요. 휴대폰 클로드 앱에서도 같은 계정이면 바로 써요.</li>
               </ol>
+              <p><a href="https://costnote.co.kr/ai#connect" target="_blank" rel="noopener">🖼 화면 그림으로 연결 방법 보기 ›</a></p>
               <p class="set-note">클로드는 지우기를 할 수 없어요. 장부를 바꿀 때마다 클로드가 사장님께 허락을 물어요. 연결은 클로드 커넥터 설정에서 언제든 끊을 수 있어요.</p>
             </div>
           </section>

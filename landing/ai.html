@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AI 원가 상담 — 코스트노트</title>
+  <meta name="description" content="클로드(Claude)에 코스트노트를 연결하면, 대화하듯 물어보고 장부 숫자로 원가·판매가 상담을 받고 허락하면 판매가까지 입력돼요.">
+  <meta property="og:title" content="코스트노트 AI 원가 상담">
+  <meta property="og:description" content="클로드와 대화하며 원가·판매가 상담, 허락하면 판매가까지 입력.">
+  <meta property="og:image" content="https://costnote.co.kr/assets/og.jpg?v=2">
+  <meta property="og:url" content="https://costnote.co.kr/ai">
+  <meta name="theme-color" content="#2459c4">
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #f4f5f8; --surface: #fff; --ink: #1d2129; --ink-2: #4a505c; --muted: #636a77; --line: #e1e4ea;
+      --accent: #2459c4; --accent-soft: #e6eefc; --ok: #18753f; --warn: #b23a0a;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f1115; --surface: #181b21; --ink: #eceef2; --ink-2: #b8bdc8; --muted: #9aa0ab; --line: #2c313a;
+        --accent: #6d9cf0; --accent-soft: #1f2c44; --ok: #4cc382; --warn: #f59a5b; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Malgun Gothic', sans-serif; line-height: 1.6; word-break: keep-all; }
+    a { color: var(--accent); }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--ink); text-decoration: none; }
+    .brand img { width: 32px; height: 32px; border-radius: 8px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 20px; border-radius: 12px; font-weight: 700; font-size: 16px; text-decoration: none; }
+    .btn.primary { background: #2459c4; color: #fff; }
+    .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+    .btn.small { padding: 8px 14px; font-size: 14px; }
+
+    .hero { display: grid; gap: 32px; align-items: center; padding: 28px 0 48px; }
+    .hero h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.25; margin: 0 0 14px; letter-spacing: -0.02em; }
+    .hero h1 em { font-style: normal; color: var(--accent); }
+    .hero p.lead { font-size: 18px; color: var(--ink-2); margin: 0 0 24px; }
+    .hero .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+    .hero .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
+    .phones { display: flex; justify-content: center; gap: 14px; }
+    .phone { width: min(44vw, 240px); border-radius: 28px; border: 6px solid #1d2129; overflow: hidden; background: #1d2129; box-shadow: 0 18px 40px rgba(20, 30, 50, 0.18); }
+    .phone img { display: block; width: 100%; height: auto; }
+    .phone.back { transform: translateY(28px); }
+    @media (min-width: 860px) { .hero { grid-template-columns: 1.1fr 1fr; padding: 48px 0 72px; } }
+
+    section { padding: 48px 0; }
+    h2 { font-size: clamp(24px, 4.5vw, 32px); margin: 0 0 8px; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); margin: 0 0 28px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .card { background: var(--surface); border-radius: 16px; padding: 20px; border: 1px solid var(--line); }
+    .card .ic { font-size: 26px; }
+    .card h3 { font-size: 18px; margin: 8px 0 6px; }
+    .card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+    .split { display: grid; gap: 28px; align-items: center; }
+    @media (min-width: 860px) { .split { grid-template-columns: 1fr 1fr; } .split.rev > :first-child { order: 2; } }
+    .split .phone { margin: 0 auto; }
+    .checks { list-style: none; padding: 0; margin: 0; }
+    .checks li { padding: 8px 0 8px 28px; position: relative; color: var(--ink-2); }
+    .checks li::before { content: '✓'; position: absolute; left: 0; color: var(--ok); font-weight: 800; }
+
+    .steps { counter-reset: s; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .step::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 800; margin-bottom: 8px; }
+    .step h3 { font-size: 17px; margin: 4px 0 6px; }
+    .step p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+    .faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; }
+    .faq summary { font-weight: 700; cursor: pointer; }
+    .faq p { margin: 10px 0 0; color: var(--ink-2); }
+    .faq ul { margin: 8px 0 0; padding-left: 20px; color: var(--ink-2); }
+    .faq li { margin: 6px 0; }
+
+    .cta-band { background: #2459c4; color: #fff; border-radius: 20px; padding: 32px 24px; text-align: center; }
+    .cta-band h2 { color: #fff; }
+    .cta-band p { color: #dfe8fb; margin: 0 0 18px; }
+    .cta-band .btn { background: #fff; color: #2459c4; }
+
+    footer { padding: 32px 0 48px; color: var(--muted); font-size: 13px; }
+    footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+    footer .biz p { margin: 0 0 12px; line-height: 1.7; }
+    .step-btn { margin-top: 14px; }
+    .plans { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .plan.best { border: 2px solid var(--accent); }
+    .plan h3 { font-size: 17px; margin: 0 0 6px; }
+    .plan .price { font-size: 28px; font-weight: 800; margin: 0; color: var(--ink); }
+    .plan .price small { font-size: 15px; font-weight: 600; color: var(--muted); }
+    .plan p { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
+    .plan .fine { color: var(--muted); font-size: 13px; }
+    .plan-note { color: var(--muted); font-size: 14px; margin: 16px 0 0; }
+
+    .chat { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 12px; max-width: 560px; }
+    .bubble { padding: 12px 15px; border-radius: 16px; font-size: 15px; line-height: 1.65; }
+    .bubble.me { align-self: flex-end; background: var(--accent-soft); color: var(--ink); border-bottom-right-radius: 4px; max-width: 88%; }
+    .bubble.ai { align-self: flex-start; background: var(--bg); border-bottom-left-radius: 4px; max-width: 94%; }
+    .bubble.ai ul { margin: 6px 0; padding-left: 18px; }
+    .bubble.ai li { margin: 3px 0; }
+    .tool { align-self: flex-start; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .tool::before { content: '🧾'; }
+    .example { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+    .shots { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); counter-reset: g; }
+    .shot { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+    .shot::before { counter-increment: g; content: counter(g); display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 14px; margin-bottom: 6px; }
+    .shot h3 { font-size: 16px; margin: 2px 0 4px; }
+    .shot p { margin: 0 0 10px; color: var(--ink-2); font-size: 14px; }
+    .shot img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
+    .url { display: block; font-family: ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px; word-break: break-all; user-select: all; margin: 10px 0 0; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 3px 10px; margin-bottom: 10px; }
+    .legal { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="/"><img src="/assets/icon.svg" alt="" width="32" height="32">코스트노트</a>
+      <a class="btn primary small" href="https://app.costnote.co.kr/">앱 열기</a>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="ai-title">
+        <div>
+          <span class="tag">보너스 기능 · AI 상담</span>
+          <h1 id="ai-title">클로드에게 물어보세요.<br><em>내 장부 숫자로</em><br>원가 상담을 해 줘요.</h1>
+          <p class="lead">클로드(Claude)에 코스트노트를 연결하면, 평소처럼 대화하듯 물어보기만 하면 돼요. 클로드가 매입가·원가율·최소 마진을 직접 읽고 설명해 주고, 사장님이 허락하면 판매가 입력까지 해 줘요.</p>
+          <div class="ctas">
+            <a class="btn primary" href="#connect">연결 방법 보기</a>
+            <a class="btn ghost" href="https://app.costnote.co.kr/?start=signup">코스트노트 시작하기</a>
+          </div>
+          <p class="note">클로드 계정이 필요해요. 무료 요금제도 연결할 수 있어요(커스텀 커넥터 1개까지).</p>
+        </div>
+        <div class="chat" role="img" aria-label="클로드와 나눈 원가 상담 대화 예시">
+          <div class="bubble me">코스트노트에서 발베니 12년 찾아서 잔·보틀 판매가 괜찮은지 봐 줘</div>
+          <div class="tool">코스트노트 사용함</div>
+          <div class="bubble ai">
+            잔은 목표 원가율 25% 안이고, 보틀은 원가율이 높지만 위스키 최소 마진을 넉넉히 넘어서 지금 가격도 문제는 없어요.
+            <ul>
+              <li><b>매입가</b> 700ml 150,000원 · 잔 30ml 기준 23잔</li>
+              <li><b>잔 26,000원</b> 원가 6,430원 · 원가율 24.7% · 마진 19,570원</li>
+              <li><b>보틀 360,000원</b> 원가율 41.7% · 마진 210,000원 (최소 마진 150,000원 충족)</li>
+            </ul>
+            잔을 27,000원으로 올리면 보틀은 잔 합계 60% 기준 37만~38만 원 선이 맞아요.
+          </div>
+          <div class="bubble me">잔 27,000원, 보틀 그에 맞게 바꿔 줘</div>
+          <div class="tool">코스트노트: 판매가 입력 사용함</div>
+          <div class="bubble ai">바꿨어요. 잔 <b>27,000원</b>(원가율 23.8%), 보틀 <b>375,000원</b>이에요. 되돌리려면 코스트노트 설정의 ‘클로드가 바꾼 기록’에서 돌릴 수 있어요.</div>
+        </div>
+      </section>
+      <p class="example">※ 위 대화는 실제 대화를 바탕으로 숫자를 바꾼 예시예요.</p>
+
+      <section aria-labelledby="can-title">
+        <h2 id="can-title">이런 걸 물어볼 수 있어요</h2>
+        <p class="sub">정해진 명령어 없이, 사장님 말투 그대로요.</p>
+        <div class="grid">
+          <div class="card"><div class="ic" aria-hidden="true">🥃</div><h3>메뉴 원가 상담</h3><p>“요즘 위스키 원가율 괜찮아?” 메뉴별 원가·원가율·마진과 목표 원가율·최소 마진에 맞는 판매가를 설명해 줘요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">📈</div><h3>단가 변화 확인</h3><p>“우유 값 계속 오르는 것 같은데?” 품목별 매입 단가 기록을 거래처·날짜와 함께 보여 줘요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">🧾</div><h3>매입 기록 찾기</h3><p>“이번 달 ○○상사에서 산 거 정리해 줘.” 품목·거래처·기간으로 장부를 찾아 정리해요.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">✍️</div><h3>판매가 입력</h3><p>“그 가격으로 바꿔 줘.” 허락하면 잔·보틀 판매가를 장부에 입력해요. 여러 메뉴도 한 번에.</p></div>
+          <div class="card"><div class="ic" aria-hidden="true">🗂</div><h3>메뉴 분류 정리</h3><p>“하이볼 분류 만들고 하이볼 메뉴들 옮겨 줘.” 원가 탭의 메뉴 분류를 만들고 옮겨요.</p></div>
+        </div>
+      </section>
+
+      <section aria-labelledby="safe-title">
+        <div class="split">
+          <div>
+            <h2 id="safe-title">AI에게 맡겨도 안심이에요</h2>
+            <p class="sub">클로드가 할 수 있는 일은 코스트노트가 정해 둔 것뿐이에요.</p>
+            <ul class="checks">
+              <li>장부를 바꿀 때는 사장님이 말했을 때만, 클로드 설정에서 매번 확인받게 할 수도 있어요</li>
+              <li><b>지우기는 할 수 없어요</b> — 영수증·메뉴를 삭제하는 기능은 아예 열어 두지 않았어요</li>
+              <li>클로드가 바꾼 내용은 앱 ⚙ 설정 → <b>클로드가 바꾼 기록</b>에서 한 번에 되돌려요</li>
+              <li>연결할 때 코스트노트 비밀번호로 직접 허락해야 하고, 앱에서 언제든 연결을 끊을 수 있어요</li>
+              <li>내 계정의 장부만 볼 수 있어요. 다른 사장님 장부는 절대 볼 수 없어요</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>필요한 것</h3>
+            <p>· 코스트노트 계정<br>· 클로드(Claude) 계정 — 무료 요금제도 커스텀 커넥터 1개까지 연결 가능<br>· 처음 한 번, 클로드 설정에서 연결 (약 1분)</p>
+            <h3 style="margin-top:16px">비용</h3>
+            <p>AI 상담에 드는 비용은 코스트노트 요금제에 포함되지 않고, 사장님 클로드 계정의 사용량으로 계산돼요. 코스트노트에서 따로 받는 돈은 없어요.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="connect" aria-labelledby="connect-title">
+        <h2 id="connect-title">연결 방법 (처음 한 번)</h2>
+        <p class="sub">클로드 앱(휴대폰·데스크톱)이나 claude.ai 웹에서 그대로 따라 하세요. 연결 주소:</p>
+        <code class="url">https://app.costnote.co.kr/mcp</code>
+        <div class="shots" style="margin-top:20px">
+          <div class="shot"><h3>설정 → 커넥터</h3><p>클로드 설정에서 <b>커넥터</b>를 눌러요.</p><img src="/assets/ai/g1.webp" alt="클로드 설정 화면의 커넥터 메뉴" width="600" height="900" loading="lazy"></div>
+          <div class="shot"><h3>맞춤 커넥터 추가</h3><p>오른쪽 위 <b>+</b> → <b>맞춤 커넥터 추가</b>.</p><img src="/assets/ai/g2.webp" alt="커넥터 화면에서 맞춤 커넥터 추가 메뉴" width="600" height="520" loading="lazy"></div>
+          <div class="shot"><h3>이름·주소 입력</h3><p>이름 <b>코스트노트</b>, 주소는 위 연결 주소를 붙여 넣고 <b>계속</b>.</p><img src="/assets/ai/g3.webp" alt="커넥터 이름과 서버 주소 입력 화면" width="600" height="680" loading="lazy"></div>
+          <div class="shot"><h3>설정은 그대로 → 추가</h3><p>‘감지됨’ 표시 그대로 두고 아래 <b>추가</b>를 눌러요. 요청 헤더는 비워 두세요.</p><img src="/assets/ai/g4.webp" alt="인증 설정이 자동으로 감지된 화면" width="600" height="860" loading="lazy"></div>
+          <div class="shot"><h3>코스트노트 로그인</h3><p><b>연결</b>을 누르면 이 화면이 열려요. 코스트노트 이메일·비밀번호로 로그인.</p><img src="/assets/ai/g5.webp" alt="코스트노트 클로드 연결 로그인 화면" width="600" height="900" loading="lazy"></div>
+          <div class="shot"><h3>허락하기</h3><p>클로드가 할 수 있는 일을 확인하고 <b>허락하기</b>.</p><img src="/assets/ai/g6.webp" alt="클로드가 할 수 있는 일과 허락하기 버튼" width="600" height="1100" loading="lazy"></div>
+          <div class="shot"><h3>연결 끝</h3><p>커넥터 목록에 <b>코스트노트</b>가 생기면 완료. 이제 아무 대화에서나 물어보세요.</p><img src="/assets/ai/g7.webp" alt="커넥터 목록에 코스트노트가 추가된 화면" width="600" height="720" loading="lazy"></div>
+          <div class="shot"><h3>(선택) 확인받기 설정</h3><p>코스트노트를 누르면 도구별로 <b>묻기</b>·항상 허용을 고를 수 있어요. 판매가 입력은 ‘묻기’를 추천해요.</p><img src="/assets/ai/g8.webp" alt="코스트노트 도구별 허용 설정 화면" width="600" height="760" loading="lazy"></div>
+        </div>
+      </section>
+
+      <section class="faq" aria-labelledby="faq-title">
+        <h2 id="faq-title">자주 묻는 질문</h2>
+        <details><summary>클로드 무료 요금제도 되나요?</summary><p>네. 클로드 무료 요금제는 커스텀 커넥터를 1개까지 연결할 수 있어요. 다만 대화 사용량 한도는 클로드 요금제를 따라요.</p></details>
+        <details><summary>휴대폰 클로드 앱에서도 되나요?</summary><p>네. 한 번 연결하면 같은 클로드 계정의 웹·데스크톱·휴대폰 앱에서 모두 쓸 수 있어요.</p></details>
+        <details><summary>클로드가 영수증을 추가하거나 지울 수 있나요?</summary><p>아니요. 지금은 장부 보기와 판매가 입력, 메뉴 분류 만들기·옮기기만 할 수 있어요. 영수증 추가·수정, 메뉴 새로 만들기, 지우기는 코스트노트 앱에서 해 주세요.</p></details>
+        <details><summary>내 장부가 어디로 가나요?</summary><p>사장님이 클로드에게 물어볼 때 그에 필요한 장부 정보만 사장님 본인의 클로드 대화로 전달돼요. 자세한 내용은 <a href="/privacy">개인정보처리방침</a>에 있어요.</p></details>
+        <details><summary>연결을 끊고 싶어요.</summary><p>코스트노트 앱 ⚙ 설정 → AI 상담 → 클로드 연결의 ‘연결된 클로드’에서 끊거나, 클로드 커넥터 설정에서 ‘연결 해제’를 누르면 돼요.</p></details>
+      </section>
+
+      <section>
+        <div class="cta-band">
+          <h2>장부는 코스트노트가, 상담은 클로드가</h2>
+          <p>먼저 코스트노트에 영수증을 쌓아 두면, 클로드가 그 숫자로 상담해 줘요.</p>
+          <a class="btn" href="https://app.costnote.co.kr/?start=signup">무료로 시작하기</a>
+        </div>
+        <p class="legal" style="margin-top:16px">Claude는 Anthropic, PBC의 상표예요. 코스트노트는 Anthropic과 제휴하거나 인증받은 서비스가 아니며, 공개된 커넥터 기능으로 연결해 쓰는 방식이에요.</p>
+      </section>
+    </main>
+  </div>
+  <footer>
+    <div class="wrap">
+      <span>© 2026 코스트노트</span>
+      <span><a href="/">소개</a> · <a href="/terms">이용약관</a> · <a href="/privacy"><b>개인정보처리방침</b></a> · <a href="/refund">환불정책</a></span>
+    </div>
+  </footer>
+</body>
+</html>

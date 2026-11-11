@@ -66,7 +66,8 @@ body.no-scroll { overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#app { max-width: 560px; margin: 0 auto; padding: env(safe-area-inset-top) 12px calc(150px + env(safe-area-inset-bottom)); }
+#app { max-width: 560px; margin: 0 auto; padding: 0 12px calc(150px + env(safe-area-inset-bottom)); }
+#app > :first-child:not(.top) { margin-top: env(safe-area-inset-top); }
 
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
@@ -75,7 +76,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ok { color: var(--ok); }
 
 /* 상단 */
-.top { display: flex; align-items: center; gap: 4px; padding: 10px 0 4px; }
+.top { display: flex; align-items: center; gap: 4px; padding: calc(env(safe-area-inset-top) + 12px) 12px 6px; margin: 0 -12px; position: sticky; top: 0; z-index: 4; background: var(--bg); }
+/* 맨 윗줄은 고정, 아래 내용은 윗줄 밑으로 스르륵 사라지게 */
+.top::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 14px; background: linear-gradient(var(--bg), transparent); pointer-events: none; }
 .month-title { font-size: 20px; font-weight: 700; padding: 4px 8px; }
 .icon-btn { width: 40px; height: 40px; border-radius: 10px; font-size: 22px; display: grid; place-items: center; color: var(--ink-2); }
 .icon-btn:active { background: var(--surface-2); }

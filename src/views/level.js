@@ -95,7 +95,8 @@ export function levelAfterRender(root) {
     }
     badge.classList.add(up ? 'lv-up' : 'lv-gain');
     if (up) {
-      toast(`🎉 Lv.${lv.level} ${lv.name} 달성!`, 3500);
+      // 저장 등 방금 한 일의 알림('저장했습니다')이 먼저 줄 서도록 한 박자 뒤에
+      setTimeout(() => toast(`🎉 Lv.${lv.level} ${lv.name} 달성!`, 3500), 80);
       scheduleClaim();
     }
   }

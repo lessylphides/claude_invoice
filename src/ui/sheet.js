@@ -168,17 +168,47 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeTopSheet();
 });
 
-export function toast(msg, ms = 2600) {
+// 알림(토스트)은 한 번에 하나씩 차례로: 동시에 오면 겹치지 않게 줄 세움 (예: '저장했어요' 다음 '레벨업')
+const toastQueue = [];
+let toastNow = null; // { el, timer, shownAt, ms }
+const MIN_SHOW = 1300; // 다음 알림이 기다리면 지금 것은 이만큼만 보여 주고 넘김
+
+function hideToast() {
+  const cur = toastNow;
+  if (!cur) return;
+  clearTimeout(cur.timer);
+  cur.el.classList.remove('show');
+  setTimeout(() => {
+    cur.el.remove();
+    toastNow = null;
+    showNextToast();
+  }, 250);
+}
+
+function showNextToast() {
+  if (toastNow || !toastQueue.length) return;
+  const { msg, ms } = toastQueue.shift();
   const el = document.createElement('div');
   el.className = 'toast';
   el.setAttribute('role', 'status');
   el.textContent = msg;
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => {
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 300);
-  }, ms);
+  toastNow = { el, msg, shownAt: Date.now(), timer: setTimeout(hideToast, toastQueue.length ? Math.min(ms, MIN_SHOW) : ms) };
+}
+
+export function toast(msg, ms = 2600) {
+  // 바로 앞과 같은 말이면 한 번만
+  const last = toastQueue.at(-1)?.msg ?? toastNow?.msg;
+  if (last === msg) return;
+  toastQueue.push({ msg, ms });
+  if (toastNow) {
+    // 기다리는 알림이 생겼으니 지금 것은 최소 시간만 보여 주고 넘김
+    const left = Math.max(0, MIN_SHOW - (Date.now() - toastNow.shownAt));
+    clearTimeout(toastNow.timer);
+    toastNow.timer = setTimeout(hideToast, left);
+  }
+  showNextToast();
 }
 
 export function showBusy(msg) {

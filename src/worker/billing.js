@@ -184,6 +184,11 @@ function publicSub(sub, now) {
 async function statusBody(env, user, sb, sub, now) {
   const ent = entitlement(env, user, sub, now);
   const usage = await usageNow(sb, ent.since ?? null);
+  // 레벨업 선물도 추가 인식에 포함해 보여 줌
+  if (usage) {
+    const rec = await db(env)?.get(`lvl:${user.id}`).catch(() => null);
+    usage.account.bonus += rec?.balance || 0;
+  }
   return {
     mode: billingMode(env),
     owner: isOwner(env, user.email),

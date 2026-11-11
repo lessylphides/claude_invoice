@@ -9,6 +9,7 @@ import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
+import { levelBadge } from './level.js';
 import { openTrend } from './trend.js';
 import { pickItem } from './itemPicker.js';
 
@@ -89,6 +90,7 @@ export function renderCostTab() {
   return `
     <header class="top">
       <h1 class="month-title static">원가율</h1>
+      ${levelBadge()}
       <button class="icon-btn settings" data-act="settings" aria-label="설정">⚙</button>
     </header>
 

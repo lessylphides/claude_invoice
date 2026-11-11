@@ -5,6 +5,7 @@ import { handleOcr } from './ocr.js';
 import { handleBilling, runRenewals } from './billing.js';
 import { handleAdmin, handleOcrFeedback } from './stats.js';
 import { runBackup } from './backup.js';
+import { handleLevel } from './levels.js';
 export { BillingStore } from './billingStore.js';
 
 const cache = new Map();
@@ -42,6 +43,7 @@ export default {
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
     if (url.pathname === '/api/ocr/feedback') return handleOcrFeedback(request, env);
     if (url.pathname.startsWith('/api/admin')) return handleAdmin(request, env);
+    if (url.pathname === '/api/level' || url.pathname === '/api/level/claim') return handleLevel(request, env);
     if (url.pathname === '/api/billing' || url.pathname.startsWith('/api/billing/')) return handleBilling(request, env);
     if (url.pathname.startsWith('/api/')) return new Response('Not Found', { status: 404 });
     return serveFile(request, url);

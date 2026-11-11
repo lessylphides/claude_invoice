@@ -2,6 +2,7 @@
 // Cloudflare KV 는 저장 직후 다른 지역 서버에서 최대 1분간 예전 값이 보일 수 있어 결제 정보에는 맞지 않음
 import { DurableObject } from 'cloudflare:workers';
 import { applyOcrStat, applyAccStat, emptyDay, emptyMonth } from './stats.js';
+import { applyClaim, applyUse } from './levels.js';
 
 export class BillingStore extends DurableObject {
   async read(key) {
@@ -25,6 +26,18 @@ export class BillingStore extends DurableObject {
     const day = (await this.ctx.storage.get(k)) ?? {};
     applyAccStat(day, model, edits);
     await this.ctx.storage.put(k, day);
+  }
+  /** 레벨업 선물 받기 (같은 레벨은 한 번만, 하루 한도) */
+  async claimLevel(key, level, today, now) {
+    const out = applyClaim(await this.ctx.storage.get(key), level, today, now);
+    if (out.gifts.length) await this.ctx.storage.put(key, out.rec);
+    return out;
+  }
+  /** 레벨업 선물 1장 쓰기 */
+  async useLevelGift(key) {
+    const { rec, used } = applyUse(await this.ctx.storage.get(key));
+    if (used) await this.ctx.storage.put(key, rec);
+    return used;
   }
   /** prefix 로 시작하는 키 목록 (after 다음부터 최대 500개) */
   async keys(prefix, after = null) {

@@ -12,6 +12,7 @@ import { closeTopSheet, toast } from './ui/sheet.js';
 import { sync } from './sync.js';
 import { takeBillingReturn } from './billing.js';
 import { finishCardRegistration } from './views/plans.js';
+import { levelAfterRender, openLevelSheet, scheduleClaim } from './views/level.js';
 
 const app = document.getElementById('app');
 
@@ -45,7 +46,10 @@ function finishBillingReturn() {
 /** 로그인했고 장부를 불러왔으면 서버 동기화 시작, 로그아웃하면 멈춤 */
 function syncWithAuth() {
   if (boot.auth !== 'ok' || boot.data !== 'ok') return;
-  if (auth.user && !auth.recovery) sync.start(auth.user);
+  if (auth.user && !auth.recovery) {
+    sync.start(auth.user);
+    scheduleClaim(8000); // 밀린 레벨업 선물이 있으면 받기 (장부가 서버에 올라간 뒤)
+  }
   else sync.stop();
 }
 
@@ -59,6 +63,7 @@ function render() {
   if (boot.data === 'error') return renderLoadError(boot.dataError);
   if (boot.data === 'loading') return (app.innerHTML = '<p class="boot-msg" role="status">장부를 불러오는 중…</p>');
   app.innerHTML = staleBanner() + (view.tab === 'cost' ? renderCostTab() : renderPurchaseTab()) + tabBar();
+  levelAfterRender(app);
 }
 
 /** 로그인 기능을 불러오지 못함 (처음 열 때 인터넷이 끊겨 있는 경우 등) */
@@ -92,6 +97,7 @@ app.addEventListener('click', (e) => {
     return setTab(tab.dataset.tab);
   }
   if (e.target.closest('[data-act=settings]')) return openSettings();
+  if (e.target.closest('[data-act=level]')) return openLevelSheet();
   if (view.tab === 'cost') handleCostClick(e);
   else handlePurchaseClick(e, { openSettings });
 });

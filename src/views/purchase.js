@@ -12,6 +12,7 @@ import { openDay } from './day.js';
 import { openTrend } from './trend.js';
 import { openCaptureMenu } from './capture.js';
 import { sync } from '../sync.js';
+import { levelBadge } from './level.js';
 
 export const monthPurchases = () => {
   const k = monthKey();
@@ -28,6 +29,7 @@ export function renderPurchaseTab() {
       <button class="icon-btn" data-act="prev" aria-label="이전 달">‹</button>
       <button class="month-title" data-act="today" title="이번 달로">${view.year}년 ${view.month}월</button>
       <button class="icon-btn" data-act="next" aria-label="다음 달">›</button>
+      ${levelBadge()}
       <button class="icon-btn settings" data-act="settings" aria-label="설정">⚙</button>
     </header>
 

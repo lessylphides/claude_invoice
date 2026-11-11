@@ -43,6 +43,7 @@ if (settings.apiKey) {
   writeJSON(SETTINGS_KEY, settings);
 }
 let index = null; // 품목 색인 (데이터가 바뀌면 다시 만듦)
+let rev = 0; // 데이터가 바뀔 때마다 1씩 (화면에서 계산 결과를 다시 쓸지 판단)
 
 const listeners = new Set();
 const notify = () => listeners.forEach((fn) => fn());
@@ -101,6 +102,7 @@ function persistNow() {
 
 function commit() {
   index = null;
+  rev++;
   persistNow();
   changeListeners.forEach((fn) => fn());
   notify();
@@ -115,6 +117,7 @@ function commit() {
 export const ready = (async () => {
   const { raw, legacy } = await persist.load();
   data = migrate(raw ?? legacy, { trusted: true });
+  rev++;
   if (raw && legacy) data = mergeLegacy(data, migrate(legacy)).data;
   if (legacy) {
     dropLegacy = true;
@@ -226,6 +229,14 @@ export const store = {
     return [...seen.values()];
   },
 
+  /** 데이터 판(바뀔 때마다 늘어남) */
+  get rev() {
+    return rev;
+  },
+  /** 같은 품목 묶기 기록 (레벨 계산용) */
+  get itemLinks() {
+    return data.itemLinks;
+  },
   // ── 원가 ──
   get menus() {
     return data.menus;
@@ -345,6 +356,7 @@ export const store = {
   replaceData(raw) {
     data = migrate(raw);
     index = null;
+    rev++;
     persistNow();
     notify();
   },

@@ -6,6 +6,7 @@ import { validateOcrInput, buildOcrRequest, parseOcrResponse } from '../lib/ocrR
 import { fail, json, authUser, usageNow } from './common.js';
 import { entitlement, overLimit, getSub } from './billing.js';
 import { recordOcrStat } from './stats.js';
+import { getLevelRec, useGift } from './levels.js';
 
 export const DEFAULTS = { model: 'claude-opus-5-5', daily: 30, monthly: 300 };
 
@@ -27,6 +28,9 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   const ent = entitlement(env, user, await getSub(env, user.id).catch(() => null), now);
   const usage = await usageNow(sb, ent.since ?? null);
   if (!usage) return fail(503, 'usage', '사용량을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+  // 레벨업 선물로 받은 추가 인식도 함께 (운영자가 준 추가 인식 + 선물)
+  const gift = (await getLevelRec(env, user.id).catch(() => null))?.balance || 0;
+  usage.account.bonus += gift;
   const limits = { day: ent.day, month: ent.month, total: ent.total ?? null, kind: ent.kind, plan: ent.plan ?? null };
   if (usage.account.suspended)
     return fail(403, 'suspended', `이용이 정지된 계정이에요.${usage.account.reason ? ` (사유: ${usage.account.reason})` : ''} 문의: hanguk.soek@me.com`);
@@ -75,8 +79,12 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   if (!rec.ok) console.error('[ocr] record usage failed', rec.status);
   const after = { day: usage.day + 1, month: usage.month + 1, total: usage.total + 1, period: usage.period + 1, account: { ...usage.account } };
   if (useBonus) {
-    const b = await sb('/rest/v1/rpc/use_bonus', { method: 'POST', body: '{}' }).catch(() => null);
-    if (!b?.ok) console.error('[ocr] use_bonus failed', b?.status);
+    // 레벨업 선물부터 쓰고, 없으면 운영자가 준 추가 인식
+    const usedGift = gift > 0 && (await useGift(env, user.id).catch(() => false));
+    if (!usedGift) {
+      const b = await sb('/rest/v1/rpc/use_bonus', { method: 'POST', body: '{}' }).catch(() => null);
+      if (!b?.ok) console.error('[ocr] use_bonus failed', b?.status);
+    }
     after.account.bonus = Math.max(0, usage.account.bonus - 1);
   }
   return json(200, { result, usage: after, limits });

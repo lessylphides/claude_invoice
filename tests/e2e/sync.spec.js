@@ -30,7 +30,7 @@ test('처음 로그인: 이 기기 장부를 계정에 올리고, 고치면 다�
 test('다른 기기에서 바뀐 장부를 받아온다', async ({ page }) => {
   const server = fakeLedgerServer({ rev: 3, data: serverData('코스트코', 3200) });
   await openApp(page, { data: local(), auth: server.handler, local: syncState({ rev: 2 }) });
-  await expect(page.locator('.toast').last()).toContainText('다른 기기에서 바뀐 장부를 불러왔어요');
+  await expect(page.locator('.toast').last()).toContainText('다른 기기나 클로드에서 바뀐 장부를 불러왔어요');
   await expect(page.locator('.hero-num')).toHaveText('3,200원');
   expect(server.requests.filter((r) => r.method !== 'GET')).toEqual([]); // 덮어쓰지 않음
 });
@@ -38,7 +38,7 @@ test('다른 기기에서 바뀐 장부를 받아온다', async ({ page }) => {
 test('이 기기와 다른 기기가 둘 다 바꿨으면 어느 쪽을 남길지 묻는다', async ({ page }) => {
   const server = fakeLedgerServer({ rev: 3, data: serverData('코스트코', 3200) });
   await openApp(page, { data: local(), auth: server.handler, local: syncState({ rev: 2, dirty: true }) });
-  await expect(sheet(page)).toContainText('다른 기기에서 장부가 바뀌었어요');
+  await expect(sheet(page)).toContainText('다른 곳에서 장부가 바뀌었어요');
   await sheet(page).locator('[data-choice=local]').click();
   await expect.poll(() => server.row.rev).toBe(4);
   expect(server.row.data.purchases[0].vendor).toBe('가락청과');

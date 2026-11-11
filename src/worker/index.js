@@ -6,6 +6,9 @@ import { handleBilling, runRenewals } from './billing.js';
 import { handleAdmin, handleOcrFeedback } from './stats.js';
 import { runBackup } from './backup.js';
 import { handleLevel } from './levels.js';
+import { makeProvider } from './mcp/provider.js';
+import { handleAuthorize } from './mcp/authorize.js';
+import { handleAiChanges } from './mcp/changes.js';
 export { BillingStore } from './billingStore.js';
 
 const cache = new Map();
@@ -34,12 +37,14 @@ function serveFile(request, url, files = FILES, csp = CSP, key = 'app') {
   return new Response(request.method === 'HEAD' ? null : cache.get(ck), { headers });
 }
 
-export default {
+const app = {
   async fetch(request, env) {
     const url = new URL(request.url);
     // www → 소개 페이지 주소로, costnote.co.kr → 소개 페이지, 그 밖(app. 등) → 앱
     if (url.hostname === 'www.costnote.co.kr') return Response.redirect(`https://costnote.co.kr${url.pathname}${url.search}`, 301);
     if (url.hostname === 'costnote.co.kr') return serveFile(request, url, LANDING, LANDING_CSP, 'landing');
+    if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
+    if (url.pathname === '/api/ai-changes' || url.pathname === '/api/ai-changes/undo') return handleAiChanges(request, env);
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
     if (url.pathname === '/api/ocr/feedback') return handleOcrFeedback(request, env);
     if (url.pathname.startsWith('/api/admin')) return handleAdmin(request, env);
@@ -47,6 +52,18 @@ export default {
     if (url.pathname === '/api/billing' || url.pathname.startsWith('/api/billing/')) return handleBilling(request, env);
     if (url.pathname.startsWith('/api/')) return new Response('Not Found', { status: 404 });
     return serveFile(request, url);
+  },
+};
+
+// 클로드 연결: 로그인(OAuth)·/mcp 는 provider 가 처리하고, 나머지는 app 으로
+const provider = makeProvider(app);
+
+export default {
+  fetch(request, env, ctx) {
+    // 소개 페이지 도메인은 OAuth 와 무관하게 바로
+    const host = new URL(request.url).hostname;
+    if (host === 'costnote.co.kr' || host === 'www.costnote.co.kr') return app.fetch(request, env);
+    return provider.fetch(request, env, ctx);
   },
   // 매일 한 번: 결제일이 된 구독 정기결제, 장부 백업 (wrangler.jsonc 의 triggers.crons)
   async scheduled(event, env, ctx) {

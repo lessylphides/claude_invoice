@@ -23,8 +23,11 @@
   "homepage": "https://github.com/lessylphides/claude_invoice#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
+    "@cloudflare/workers-oauth-provider": "^1.2.4",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@supabase/supabase-js": "^2.119.0",
-    "@tosspayments/tosspayments-sdk": "^2.10.0"
+    "@tosspayments/tosspayments-sdk": "^2.10.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

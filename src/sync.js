@@ -113,8 +113,8 @@ function choose({ title, text, options }) {
 async function resolveConflict(row) {
   setStatus('conflict');
   const pick = await choose({
-    title: '다른 기기에서 장부가 바뀌었어요',
-    text: `이 기기에서 바꾼 내용이 아직 서버에 올라가지 않았는데, 그 사이 다른 기기에서 장부가 바뀌었어요.<br>어느 쪽을 남길까요? <span class="muted small">(남기지 않은 쪽은 사라집니다. 걱정되면 먼저 ⚙ 설정에서 백업 파일을 저장하세요.)</span>`,
+    title: '다른 곳에서 장부가 바뀌었어요',
+    text: `이 기기에서 바꾼 내용이 아직 서버에 올라가지 않았는데, 그 사이 다른 기기나 클로드에서 장부가 바뀌었어요.<br>어느 쪽을 남길까요? <span class="muted small">(남기지 않은 쪽은 사라집니다. 걱정되면 먼저 ⚙ 설정에서 백업 파일을 저장하세요.)</span>`,
     options: [
       { value: 'server', label: '다른 기기 내용 받기' },
       { value: 'local', label: '이 기기 내용으로 덮어쓰기' },
@@ -177,15 +177,15 @@ function schedulePush() {
 }
 
 /** 다른 기기의 변경 받아오기 (이 기기에 못 올린 변경이 있으면 먼저 올림) */
-async function pull() {
+async function pull(force = false) {
   if (!uid || pushing || status === 'conflict') return;
   if (st.dirty) return push();
-  if (document.querySelector('.sheet-wrap')) return; // 입력 중인 화면이 있으면 다음에
+  if (!force && document.querySelector('.sheet-wrap')) return; // 입력 중인 화면이 있으면 다음에
   try {
     const row = await fetchRow();
     if (row && row.rev !== st.rev) {
       adoptServer(row);
-      toast('다른 기기에서 바뀐 장부를 불러왔어요.');
+      toast('다른 기기나 클로드에서 바뀐 장부를 불러왔어요.');
     }
     setStatus('idle');
   } catch (err) {
@@ -257,7 +257,7 @@ async function reconcile() {
   if (row.rev !== st.rev || st.owner !== uid) {
     const fromOtherDevice = st.owner === uid && st.rev > 0;
     adoptServer(row);
-    if (fromOtherDevice) toast('다른 기기에서 바뀐 장부를 불러왔어요.');
+    if (fromOtherDevice) toast('다른 기기나 클로드에서 바뀐 장부를 불러왔어요.');
   }
   setStatus('idle');
 }
@@ -311,6 +311,10 @@ export const sync = {
       localStorage.removeItem(STATE_KEY);
     } catch {}
     setStatus('idle');
+  },
+  /** 서버 장부 바로 받기 (클로드 기록 되돌리기 뒤: 화면이 열려 있어도) */
+  pullNow() {
+    return pull(true);
   },
   /** 지금 바로 올리기/받기 (설정 화면의 버튼) */
   now() {

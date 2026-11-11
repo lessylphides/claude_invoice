@@ -723,3 +723,18 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .top [data-act=prev] { margin-left: -4px; }
 .top .month-title { padding: 4px 2px; }
 .top .settings { width: 34px; flex: none; }
+/* 설정 → 클로드 연결 */
+.claude-sheet { display: flex; flex-direction: column; gap: 16px; }
+.claude-sheet section { margin: 0; }
+.claude-sheet p { margin: 0 0 8px; }
+.claude-ex { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.6; word-break: keep-all; }
+.claude-url { display: flex; align-items: center; gap: 8px; }
+.claude-url code { flex: 1; min-width: 0; font-size: 14px; word-break: break-all; user-select: all; }
+.claude-steps { margin: 0 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.7; word-break: keep-all; }
+.claude-steps li { margin-bottom: 4px; }
+.ai-list { list-style: none; margin: 0; padding: 0; }
+.ai-ch { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ai-ch:last-child { border-bottom: 0; }
+.ai-ch .grow { display: flex; flex-direction: column; gap: 2px; word-break: keep-all; }
+.ai-ch small { color: var(--muted); font-size: 12px; }
+.ai-ch.undone .grow { color: var(--muted); }

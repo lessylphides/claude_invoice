@@ -15,6 +15,7 @@ import { billing } from '../billing.js';
 import { PLANS } from '../lib/plans.js';
 import { openPlans } from './plans.js';
 import { openAdmin } from './admin.js';
+import { openClaudeConnect } from './claude.js';
 
 function syncLine() {
   const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -129,6 +130,13 @@ export function openSettings() {
           </section>
 
           <section>
+            <h3 class="set-title">AI 상담</h3>
+            <div class="set-card list">
+              <button type="button" class="set-row" data-act="claude"><span class="set-ic" aria-hidden="true">🤖</span><span class="grow">클로드 연결<small>클로드 앱에서 원가·판매가 상담 · 바꾼 기록</small></span><span class="chev" aria-hidden="true">›</span></button>
+            </div>
+          </section>
+
+          <section>
             <h3 class="set-title">데이터</h3>
             <div class="set-card list">
               <button class="set-row" type="button" data-act="csv"><span class="set-ic" aria-hidden="true">📄</span><span class="grow">이번 달 CSV 내보내기<small>엑셀에서 열 수 있어요</small></span><span class="chev" aria-hidden="true">›</span></button>
@@ -158,6 +166,10 @@ export function openSettings() {
       body.querySelector('[data-act=admin]').addEventListener('click', () => {
         close();
         openAdmin();
+      });
+      body.querySelector('[data-act=claude]').addEventListener('click', () => {
+        close();
+        openClaudeConnect();
       });
       planBtn.addEventListener('click', () => {
         close();

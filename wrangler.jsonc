@@ -6,6 +6,8 @@
   "account_id": "9ecdd9e050cc043f4c41cbef5f0b9853",
   "main": "src/worker/index.js",
   "compatibility_date": "2026-11-07",
+  // 클로드 연결: 클라이언트 정보 문서(CIMD)를 받아올 때 공개 인터넷 주소만 허용
+  "compatibility_flags": ["global_fetch_strictly_public"],
   // 맞춤 도메인 3개는 Cloudflare 대시보드에서 연결해 둔 것 (배포할 때 풀리지 않게 여기에도 적어 둠)
   "routes": [
     { "pattern": "app.costnote.co.kr", "custom_domain": true },
@@ -19,7 +21,11 @@
   "durable_objects": { "bindings": [{ "name": "BILLING_DO", "class_name": "BillingStore" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BillingStore"] }],
   // 예전 저장소(KV): 처음 시험 결제 1건이 여기 있음. 새 저장소로 옮겨지면 지워도 됨
-  "kv_namespaces": [{ "binding": "BILLING", "id": "5592f6bf8d43431f8cef8e0a3ef07a0b" }],
+  // OAUTH_KV: 클로드 연결(커넥터) 로그인 토큰 저장 (토큰은 해시로만 저장, 내용은 암호화)
+  "kv_namespaces": [
+    { "binding": "BILLING", "id": "5592f6bf8d43431f8cef8e0a3ef07a0b" },
+    { "binding": "OAUTH_KV", "id": "da18ac9c0ce2421db408a3629e0e2e29" }
+  ],
   // 매일 한국 시간 오전 10시 7분에 정기결제
   "triggers": { "crons": ["7 1 * * *"] },
   // 비밀 값(대시보드에서 넣음): ANTHROPIC_API_KEY, TOSS_SECRET_KEY

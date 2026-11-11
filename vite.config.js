@@ -38,5 +38,7 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.js'],
     alias: { 'cloudflare:workers': new URL('./tests/unit/stubs/cloudflare-workers.js', import.meta.url).pathname },
     environment: 'node',
+    // 클로드 연결(OAuth) 라이브러리도 위 cloudflare:workers 자리 표시를 쓰도록
+    server: { deps: { inline: ['@cloudflare/workers-oauth-provider'] } },
   },
 });

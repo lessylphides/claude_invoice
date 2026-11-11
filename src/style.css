@@ -738,3 +738,6 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .ai-ch .grow { display: flex; flex-direction: column; gap: 2px; word-break: keep-all; }
 .ai-ch small { color: var(--muted); font-size: 12px; }
 .ai-ch.undone .grow { color: var(--muted); }
+/* 설정 버튼: 이모지 대신 그린 톱니 (휴대폰마다 이모지 높이가 달라 가운데가 어긋나서) */
+.top .settings { display: grid; place-items: center; padding: 0; gap: 0; } /* 설정 화면(.settings)과 이름이 같아 그 꾸밈이 섞이지 않게 */
+.settings .gear { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

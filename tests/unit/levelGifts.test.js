@@ -70,7 +70,7 @@ describe('레벨업 선물', () => {
 
   it('서버에 저장된 장부로 레벨을 계산하고, 같은 레벨 선물은 한 번만', async () => {
     const env = { BILLING: memKV() };
-    const f = fake({ ledger: ledgerWith(5) }); // 50점 → Lv.2
+    const f = fake({ ledger: ledgerWith(3) }); // 30점 + 첫 영수증 미션 20 = 50점 → Lv.2
     const r1 = await claim(env, f);
     expect(r1).toMatchObject({ level: 2, gifts: [{ level: 2, amount: 3 }], balance: 3 });
     expect(f.calls.some((c) => c.startsWith(`/rest/v1/ledgers?select=data&user_id=eq.${UID}`))).toBe(true);
@@ -86,7 +86,7 @@ describe('레벨업 선물', () => {
 
   it('무료 체험 중에는 선물이 쌓이기만 하고 쓰지 않음 (구독하면 바로 씀)', async () => {
     const env = { ANTHROPIC_API_KEY: 'sk', BILLING: memKV(), BILLING_MODE: 'live' };
-    const r = await claim(env, fake({ ledger: ledgerWith(5) }));
+    const r = await claim(env, fake({ ledger: ledgerWith(3) }));
     expect(r).toMatchObject({ balance: 3, usable: false });
     const req = new Request('https://app.costnote.co.kr/api/ocr', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ images: [IMG], categories: ['기타'] }) });
     const res = await handleOcr(req, env, { fetchImpl: fake().fetchImpl, now: NOW });
@@ -96,7 +96,7 @@ describe('레벨업 선물', () => {
 
   it('영수증 인식: 한도를 다 써도 (구독 중이면) 선물부터 1장 씀', async () => {
     const env = { ANTHROPIC_API_KEY: 'sk', BILLING: memKV(), BILLING_MODE: 'test' };
-    await claim(env, fake({ ledger: ledgerWith(5) })); // 선물 3장
+    await claim(env, fake({ ledger: ledgerWith(3) })); // 선물 3장
     const f = fake({ usage: { day: 30, month: 30, total: 30, period: 0, account: { suspended: false, bonus: 0 } } }); // 하루 한도(30) 다 씀
     const req = new Request('https://app.costnote.co.kr/api/ocr', { method: 'POST', headers: { authorization: 'Bearer t' }, body: JSON.stringify({ images: [IMG], categories: ['기타'] }) });
     const res = await handleOcr(req, env, { fetchImpl: f.fetchImpl, now: NOW });

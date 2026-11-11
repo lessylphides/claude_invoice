@@ -4,6 +4,24 @@ import { esc, num } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { auth } from '../auth.js';
+import { todayFortune, todayTip } from '../lib/fortune.js';
+
+// ── 오늘의 운세: 오늘 아직 안 봤으면 배지에 빨간 점 ──
+const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+const SEEN_KEY = 'costnote:fortune-seen';
+function fortuneSeen() {
+  try {
+    return localStorage.getItem(SEEN_KEY) === kstToday();
+  } catch {
+    return true;
+  }
+}
+function markFortuneSeen() {
+  try {
+    localStorage.setItem(SEEN_KEY, kstToday());
+  } catch {}
+  document.querySelectorAll('.lv-dot, .fortune-new').forEach((d) => d.remove());
+}
 
 /** 지금 장부의 레벨 (장부가 바뀌었을 때만 다시 계산: store.rev) */
 let memo = { rev: -1, day: '', val: null };
@@ -22,6 +40,7 @@ export function levelBadge() {
     <span class="lv-medal" aria-hidden="true">${lv.max ? '👑' : '🏅'}</span>
     <span class="lv-text"><b>${lv.max ? 'MAX' : `Lv.${lv.level}`}</b> <span class="lv-name">${esc(lv.name)}</span></span>
     <span class="lv-bar" aria-hidden="true"><i style="width:${pctW(lv.progress)}"></i></span>
+    ${fortuneSeen() ? '' : '<span class="lv-dot" aria-hidden="true"></span>'}
   </button>`;
 }
 
@@ -91,6 +110,49 @@ async function loadGifts() {
   return res.json();
 }
 
+const starsHtml = (n) => `<span class="ft-stars" aria-label="별 ${n}개">${'★'.repeat(n)}<span>${'★'.repeat(5 - n)}</span></span>`;
+
+/** 오늘의 운세 화면 */
+export function openFortuneSheet() {
+  const who = auth.user?.id || 'local';
+  const day = kstToday();
+  const f = todayFortune(who, day);
+  const tip = todayTip({ purchases: store.purchases, menus: store.menus }, who, day);
+  const [, m, d] = day.split('-').map(Number);
+  markFortuneSeen();
+  openSheet({
+    title: '오늘의 운세',
+    render(body) {
+      body.innerHTML = `
+        <div class="ft">
+          <p class="ft-date">${m}월 ${d}일 사장님 운세</p>
+          <p class="ft-head">${esc(f.headline)}</p>
+          <div class="set-card ft-list">
+            <div class="ft-row"><p class="ft-cat">💰 재물운 ${starsHtml(f.money.stars)}</p><p>${esc(f.money.text)}</p></div>
+            <div class="ft-row"><p class="ft-cat">🙋 손님운 ${starsHtml(f.guest.stars)}</p><p>${esc(f.guest.text)}</p></div>
+            <div class="ft-row"><p class="ft-cat">🤝 거래처운 ${starsHtml(f.vendor.stars)}</p><p>${esc(f.vendor.text)}</p></div>
+          </div>
+          <div class="set-card ft-advice">
+            <p class="ft-cat">☕ 사장님께 한마디</p>
+            <p>${esc(f.advice)}</p>
+          </div>
+          <div class="set-card ft-tip">
+            <p class="ft-cat">${tip.fromLedger ? '📒 내 장부에서 찾은 오늘의 팁' : '💡 오늘의 장사 팁'}</p>
+            <p>${tip.icon} ${esc(tip.text)}</p>
+          </div>
+          <p class="ft-lucky">오늘의 키워드 <b>${esc(f.keyword)}</b> · 행운의 시간 <b>${esc(f.luckyTime)}</b></p>
+          <p class="set-note center">재미로 보는 운세예요. 내일 또 새로운 운세가 기다려요.</p>
+          <div class="ad-slot" hidden></div>
+        </div>`;
+    },
+  });
+}
+
+const missionLi = (x) =>
+  `<li class="${x.done ? 'done' : ''}"><span class="ms-check" aria-hidden="true">${x.done ? '✅' : '⬜'}</span><span class="grow">${esc(x.title)}${
+    x.done ? '' : ` <span class="small muted">${num(x.have)}/${num(x.goal)}</span>`
+  }</span><b class="ms-pt">+${x.points}</b></li>`;
+
 export function openLevelSheet() {
   const lv = currentLevel();
   const nextName = levelName(lv.level + 1);
@@ -113,6 +175,27 @@ export function openLevelSheet() {
             }
           </div>
 
+          <button type="button" class="set-card ft-open" data-fortune>
+            <span class="ft-open-ic" aria-hidden="true">🔮</span>
+            <span class="grow"><b>오늘의 운세</b><span class="small muted"> 재물운 · 손님운 · 거래처운</span></span>
+            ${fortuneSeen() ? '' : '<span class="fortune-new">NEW</span>'}
+            <span class="chev" aria-hidden="true">›</span>
+          </button>
+
+          <section>
+            <h3 class="set-title">🎯 이번 주 미션 <span class="small muted">매주 월요일 새로 시작</span></h3>
+            <div class="set-card"><ul class="ms-list">${lv.missions.week.map(missionLi).join('')}</ul></div>
+          </section>
+
+          ${
+            lv.missions.start.every((x) => x.done)
+              ? ''
+              : `<section>
+            <h3 class="set-title">🌱 시작 미션 <span class="small muted">${lv.missions.start.filter((x) => x.done).length}/${lv.missions.start.length} 완료</span></h3>
+            <div class="set-card"><ul class="ms-list">${lv.missions.start.map(missionLi).join('')}</ul></div>
+          </section>`
+          }
+
           <div class="set-card lv-streak">
             ${
               lv.streak
@@ -134,6 +217,7 @@ export function openLevelSheet() {
               <div class="set-row static"><span class="grow">메뉴에 연결한 매입 품목 ${num(p.ingredients)}개</span><b>${num(p.ingredients * POINTS.ingredient)}점</b></div>
               <div class="set-row static"><span class="grow">같은 품목 묶기 ${num(p.links)}개</span><b>${num(p.links * POINTS.link)}점</b></div>
               <div class="set-row static"><span class="grow">연속 기록 보너스</span><b>${num(p.streakBonus)}점</b></div>
+              <div class="set-row static"><span class="grow">성장 미션</span><b>${num(p.missions)}점</b></div>
             </div>
           </section>
 
@@ -145,6 +229,7 @@ export function openLevelSheet() {
                 <li>새 메뉴 만들기 <b>+${POINTS.menu}</b> (판매가를 넣은 메뉴)</li>
                 <li>메뉴에 매입 품목 재료 연결 <b>+${POINTS.ingredient}</b> (판매가를 넣은 메뉴)</li>
                 <li>같은 품목 묶기 <b>+${POINTS.link}</b></li>
+                <li>성장 미션 달성 (이번 주 미션은 매주 새로)</li>
                 <li>연속 기록 3일째마다 <b>+${POINTS.streak3}</b>, 7일째마다 <b>+${POINTS.streak7}</b></li>
               </ul>
               <p class="set-note">같은 영수증을 두 번 올린 건 한 번만 세고, 지운 기록의 포인트는 빠져요.</p>
@@ -159,6 +244,10 @@ export function openLevelSheet() {
             <p class="set-note">레벨업 선물(추가 인식)은 구독 중에 요금제 한도를 다 쓴 뒤 1장씩 써요. 무료 체험 중에는 쌓아 두었다가 구독하면 바로 쓸 수 있어요. 하루 10장·한 달 20장까지 받고, 넘는 몫은 다음 날·다음 달에 이어서 받아요.</p>
           </details>
         </div>`;
+      body.querySelector('[data-fortune]').addEventListener('click', (e) => {
+        e.currentTarget.querySelector('.fortune-new')?.remove();
+        openFortuneSheet();
+      });
       const box = body.querySelector('.lv-gifts');
       loadGifts().then(
         (g) => {

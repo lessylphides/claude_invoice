@@ -57,8 +57,10 @@ describe('장부로 포인트 계산', () => {
       NOW,
     );
     expect(r.parts).toMatchObject({ receipts: 2, menus: 2, ingredients: 1, links: 1 });
-    expect(r.points).toBe(20 + 40 + 5 + 5);
-    expect(r).toMatchObject({ level: 2, name: '영수증 모으는 사장', toNext: 120 - 70 });
+    // + 시작 미션: 첫 영수증 20, 품목 묶기 20
+    expect(r.parts.missions).toBe(40);
+    expect(r.points).toBe(20 + 40 + 5 + 5 + 40);
+    expect(r).toMatchObject({ level: 2, name: '영수증 모으는 사장', toNext: 120 - 110 });
   });
 
   it('같은 영수증 두 번, 금액 0, 하루 10건 넘는 영수증은 포인트 없음', () => {
@@ -69,7 +71,7 @@ describe('장부로 포인트 계산', () => {
 
   it('지우면 포인트도 빠짐 (장부에서 다시 계산)', () => {
     const a = buy('2026-11-01', '가락청과', 28000);
-    expect(computeLevel({ purchases: [a] }, NOW).points).toBe(10);
+    expect(computeLevel({ purchases: [a] }, NOW).points).toBe(10 + 20); // + 첫 영수증 미션
     expect(computeLevel({ purchases: [] }, NOW).points).toBe(0);
   });
 
@@ -81,5 +83,41 @@ describe('장부로 포인트 계산', () => {
     // 어제까지 이어졌으면 오늘 아직 안 적어도 유지, 이틀 비면 0
     expect(computeLevel({ purchases: [buy('2026-11-10', 'a', 1)] }, NOW).streak).toBe(1);
     expect(computeLevel({ purchases: [buy('2026-11-08', 'a', 1)] }, NOW).streak).toBe(0);
+  });
+});
+
+describe('성장 미션', () => {
+  it('시작 미션: 장부로 자동 확인, 진행도 표시', () => {
+    const priced = (i, withItem) => ({ price: 5000, ingredients: withItem ? [{ type: 'item', itemName: `재료${i}` }] : [] });
+    const r = computeLevel(
+      {
+        purchases: ['a', 'b', 'c', 'd', 'e'].map((v, i) => buy(`2026-10-0${i + 1}`, v, 1000 + i)),
+        menus: [priced(1, true), priced(2, true), priced(3, false), { price: 0, ingredients: [{ type: 'item', itemName: 'x' }] }],
+      },
+      NOW,
+    );
+    const m = Object.fromEntries(r.missions.start.map((x) => [x.id, x]));
+    expect(m.first.done).toBe(true);
+    expect(m.vendors5.done).toBe(true);
+    expect(m.menus3).toMatchObject({ have: 3, done: true });
+    expect(m.costed3).toMatchObject({ have: 2, done: false }); // 판매가 없는 메뉴는 안 셈
+    expect(m.link1.done).toBe(false);
+    expect(m.month20).toMatchObject({ have: 5, goal: 20 });
+    // 첫 영수증 20 + 거래처 5곳 30 + 메뉴 3개 30, 10/1(목)~10/4(일) 4일 기록 → 주간 '3일 이상' 20
+    expect(r.parts.missions).toBe(20 + 30 + 30 + 20);
+  });
+
+  it('주간 미션: 월요일에 새로, 지난주 달성분도 포인트로 남음', () => {
+    // 2026-11-02(월)~11-08(일) 주에 5장·3일 → 30+20, 이번 주(11-09~) 2장·2일 → 진행 중
+    const last = ['2026-11-02', '2026-11-03', '2026-11-03', '2026-11-05', '2026-11-08'].map((d, i) => buy(d, `v${i}`, 1000 + i));
+    const cur = ['2026-11-10', '2026-11-11'].map((d, i) => buy(d, `n${i}`, 2000 + i));
+    const r = computeLevel({ purchases: [...last, ...cur] }, NOW);
+    expect(r.missions.weeksDone).toBe(2);
+    expect(r.missions.week.map((w) => [w.id, w.have, w.done])).toEqual([
+      ['w5', 2, false],
+      ['w3d', 2, false],
+    ]);
+    // 시작 미션: 첫 영수증 20 + 거래처 5곳 30
+    expect(r.parts.missions).toBe(30 + 20 + 20 + 30);
   });
 });

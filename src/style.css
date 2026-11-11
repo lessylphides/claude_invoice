@@ -665,3 +665,26 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .lv-badge.lv-max b { color: #a06a00; }
 .lv-badge.lv-max .lv-bar i { background: #d9a520; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .lv-badge.lv-max { background: linear-gradient(135deg, #3a2e0c, #5a4512); } :root:not([data-theme='light']) .lv-badge.lv-max b { color: #ffd166; } }
+/* 오늘의 운세: 안 봤으면 배지에 빨간 점 */
+.lv-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--bg); }
+.ft-open { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 14px; }
+.ft-open-ic { font-size: 24px; }
+.ft-open .grow { display: flex; flex-direction: column; gap: 2px; }
+.fortune-new { font-size: 11px; font-weight: 800; color: #fff; background: #e5484d; border-radius: 999px; padding: 2px 7px; }
+.ft { display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.ft p { margin: 0; }
+.ft-date { text-align: center; color: var(--muted); font-size: 13px; margin-top: 4px !important; }
+.ft-head { text-align: center; font-size: 19px; font-weight: 800; line-height: 1.45; padding: 0 8px; word-break: keep-all; }
+.ft-list { display: flex; flex-direction: column; gap: 14px; }
+.ft-row p:last-child, .ft-advice p:last-child, .ft-tip p:last-child { line-height: 1.6; color: var(--ink-2); word-break: keep-all; }
+.ft-cat { font-weight: 700; margin-bottom: 4px !important; display: flex; align-items: center; gap: 6px; }
+.ft-stars { color: #f5a524; letter-spacing: 1px; font-size: 13px; }
+.ft-stars span { color: var(--line); }
+.ft-tip { border: 1px solid var(--accent); }
+.ft-lucky { text-align: center; font-size: 14px; color: var(--ink-2); }
+.ms-list { list-style: none; margin: 0; padding: 0; }
+.ms-list li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ms-list li:last-child { border-bottom: 0; }
+.ms-list li.done .grow { color: var(--muted); text-decoration: line-through; }
+.ms-pt { color: var(--accent); font-size: 13px; }
+.ms-list li.done .ms-pt { color: var(--muted); }

@@ -2,6 +2,7 @@
 // 기록을 지우면 포인트도 빠지고, 서버는 레벨업 선물을 줄 때 서버에 저장된 장부로 다시 계산함
 
 import { normKey } from './format.js';
+import { missionsOf, weekOf } from './missions.js';
 
 export const POINTS = { receipt: 10, menu: 20, ingredient: 5, link: 5, streak3: 15, streak7: 50 };
 /** 하루에 영수증으로 받을 수 있는 최대 포인트 (영수증 10건) */
@@ -83,6 +84,9 @@ export function computeLevel(data, now = Date.now()) {
   const seen = new Set();
   const perDay = new Map();
   const days = new Set();
+  const vendors = new Set();
+  const months = new Map(); // 영수증 날짜의 달 → 건수
+  const weeks = new Map(); // 기록한 주 → {receipts, days}
   let receipts = 0;
   for (const p of purchases) {
     const total = Math.round(totalOf(p));
@@ -97,16 +101,26 @@ export function computeLevel(data, now = Date.now()) {
     if (got >= DAILY_RECEIPT_CAP) continue;
     perDay.set(day, got + POINTS.receipt);
     receipts++;
+    if (normKey(p.vendor)) vendors.add(normKey(p.vendor));
+    const mon = String(p.date || day).slice(0, 7);
+    months.set(mon, (months.get(mon) || 0) + 1);
+    const wk = weekOf(dayNum(day));
+    const w = weeks.get(wk) || { receipts: 0, days: new Set() };
+    w.receipts++;
+    w.days.add(day);
+    weeks.set(wk, w);
   }
 
   let menus = 0;
   let ingredients = 0;
+  let costedMenus = 0;
   for (const m of data?.menus || []) {
     // 판매가(잔 또는 보틀)를 넣은 메뉴만 인정: 이름만 있는 빈 메뉴로 점수를 받지 않게
     if (!(Number(m.price) > 0 || Number(m.bottlePrice) > 0)) continue;
     menus++;
     const keys = new Set((m.ingredients || []).filter((g) => g.type !== 'manual' && g.itemName).map((g) => normKey(g.itemName)));
     ingredients += keys.size;
+    if (keys.size) costedMenus++;
   }
   const links = Object.keys(data?.itemLinks || {}).length;
 
@@ -128,8 +142,17 @@ export function computeLevel(data, now = Date.now()) {
     for (let i = sorted.length - 1; i > 0 && sorted[i] - sorted[i - 1] === 1; i--) streak++;
   }
 
+  const missions = missionsOf(
+    { receipts, pricedMenus: menus, costedMenus, links, vendors: vendors.size, bestMonth: Math.max(0, ...months.values()), weeks },
+    weekOf(today),
+  );
   const points =
-    receipts * POINTS.receipt + menus * POINTS.menu + ingredients * POINTS.ingredient + links * POINTS.link + streakBonus;
+    receipts * POINTS.receipt +
+    menus * POINTS.menu +
+    ingredients * POINTS.ingredient +
+    links * POINTS.link +
+    streakBonus +
+    missions.bonus;
   const level = levelOf(points);
   const max = level >= MAX_LEVEL;
   const start = levelStart(level);
@@ -142,6 +165,7 @@ export function computeLevel(data, now = Date.now()) {
     progress: max ? 1 : (points - start) / (next - start),
     toNext: max ? 0 : next - points,
     streak,
-    parts: { receipts, menus, ingredients, links, streakBonus },
+    parts: { receipts, menus, ingredients, links, streakBonus, missions: missions.bonus },
+    missions,
   };
 }

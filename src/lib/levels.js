@@ -12,10 +12,10 @@ export const MAX_LEVEL = 99;
 /**
  * 레벨 n → n+1 에 필요한 포인트
  * - Lv.10 까지: 50, 70, 90 … (빨리 오르는 재미)
- * - Lv.10~50: 230 에서 8씩 늘어남 (하루 영수증 3장 꾸준히 → Lv.50 약 1년)
- * - Lv.50~99: 550 에서 29씩 늘어남 (Lv.99 약 5년, 진짜 만렙)
+ * - Lv.10부터: 230 에서 8씩 늘어남
+ *   하루 영수증 3장 꾸준히 → Lv.50 약 1년, Lv.90 약 2.8년, Lv.99 약 3.4년
  */
-export const levelGap = (n) => (n < 10 ? 50 + 20 * (n - 1) : n < 50 ? 230 + 8 * (n - 10) : 550 + 29 * (n - 50));
+export const levelGap = (n) => (n < 10 ? 50 + 20 * (n - 1) : 230 + 8 * (n - 10));
 
 const STARTS = [0, 0];
 for (let n = 1; n < MAX_LEVEL; n++) STARTS[n + 1] = STARTS[n] + levelGap(n);

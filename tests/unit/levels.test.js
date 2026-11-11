@@ -19,12 +19,13 @@ describe('레벨 곡선·이름·선물', () => {
     expect(levelName(95)).toBe('전설의 사장님');
     expect(levelName(99)).toBe('명예의 전당');
   });
-  it('최고 레벨 99: 하루 영수증 3장 꾸준히(하루 약 42점) → Lv.50 약 1년, Lv.99 약 5년', () => {
+  it('최고 레벨 99: 하루 영수증 3장 꾸준히(하루 약 42점) → Lv.50 약 1년, Lv.90 3년 안, Lv.99 약 3.4년', () => {
     const years = (lv) => (levelStart(lv) - 1450) / 42 / 365; // 처음 메뉴·재료 등록 약 1,450점
     expect(years(50)).toBeGreaterThan(0.9);
     expect(years(50)).toBeLessThan(1.15);
-    expect(years(99)).toBeGreaterThan(4.5);
-    expect(years(99)).toBeLessThan(5.5);
+    expect(years(90)).toBeLessThan(3);
+    expect(years(99)).toBeGreaterThan(3);
+    expect(years(99)).toBeLessThan(3.6);
     expect(levelOf(10 ** 9)).toBe(MAX_LEVEL);
     const top = computeLevel({ itemLinks: Object.fromEntries(Array.from({ length: 20000 }, (_, i) => [i, 'x'])) }, NOW);
     expect(top).toMatchObject({ level: 99, max: true, progress: 1, toNext: 0, name: '명예의 전당' });

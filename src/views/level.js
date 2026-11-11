@@ -158,6 +158,7 @@ export function openFortuneSheet() {
             <div class="ft-row ft-s" style="--d:1.75s"><p class="ft-cat">🤝 거래처운 ${starsHtml(f.vendor.stars, 1.85)}</p><p>${esc(f.vendor.text)}</p></div>
             <hr class="ft-cut" />
             <div class="ft-row ft-s" style="--d:2.1s"><p class="ft-cat">☕ 사장님께 한마디</p><p>${esc(f.advice)}</p></div>
+            ${f.season ? `<div class="ft-row ft-s" style="--d:2.2s"><p class="ft-cat">📅 이맘때 한마디 <span class="ft-tag">${esc(f.season.label)}</span></p><p>${esc(f.season.text)}</p></div>` : ''}
             <div class="ft-row ft-tip ft-s" style="--d:2.3s">
               <p class="ft-cat">${tip.fromLedger ? '📒 내 장부에서 찾은 오늘의 팁' : '💡 오늘의 장사 팁'}</p>
               <p>${tip.fromLedger ? `${tip.icon} ` : ''}${esc(tip.text)}</p>

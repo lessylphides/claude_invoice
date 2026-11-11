@@ -1,6 +1,8 @@
 // 오늘의 운세: 재미로 보는 글(직접 쓴 문장) + 내 장부에서 뽑은 진짜 장사 팁
-// 같은 사장님·같은 날에는 언제 열어도 같은 운세 (계정 + 날짜로 고름)
+// 같은 사장님·같은 날에는 언제 열어도 같은 운세
+// 칸마다 사장님별로 순서를 섞어 두고 날마다 다음 문장 → 목록을 한 바퀴 돌기 전에는 같은 문장이 다시 나오지 않음
 import { HEADLINES, MONEY, GUEST, VENDOR, ADVICE, TIPS, KEYWORDS } from './fortuneText.js';
+import { seasonsOf } from './fortuneSeason.js';
 import { normKey, won } from './format.js';
 
 /** 문자열 → 32비트 수 (FNV-1a) */
@@ -12,7 +14,42 @@ export function hash(s) {
   }
   return h >>> 0;
 }
-const pick = (arr, seed) => arr[hash(seed) % arr.length];
+const dayNum = (ymd) => Math.round(Date.parse(`${ymd}T00:00:00Z`) / 86400000);
+
+/** seed 로 섞은 0..n-1 순서 (Fisher-Yates + mulberry32) */
+const permCache = new Map();
+function permutation(n, seed) {
+  const key = `${n}|${seed}`;
+  if (permCache.has(key)) return permCache.get(key);
+  let a = seed >>> 0;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const p = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+  if (permCache.size > 200) permCache.clear();
+  permCache.set(key, p);
+  return p;
+}
+/** 사장님별로 섞은 순서에서 step 번째 문장 (목록 길이만큼은 겹치지 않음) */
+export const rotate = (arr, who, slot, step) => arr[permutation(arr.length, hash(`${who}|${slot}`))[((step % arr.length) + arr.length) % arr.length]];
+
+/** 이맘때 한마디: 해당 시기에만, 이틀에 한 번 (같은 시기 안에서 덜 겹치게) */
+export function seasonLine(who, ymd) {
+  const ss = seasonsOf(ymd);
+  if (!ss.length) return null;
+  const n = dayNum(ymd);
+  if ((n + hash(who)) % 2) return null;
+  const lines = ss.flatMap((x) => x.lines.map((text) => ({ label: x.label, text })));
+  return rotate(lines, who, `season|${ss.map((x) => x.id).join(',')}`, Math.floor(n / 2));
+}
 /** 별점 3~5 (재미로 보는 운세라 너무 나쁘게 나오지 않게) */
 const stars = (seed) => 3 + (hash(seed) % 3);
 
@@ -22,15 +59,17 @@ const stars = (seed) => 3 + (hash(seed) % 3);
  */
 export function todayFortune(who, ymd) {
   const s = `${who}|${ymd}`;
+  const n = dayNum(ymd);
   const hour = 10 + (hash(`${s}|time`) % 12); // 오전 10시 ~ 오후 9시
   return {
     date: ymd,
-    headline: pick(HEADLINES, `${s}|h`),
-    money: { stars: stars(`${s}|ms`), text: pick(MONEY, `${s}|m`) },
-    guest: { stars: stars(`${s}|gs`), text: pick(GUEST, `${s}|g`) },
-    vendor: { stars: stars(`${s}|vs`), text: pick(VENDOR, `${s}|v`) },
-    advice: pick(ADVICE, `${s}|a`),
-    keyword: pick(KEYWORDS, `${s}|k`),
+    headline: rotate(HEADLINES, who, 'h', n),
+    money: { stars: stars(`${s}|ms`), text: rotate(MONEY, who, 'm', n) },
+    guest: { stars: stars(`${s}|gs`), text: rotate(GUEST, who, 'g', n) },
+    vendor: { stars: stars(`${s}|vs`), text: rotate(VENDOR, who, 'v', n) },
+    advice: rotate(ADVICE, who, 'a', n),
+    season: seasonLine(who, ymd),
+    keyword: rotate(KEYWORDS, who, 'k', n),
     luckyTime: hour < 12 ? `오전 ${hour}시` : hour === 12 ? '낮 12시' : `오후 ${hour - 12}시`,
   };
 }
@@ -124,5 +163,5 @@ export function todayTip(data, who, ymd, now = Date.now()) {
     const top = tips.slice(0, 2);
     return { ...top[hash(`${who}|${ymd}|tip`) % top.length], fromLedger: true };
   }
-  return { icon: '💡', text: pick(TIPS, `${who}|${ymd}|t`), fromLedger: false };
+  return { icon: '💡', text: rotate(TIPS, who, 't', dayNum(ymd)), fromLedger: false };
 }

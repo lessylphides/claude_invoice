@@ -40,3 +40,32 @@ describe('오늘의 운세', () => {
     expect(todayTip({}, 'u1', '2026-11-11', NOW)).toMatchObject({ icon: '💡', fromLedger: false });
   });
 });
+
+describe('안 겹치게 돌리기 · 이맘때 한마디', () => {
+  const days = (start, n) => Array.from({ length: n }, (_, i) => new Date(Date.parse(`${start}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10));
+  it('목록 길이만큼의 날 동안 같은 문장이 다시 나오지 않음, 사장님마다 순서가 다름', () => {
+    const n = ADVICE.length;
+    const a = days('2026-11-11', n).map((d) => todayFortune('u1', d).advice);
+    expect(new Set(a).size).toBe(n);
+    const b = days('2026-11-11', 10).map((d) => todayFortune('u2', d).advice);
+    expect(b).not.toEqual(a.slice(0, 10));
+    const h = days('2026-11-11', HEADLINES.length).map((d) => todayFortune('u1', d).headline);
+    expect(new Set(h).size).toBe(HEADLINES.length);
+  });
+
+  it('시기: 부가세 신고·설·추석·월말, 해당 시기에만 이틀에 한 번', async () => {
+    const { seasonsOf } = await import('../../src/lib/fortuneSeason.js');
+    const ids = (d) => seasonsOf(d).map((x) => x.id);
+    expect(ids('2026-01-10')).toEqual(expect.arrayContaining(['vat', 'newyear']));
+    expect(ids('2026-02-12')).toContain('seol');
+    expect(ids('2026-09-20')).toContain('chuseok');
+    expect(ids('2026-05-20')).toContain('income');
+    expect(ids('2026-11-27')).toEqual(expect.arrayContaining(['autumn', 'monthend']));
+    expect(ids('2026-09-05')).toEqual([]);
+    const jan = days('2026-01-01', 20).map((d) => todayFortune('u1', d).season);
+    const shown = jan.filter(Boolean);
+    expect(shown.length).toBe(10);
+    expect(new Set(shown.map((x) => x.text)).size).toBe(10); // 1월 초 10번은 서로 다른 문장
+    expect(todayFortune('u1', '2026-09-05').season).toBe(null);
+  });
+});

@@ -2,9 +2,9 @@
 import { test, expect } from '@playwright/test';
 import { openApp, mockClaude, ocrItem, PHOTO, purchase, item, sheet } from './helpers.js';
 
-// 띄엄띄엄 4건 (연속 기록 보너스 없이 40점)
+// 띄엄띄엄 2건: 영수증 20점 + 첫 영수증 미션 20점 = 40점 (연속 기록·주간 미션 없이)
 const four = () => ({
-  purchases: ['2026-10-20', '2026-10-23', '2026-10-26', '2026-10-29'].map((d, i) => purchase(`p${i}`, d, `가게${i}`, [item(`품목${i}`, '기타', 1000 + i)])),
+  purchases: ['2026-10-20', '2026-10-29'].map((d, i) => purchase(`p${i}`, d, `가게${i}`, [item(`품목${i}`, '기타', 1000 + i)])),
 });
 
 test('배지에 레벨, 영수증을 저장하면 +10 → Lv.2 달성 → 레벨업 선물', async ({ page }) => {
@@ -41,6 +41,12 @@ test('레벨 화면: 포인트 내역·다음 선물·받은 선물', async ({ p
   await expect(s.locator('.lv-big')).toContainText('Lv.1 새내기 사장');
   await expect(s).toContainText('다음 레벨(Lv.2 영수증 모으는 사장)까지 10점');
   await expect(s).toContainText('추가 인식 3장');
-  await expect(s.locator('.set-row', { hasText: '영수증 기록 4건' })).toContainText('40점');
+  await expect(s.locator('.set-row', { hasText: '영수증 기록 2건' })).toContainText('20점');
+  await expect(s.locator('.set-row', { hasText: '성장 미션' })).toContainText('20점');
+  await expect(s.locator('.ms-list li', { hasText: '첫 영수증 기록하기' })).toHaveClass(/done/);
   await expect(s.locator('.lv-gifts')).toContainText('남은 선물 0장');
+  await expect(s.locator('[data-fortune]')).toContainText('NEW');
+  await s.locator('[data-fortune]').click();
+  await expect(page.locator('.sheet').last()).toContainText('사장님께 한마디');
+  await expect(page.locator('.lv-dot')).toHaveCount(0);
 });

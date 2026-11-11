@@ -23,6 +23,7 @@ export function applyClaim(rec, level, today, now) {
     const amount = rewardFor(n);
     if (r.dayGranted + amount > DAILY_GIFT_CAP && r.dayGranted > 0) break; // 오늘 몫을 넘으면 내일
     r.rewarded = n;
+    if (!amount) continue; // 선물 없는 레벨
     r.balance += amount;
     r.granted += amount;
     r.dayGranted += amount;

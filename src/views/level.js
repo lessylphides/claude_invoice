@@ -1,5 +1,5 @@
 // 레벨: 헤더 배지, 포인트가 오를 때 움직임(+10), 레벨 화면, 레벨업 선물 받기
-import { computeLevel, levelStart, levelName, rewardFor, POINTS, DAILY_RECEIPT_CAP } from '../lib/levels.js';
+import { computeLevel, levelStart, levelName, rewardFor, nextGiftLevel, POINTS, DAILY_RECEIPT_CAP } from '../lib/levels.js';
 import { esc, num } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
@@ -18,9 +18,9 @@ const pctW = (x) => `${Math.max(0, Math.min(100, Math.round(x * 100)))}%`;
 
 export function levelBadge() {
   const lv = currentLevel();
-  return `<button class="lv-badge" data-act="level" aria-label="레벨 ${lv.level} ${esc(lv.name)}, 다음 레벨까지 ${num(lv.toNext)}점">
-    <span class="lv-medal" aria-hidden="true">🏅</span>
-    <span class="lv-text"><b>Lv.${lv.level}</b> <span class="lv-name">${esc(lv.name)}</span></span>
+  return `<button class="lv-badge${lv.max ? ' lv-max' : ''}" data-act="level" aria-label="레벨 ${lv.level} ${esc(lv.name)}${lv.max ? ', 최고 레벨' : `, 다음 레벨까지 ${num(lv.toNext)}점`}">
+    <span class="lv-medal" aria-hidden="true">${lv.max ? '👑' : '🏅'}</span>
+    <span class="lv-text"><b>${lv.max ? 'MAX' : `Lv.${lv.level}`}</b> <span class="lv-name">${esc(lv.name)}</span></span>
     <span class="lv-bar" aria-hidden="true"><i style="width:${pctW(lv.progress)}"></i></span>
   </button>`;
 }
@@ -94,18 +94,23 @@ async function loadGifts() {
 export function openLevelSheet() {
   const lv = currentLevel();
   const nextName = levelName(lv.level + 1);
+  const gift = nextGiftLevel(lv.level);
   const p = lv.parts;
-  const table = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30];
+  const table = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 99];
   openSheet({
     title: '내 레벨',
     render(body) {
       body.innerHTML = `
         <div class="lv-sheet">
           <div class="set-card lv-hero">
-            <p class="lv-big"><span aria-hidden="true">🏅</span> Lv.${lv.level} <b>${esc(lv.name)}</b></p>
+            <p class="lv-big"><span aria-hidden="true">${lv.max ? '👑' : '🏅'}</span> Lv.${lv.level} <b>${esc(lv.name)}</b></p>
             <div class="meter-bar" aria-hidden="true"><i style="width:${pctW(lv.progress)}"></i></div>
-            <p class="small">지금 <b>${num(lv.points)}점</b> · 다음 레벨(Lv.${lv.level + 1} ${esc(nextName)})까지 <b>${num(lv.toNext)}점</b></p>
-            <p class="small">Lv.${lv.level + 1}이 되면 🎁 영수증 추가 인식 <b>${rewardFor(lv.level + 1)}장</b> 선물</p>
+            ${
+              lv.max
+                ? `<p class="small">지금 <b>${num(lv.points)}점</b> · 최고 레벨에 올랐어요. 코스트노트와 함께해 주셔서 고맙습니다!</p>`
+                : `<p class="small">지금 <b>${num(lv.points)}점</b> · 다음 레벨(Lv.${lv.level + 1} ${esc(nextName)})까지 <b>${num(lv.toNext)}점</b></p>
+            <p class="small">${gift ? `Lv.${gift}이 되면 🎁 영수증 추가 인식 <b>${rewardFor(gift)}장</b> 선물` : ''}</p>`
+            }
           </div>
 
           <div class="set-card lv-streak">
@@ -149,7 +154,7 @@ export function openLevelSheet() {
           <details class="lv-table">
             <summary>레벨표 보기</summary>
             <ul>${table
-              .map((n) => `<li class="${n === lv.level ? 'on' : ''}"><span>Lv.${n} ${esc(levelName(n))}</span><span>${n > 1 ? `${num(levelStart(n))}점 · 🎁 ${rewardFor(n)}장` : '시작'}</span></li>`)
+              .map((n) => `<li class="${n === lv.level ? 'on' : ''}"><span>Lv.${n} ${esc(levelName(n))}</span><span>${n > 1 ? `${num(levelStart(n))}점${rewardFor(n) ? ` · 🎁 ${rewardFor(n)}장` : ''}` : '시작'}</span></li>`)
               .join('')}</ul>
             <p class="set-note">레벨업 선물(추가 인식)은 요금제·무료 체험 한도를 다 쓴 뒤에 1장씩 써요. 하루에 최대 10장까지 받고, 남은 선물은 다음 날 이어서 받아요.</p>
           </details>

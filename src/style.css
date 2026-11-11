@@ -660,3 +660,8 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .lv-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lv-badge { min-width: 76px; }
 @media (max-width: 380px) { .lv-name { display: none; } .top .month-title { padding: 4px 2px; } }
+/* 만렙(Lv.99): 금색 배지 */
+.lv-badge.lv-max { border-color: #d9a520; background: linear-gradient(135deg, #fff8e1, #ffe8a3); }
+.lv-badge.lv-max b { color: #a06a00; }
+.lv-badge.lv-max .lv-bar i { background: #d9a520; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .lv-badge.lv-max { background: linear-gradient(135deg, #3a2e0c, #5a4512); } :root:not([data-theme='light']) .lv-badge.lv-max b { color: #ffd166; } }

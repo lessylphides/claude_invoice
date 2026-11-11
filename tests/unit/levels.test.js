@@ -1,6 +1,6 @@
 // 레벨·포인트 계산
 import { describe, it, expect } from 'vitest';
-import { computeLevel, levelStart, levelOf, levelName, rewardFor, rewardsBetween, DAILY_RECEIPT_CAP } from '../../src/lib/levels.js';
+import { computeLevel, levelStart, levelOf, levelName, rewardFor, rewardsBetween, nextGiftLevel, MAX_LEVEL, DAILY_RECEIPT_CAP } from '../../src/lib/levels.js';
 
 const T = (ymd, h = 12) => Date.parse(`${ymd}T${String(h).padStart(2, '0')}:00:00+09:00`);
 const buy = (date, vendor, amount, createdAt = T(date)) => ({ id: `${date}${vendor}${amount}${createdAt}`, date, vendor, createdAt, items: [{ amount }] });
@@ -15,10 +15,27 @@ describe('레벨 곡선·이름·선물', () => {
     expect(levelName(1)).toBe('새내기 사장');
     expect(levelName(10)).toBe('원가 고수');
     expect(levelName(11)).toBe('원가 고수');
-    expect(levelName(31)).toBe('전설의 사장님');
+    expect(levelName(31)).toBe('원가 마스터');
+    expect(levelName(95)).toBe('전설의 사장님');
+    expect(levelName(99)).toBe('명예의 전당');
   });
-  it('선물: Lv.2~4 3장, 5~9 5장, 10~19 10장, 20부터 20장', () => {
-    expect([1, 2, 4, 5, 9, 10, 19, 20, 30].map(rewardFor)).toEqual([0, 3, 3, 5, 5, 10, 10, 20, 20]);
+  it('최고 레벨 99: 하루 영수증 3장 꾸준히(하루 약 42점) → Lv.50 약 1년, Lv.99 약 5년', () => {
+    const years = (lv) => (levelStart(lv) - 1450) / 42 / 365; // 처음 메뉴·재료 등록 약 1,450점
+    expect(years(50)).toBeGreaterThan(0.9);
+    expect(years(50)).toBeLessThan(1.15);
+    expect(years(99)).toBeGreaterThan(4.5);
+    expect(years(99)).toBeLessThan(5.5);
+    expect(levelOf(10 ** 9)).toBe(MAX_LEVEL);
+    const top = computeLevel({ itemLinks: Object.fromEntries(Array.from({ length: 20000 }, (_, i) => [i, 'x'])) }, NOW);
+    expect(top).toMatchObject({ level: 99, max: true, progress: 1, toNext: 0, name: '명예의 전당' });
+  });
+  it('선물: Lv.2~4 3장, 5~9 5장, 10~19 10장, 20부터 5레벨마다 20장, Lv.99 50장', () => {
+    expect([1, 2, 4, 5, 9, 10, 19, 20, 21, 24, 25, 95, 98, 99, 100].map(rewardFor)).toEqual([0, 3, 3, 5, 5, 10, 10, 20, 0, 0, 20, 20, 0, 50, 0]);
+    expect(nextGiftLevel(20)).toBe(25);
+    expect(nextGiftLevel(96)).toBe(99);
+    expect(nextGiftLevel(99)).toBe(null);
+    const all = rewardsBetween(1, 99);
+    expect(all).toBe(9 + 25 + 100 + 16 * 20 + 50);
     expect(rewardsBetween(1, 5)).toBe(3 + 3 + 3 + 5);
     expect(rewardsBetween(5, 5)).toBe(0);
   });

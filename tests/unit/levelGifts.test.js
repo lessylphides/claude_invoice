@@ -47,6 +47,12 @@ describe('레벨업 선물', () => {
     expect(DAILY_GIFT_CAP).toBe(10);
   });
 
+  it('선물 없는 레벨(21~24)은 지나가고 Lv.25에서 20장', () => {
+    const { rec, gifts } = applyClaim({ rewarded: 20, balance: 0, granted: 0 }, 25, '2026-11-11', NOW);
+    expect(gifts).toEqual([{ level: 25, amount: 20 }]);
+    expect(rec).toMatchObject({ rewarded: 25, balance: 20 });
+  });
+
   it('서버에 저장된 장부로 레벨을 계산하고, 같은 레벨 선물은 한 번만', async () => {
     const env = { BILLING: memKV() };
     const f = fake({ ledger: ledgerWith(5) }); // 50점 → Lv.2

@@ -7,12 +7,24 @@ export const POINTS = { receipt: 10, menu: 20, ingredient: 5, link: 5, streak3: 
 /** 하루에 영수증으로 받을 수 있는 최대 포인트 (영수증 10건) */
 export const DAILY_RECEIPT_CAP = 100;
 
-/** 레벨 n 이 되는 데 필요한 누적 포인트: Lv.2 50, Lv.3 120, Lv.4 210 … (다음까지 필요한 양이 20씩 늘어남) */
-export const levelStart = (n) => (n <= 1 ? 0 : 50 * (n - 1) + 10 * (n - 1) * (n - 2));
+export const MAX_LEVEL = 99;
+
+/**
+ * 레벨 n → n+1 에 필요한 포인트
+ * - Lv.10 까지: 50, 70, 90 … (빨리 오르는 재미)
+ * - Lv.10~50: 230 에서 8씩 늘어남 (하루 영수증 3장 꾸준히 → Lv.50 약 1년)
+ * - Lv.50~99: 550 에서 29씩 늘어남 (Lv.99 약 5년, 진짜 만렙)
+ */
+export const levelGap = (n) => (n < 10 ? 50 + 20 * (n - 1) : n < 50 ? 230 + 8 * (n - 10) : 550 + 29 * (n - 50));
+
+const STARTS = [0, 0];
+for (let n = 1; n < MAX_LEVEL; n++) STARTS[n + 1] = STARTS[n] + levelGap(n);
+/** 레벨 n 이 되는 데 필요한 누적 포인트: Lv.2 50, Lv.3 120, Lv.4 210 … */
+export const levelStart = (n) => (n <= 1 ? 0 : STARTS[Math.min(n, MAX_LEVEL)]);
 
 export function levelOf(points) {
   let n = 1;
-  while (points >= levelStart(n + 1)) n++;
+  while (n < MAX_LEVEL && points >= levelStart(n + 1)) n++;
   return n;
 }
 
@@ -31,12 +43,25 @@ const NAMES = [
   [15, '메뉴 설계자'],
   [20, '원가 장인'],
   [25, '장부의 달인'],
-  [30, '전설의 사장님'],
+  [30, '원가 마스터'],
+  [40, '동네 소문난 사장'],
+  [50, '골목의 전설'],
+  [60, '장사의 신'],
+  [70, '원가의 현자'],
+  [80, '장부의 지배자'],
+  [90, '전설의 사장님'],
+  [99, '명예의 전당'],
 ];
 export const levelName = (n) => NAMES.filter(([lv]) => lv <= n).at(-1)[1];
 
-/** 그 레벨에 오르면 받는 추가 인식 장수 */
-export const rewardFor = (n) => (n < 2 ? 0 : n <= 4 ? 3 : n <= 9 ? 5 : n <= 19 ? 10 : 20);
+/** 그 레벨에 오르면 받는 추가 인식 장수: Lv.2~4 3장, 5~9 5장, 10~19 10장, 20부터는 5레벨마다 20장, Lv.99 50장 */
+export const rewardFor = (n) =>
+  n < 2 || n > MAX_LEVEL ? 0 : n <= 4 ? 3 : n <= 9 ? 5 : n <= 19 ? 10 : n === MAX_LEVEL ? 50 : n % 5 === 0 ? 20 : 0;
+/** n 보다 높은 레벨 중 선물이 있는 가장 가까운 레벨 */
+export const nextGiftLevel = (n) => {
+  for (let k = n + 1; k <= MAX_LEVEL; k++) if (rewardFor(k)) return k;
+  return null;
+};
 /** from 레벨 다음부터 to 레벨까지 오르며 받는 선물 합계 */
 export const rewardsBetween = (from, to) => {
   let s = 0;
@@ -104,14 +129,16 @@ export function computeLevel(data, now = Date.now()) {
   const points =
     receipts * POINTS.receipt + menus * POINTS.menu + ingredients * POINTS.ingredient + links * POINTS.link + streakBonus;
   const level = levelOf(points);
+  const max = level >= MAX_LEVEL;
   const start = levelStart(level);
   const next = levelStart(level + 1);
   return {
     points,
     level,
+    max,
     name: levelName(level),
-    progress: (points - start) / (next - start),
-    toNext: next - points,
+    progress: max ? 1 : (points - start) / (next - start),
+    toNext: max ? 0 : next - points,
     streak,
     parts: { receipts, menus, ingredients, links, streakBonus },
   };

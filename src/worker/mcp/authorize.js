@@ -1,5 +1,5 @@
 // 클로드 연결: 로그인·허락 화면 (/oauth/authorize)
-// 1) 클로드가 이 주소를 열면, 코스트노트 계정으로 로그인 (이 브라우저에 앱 로그인이 남아 있으면 그대로 사용)
+// 1) 클로드가 이 주소를 열면, 코스트노트 계정 이메일·비밀번호로 로그인 (공용 기기 보호: 앱 로그인을 자동으로 쓰지 않음)
 // 2) "클로드가 내 장부를 보고, 허락하면 판매가·분류를 바꿀 수 있어요" 확인 → 허락하면 클로드로 돌아감
 // 비밀번호는 Supabase 로만 가고, 서버는 로그인 토큰으로 누구인지만 확인 (OAuth 승인에는 계정 id 만 담음)
 import { AuthorizationError, CimdFetchError } from '@cloudflare/workers-oauth-provider';
@@ -12,7 +12,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from '../../config.js';
 export function allowedRedirect(uri) {
   try {
     const u = new URL(uri);
-    if (u.href === 'https://claude.ai/api/mcp/auth_callback') return true;
+    if (u.href === 'https://claude.ai/api/mcp/auth_callback' || u.href === 'https://claude.com/api/mcp/auth_callback') return true;
     return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.pathname === '/callback';
   } catch {
     return false;
@@ -20,7 +20,6 @@ export function allowedRedirect(uri) {
 }
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const SESSION_KEY = 'costnote.auth'; // 앱의 로그인 저장 이름 (src/auth.js AUTH_STORAGE_KEY 와 같아야 함)
 
 function page(body, { nonce = '', status = 200, headers = new Headers() } = {}) {
   headers.set('content-type', 'text/html; charset=utf-8');
@@ -124,11 +123,7 @@ async function showPage(request, oauth) {
     $('token').value = token; $('who').textContent = email;
     $('login').hidden = true; $('consent').hidden = false;
   }
-  // 이 브라우저에 코스트노트 앱 로그인이 남아 있으면 그대로 (만료 전일 때만)
-  try {
-    const s = JSON.parse(localStorage.getItem(${JSON.stringify(SESSION_KEY)}) || 'null');
-    if (s && s.access_token && s.expires_at && s.expires_at * 1000 > Date.now() + 60000) show(s.access_token, (s.user && s.user.email) || '');
-  } catch (e) {}
+  // 공용 기기(가게 태블릿 등)에서 남이 연결하지 못하게, 저장된 앱 로그인을 쓰지 않고 항상 비밀번호를 물음
   $('other').onclick = () => { $('consent').hidden = true; $('login').hidden = false; $('token').value = ''; };
   $('loginForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -164,7 +159,7 @@ async function decide(request, oauth, fetchImpl) {
   const { redirectTo } = await oauth.completeAuthorization({
     request: approved.request,
     userId: user.id,
-    metadata: { email: user.email },
+    metadata: { email: user.email, client: approved.request.clientId ? String((await oauth.lookupClient(approved.request.clientId).catch(() => null))?.clientName || 'Claude').slice(0, 60) : 'Claude' },
     scope: approved.request.scope,
     props: { userId: user.id },
   });

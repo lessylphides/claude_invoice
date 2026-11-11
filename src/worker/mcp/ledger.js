@@ -34,11 +34,12 @@ export async function readLedger(env, uid, fetchImpl = fetch) {
 }
 
 /**
- * 장부를 고침: change(data) 가 data 를 직접 바꾸고 결과를 돌려줌. 그 사이 다른 곳에서 바뀌면 다시 읽어서 최대 3번
+ * 장부를 고침: change(data) 가 data 를 직접 바꾸고 결과를 돌려줌. 그 사이 다른 곳에서 바뀌면 다시 읽어서 최대 5번
  * @param {(data: object) => any} change 바꿀 게 없거나 할 수 없으면 LedgerError 를 던짐
  */
 export async function updateLedger(env, uid, change, fetchImpl = fetch) {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 40 * i + Math.random() * 80)); // 동시에 여러 개를 바꿀 때 엇갈리게
     const { rev, data } = await readLedger(env, uid, fetchImpl);
     if (!rev) throw new LedgerError('empty', '아직 서버에 저장된 장부가 없어요. 코스트노트 앱에서 로그인해 장부를 한 번 저장해 주세요.');
     const result = await change(data);
@@ -46,5 +47,5 @@ export async function updateLedger(env, uid, change, fetchImpl = fetch) {
     const next = await rpc(env, fetchImpl, 'mcp_ledger_put', { uid, payload: data, expected: rev });
     if (next != null) return { rev: Number(next), result };
   }
-  throw new LedgerError('busy', '앱에서 장부를 저장하는 중이라 반영하지 못했어요. 잠시 후 다시 시도해 주세요.');
+  throw new LedgerError('busy', '장부가 동시에 여러 번 바뀌는 중이라 반영하지 못했어요. 여러 메뉴는 set_menu_prices 로 한 번에 바꾸거나, 잠시 후 다시 시도해 주세요.');
 }

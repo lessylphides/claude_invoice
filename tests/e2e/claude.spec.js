@@ -15,6 +15,12 @@ test('클로드 연결 화면: 주소, 방법, 바꾼 기록 → 되돌리기', 
     const changes = CH.map((c) => (c.id === 'c2' ? { ...c, undoneAt: Date.now() } : c));
     await r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, message: '"어벨라워 아부나흐" 잔 판매가를 되돌렸어요.', changes }) });
   });
+  const revoked = [];
+  await page.route('**/api/claude/grants', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ grants: revoked.length ? [] : [{ id: 'g1', createdAt: Math.floor(Date.now() / 1000), client: 'Claude' }] }) }));
+  await page.route('**/api/claude/revoke', async (r) => {
+    revoked.push(JSON.parse(r.request().postData()).id);
+    await r.fulfill({ contentType: 'application/json', body: '{"revoked":1}' });
+  });
   await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
   const errors = await openApp(page, { data: {} });
   await page.locator('[data-act=settings]').first().click();
@@ -22,11 +28,17 @@ test('클로드 연결 화면: 주소, 방법, 바꾼 기록 → 되돌리기', 
   const s = sheet(page);
   await expect(s).toContainText('https://app.costnote.co.kr/mcp');
   await expect(s).toContainText('커스텀 커넥터 추가');
-  await expect(s.locator('.ai-ch').first()).toContainText('잔 판매가 33,000원 → 36,000원');
-  await expect(s.locator('.ai-ch').nth(1)).toContainText('메뉴 분류 하이볼 만들기');
+  await expect(s.locator('.ai-log .ai-ch').first()).toContainText('잔 판매가 33,000원 → 36,000원');
+  await expect(s.locator('.ai-log .ai-ch').nth(1)).toContainText('메뉴 분류 하이볼 만들기');
   await s.locator('[data-undo=c2]').click();
   await expect(page.locator('.toast').last()).toContainText('되돌렸어요');
-  await expect(s.locator('.ai-ch').first()).toContainText('되돌림');
+  await expect(s.locator('.ai-log .ai-ch').first()).toContainText('되돌림');
   expect(undo).toEqual(['c2']);
+  // 연결된 클로드 → 끊기
+  await expect(s.locator('.ai-grants')).toContainText('Claude');
+  page.once('dialog', (d) => d.accept());
+  await s.locator('[data-revoke=g1]').click();
+  await expect(s.locator('.ai-grants')).toContainText('연결된 클로드가 없어요');
+  expect(revoked).toEqual(['g1']);
   expect(errors).toEqual([]);
 });

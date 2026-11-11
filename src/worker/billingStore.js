@@ -40,6 +40,12 @@ export class BillingStore extends DurableObject {
     return used;
   }
   /** prefix 로 시작하는 키 목록 (after 다음부터 최대 500개) */
+  /** 목록 앞에 붙이기 (클로드가 바꾼 기록): 읽고 쓰기를 한 번에 해서 동시에 와도 빠지지 않음 */
+  async prepend(key, items, max) {
+    const list = [...items, ...((await this.ctx.storage.get(key)) || [])].slice(0, max);
+    await this.ctx.storage.put(key, list);
+    return list;
+  }
   async keys(prefix, after = null) {
     const m = await this.ctx.storage.list({ prefix, ...(after ? { startAfter: after } : {}), limit: 500 });
     const keys = [...m.keys()];

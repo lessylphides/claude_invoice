@@ -1,6 +1,8 @@
 // 클로드가 바꾼 기록 (서버 저장소에 사장님별로 최근 50건) + 앱에서 되돌리기
 // GET /api/ai-changes        → 기록 목록 (앱 로그인 필요)
 // POST /api/ai-changes/undo  → {id} 하나 되돌리기 (장부를 서버에서 고침 → 앱이 새 장부를 받아 감)
+// GET /api/claude/grants     → 연결된 클로드 목록
+// POST /api/claude/revoke    → {id} 연결 하나 끊기, {all: true} 모두 끊기 (탈퇴할 때도)
 import { json, fail, authUser } from '../common.js';
 import { db } from '../billing.js';
 import { updateLedger, LedgerError } from './ledger.js';
@@ -13,13 +15,34 @@ export async function readChanges(env, uid) {
   return (await db(env)?.get(KEY(uid))) || [];
 }
 
-/** 새 기록을 앞에 붙임 */
+/** 새 기록을 앞에 붙임 (저장소에서 한 번에: 동시에 와도 빠지지 않음) */
 export async function logChanges(env, uid, changes, tool) {
   if (!changes?.length) return;
+  const items = changes.map((c) => ({ ...c, tool }));
+  if (env.BILLING_DO) return env.BILLING_DO.get(env.BILLING_DO.idFromName('billing')).prepend(KEY(uid), items, MAX);
   const d = db(env);
   if (!d) return;
-  const list = [...changes.map((c) => ({ ...c, tool })), ...((await d.get(KEY(uid))) || [])].slice(0, MAX);
-  await d.put(KEY(uid), list);
+  await d.put(KEY(uid), [...items, ...((await d.get(KEY(uid))) || [])].slice(0, MAX));
+}
+
+/** 연결된 클로드 (OAuth 승인) 목록 */
+async function grantsOf(env, uid) {
+  const out = [];
+  let cursor;
+  do {
+    const r = await env.OAUTH_PROVIDER.listUserGrants(uid, cursor ? { cursor } : {});
+    out.push(...r.items);
+    cursor = r.cursor;
+  } while (cursor);
+  return out;
+}
+
+/** 모든 연결 끊기 (탈퇴 등) */
+export async function revokeAll(env, uid) {
+  if (!env.OAUTH_PROVIDER) return 0;
+  const gs = await grantsOf(env, uid);
+  await Promise.all(gs.map((g) => env.OAUTH_PROVIDER.revokeGrant(g.id, uid)));
+  return gs.length;
 }
 
 export async function handleAiChanges(request, env, { fetchImpl = fetch } = {}) {
@@ -30,6 +53,21 @@ export async function handleAiChanges(request, env, { fetchImpl = fetch } = {}) 
   const path = new URL(request.url).pathname;
 
   if (path === '/api/ai-changes' && request.method === 'GET') return json(200, { changes: await readChanges(env, uid) });
+
+  if (path === '/api/claude/grants' && request.method === 'GET') {
+    if (!env.OAUTH_PROVIDER) return json(200, { grants: [] });
+    const gs = await grantsOf(env, uid);
+    return json(200, { grants: gs.map((g) => ({ id: g.id, createdAt: g.createdAt, expiresAt: g.expiresAt ?? null, client: g.metadata?.client ?? null })) });
+  }
+  if (path === '/api/claude/revoke' && request.method === 'POST') {
+    const { id, all } = await request.json().catch(() => ({}));
+    if (all) return json(200, { revoked: await revokeAll(env, uid) });
+    if (!id || !env.OAUTH_PROVIDER) return fail(400, 'bad_input', '끊을 연결을 골라 주세요.');
+    const mine = (await grantsOf(env, uid)).some((g) => g.id === id);
+    if (!mine) return fail(404, 'not_found', '연결을 찾지 못했어요.');
+    await env.OAUTH_PROVIDER.revokeGrant(id, uid);
+    return json(200, { revoked: 1 });
+  }
 
   if (path === '/api/ai-changes/undo' && request.method === 'POST') {
     const { id } = await request.json().catch(() => ({}));

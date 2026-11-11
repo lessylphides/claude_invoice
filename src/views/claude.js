@@ -29,6 +29,15 @@ function changeLi(c) {
   </li>`;
 }
 
+/** 클로드 연결 모두 끊기 (탈퇴할 때) */
+export const disconnectClaude = () => api('/api/claude/revoke', { method: 'POST', body: JSON.stringify({ all: true }) });
+
+function grantLi(g) {
+  const d = new Date(g.createdAt * (g.createdAt < 1e12 ? 1000 : 1)).toLocaleDateString('ko-KR');
+  return `<li class="ai-ch"><span class="grow">🤖 ${esc(g.client || 'Claude')}<small>${d} 연결</small></span>
+    <button type="button" class="btn ghost small-btn" data-revoke="${esc(g.id)}">연결 끊기</button></li>`;
+}
+
 export function openClaudeConnect() {
   openSheet({
     title: '클로드 연결',
@@ -64,6 +73,12 @@ export function openClaudeConnect() {
           </section>
 
           <section>
+            <h3 class="set-title">연결된 클로드</h3>
+            <div class="set-card set-pad ai-grants" aria-live="polite"><p class="small muted">불러오는 중…</p></div>
+            <p class="set-note">모르는 연결이 보이면 바로 끊어 주세요. 끊으면 그 클로드는 장부를 더 이상 볼 수 없어요.</p>
+          </section>
+
+          <section>
             <h3 class="set-title">클로드가 바꾼 기록</h3>
             <div class="set-card set-pad ai-log" aria-live="polite"><p class="small muted">불러오는 중…</p></div>
             <p class="set-note">되돌리기는 클로드가 바꾼 뒤 그대로일 때만 돼요. 그 뒤에 앱에서 다시 바꾼 값은 건드리지 않아요.</p>
@@ -76,6 +91,31 @@ export function openClaudeConnect() {
           toast('연결 주소를 복사했어요.');
         } catch {
           toast('복사하지 못했어요. 주소를 길게 눌러 복사해 주세요.');
+        }
+      });
+
+      const gbox = body.querySelector('.ai-grants');
+      const drawGrants = (gs) => {
+        if (!gbox.isConnected) return;
+        gbox.innerHTML = gs.length ? `<ul class="ai-list">${gs.map(grantLi).join('')}</ul>` : '<p class="small muted">연결된 클로드가 없어요.</p>';
+      };
+      const loadGrants = () =>
+        api('/api/claude/grants').then(
+          (j) => drawGrants(j.grants || []),
+          (e) => gbox.isConnected && (gbox.innerHTML = `<p class="small muted">${esc(e.message)}</p>`),
+        );
+      loadGrants();
+      gbox.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-revoke]');
+        if (!b || !confirm('이 클로드 연결을 끊을까요?')) return;
+        b.disabled = true;
+        try {
+          await api('/api/claude/revoke', { method: 'POST', body: JSON.stringify({ id: b.dataset.revoke }) });
+          toast('연결을 끊었어요.');
+          loadGrants();
+        } catch (err) {
+          toast(err.message);
+          b.disabled = false;
         }
       });
 
@@ -95,6 +135,7 @@ export function openClaudeConnect() {
         if (!b) return;
         b.disabled = true;
         try {
+          if (sync.dirty) await sync.now(); // 이 기기에서 바꾼 게 있으면 먼저 올려야 되돌린 장부와 엇갈리지 않음
           const j = await api('/api/ai-changes/undo', { method: 'POST', body: JSON.stringify({ id: b.dataset.undo }) });
           toast(j.message || '되돌렸어요.');
           draw(j.changes || []);

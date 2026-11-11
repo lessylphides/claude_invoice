@@ -5,13 +5,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import * as z from 'zod';
 import { readLedger, updateLedger, LedgerError } from './ledger.js';
-import { overview, listMenus, searchPurchases, itemHistory, setMenuPrice, createCategory, moveMenu } from './tools.js';
+import { overview, listMenus, searchPurchases, itemHistory, setMenuPrice, setMenuPrices, createCategory, moveMenu } from './tools.js';
 import { logChanges } from './changes.js';
 
 const INSTRUCTIONS = `코스트노트는 한국 음식점·카페·바 사장님의 매입 장부와 메뉴 원가율 앱입니다.
 - 숫자는 장부에서 직접 읽으세요 (get_cost_overview, list_menus, search_purchases, get_item_price_history). 원가는 메뉴에 연결된 매입 품목의 가장 최근 매입 단가로 계산되며, 금액 단위는 원입니다.
 - 판매가를 제안할 때는 목표 원가율, 분류별 최소 마진(잔·보틀), 최근 단가 변화를 근거로 이유를 설명하세요.
-- 장부를 바꾸는 도구(set_menu_price, create_menu_category, move_menu_to_category)는 사장님이 그 값으로 바꾸라고 분명히 말했을 때만 쓰세요. 바꾼 내용은 앱의 '클로드가 바꾼 기록'에서 되돌릴 수 있다고 알려 주세요.
+- 장부를 바꾸는 도구(set_menu_price, set_menu_prices, create_menu_category, move_menu_to_category)는 사장님이 그 값으로 바꾸라고 분명히 말했을 때만 쓰세요. 바꾼 내용은 앱의 '클로드가 바꾼 기록'에서 되돌릴 수 있다고 알려 주세요.
 - 바꾼 값은 사장님이 코스트노트 앱을 다시 열거나 새로고침하면 보입니다.`;
 
 const text = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 1) }] });
@@ -37,9 +37,13 @@ export function buildServer(env, uid, fetchImpl = fetch) {
   const write = (tool, fn) =>
     run(async () => {
       const { result } = await updateLedger(env, uid, fn, fetchImpl);
-      await logChanges(env, uid, result.changes, tool);
+      // 장부는 이미 저장됨: 기록을 못 남겨도 실패로 알리지 않음 (대신 안내)
+      const logged = await logChanges(env, uid, result.changes, tool).then(
+        () => true,
+        (e) => (console.error('[mcp] log failed', e), false),
+      );
       const { changes, ...rest } = result;
-      return text({ changed: changes.map(({ label, menuName, category, before, after, kind }) => ({ kind, menu: menuName, field: label, category, before, after })), ...rest });
+      return text({ ...(logged ? {} : { note: '바꾼 기록을 남기지 못해 앱에서 되돌리기가 안 될 수 있어요.' }), changed: changes.map(({ label, menuName, category, before, after, kind }) => ({ kind, menu: menuName, field: label, category, before, after })), ...rest });
     });
 
   server.registerTool(
@@ -111,6 +115,28 @@ export function buildServer(env, uid, fetchImpl = fetch) {
   );
 
   server.registerTool(
+    'set_menu_prices',
+    {
+      title: '여러 메뉴 판매가 한 번에 입력',
+      description: '여러 메뉴의 잔·보틀 판매가를 한 번에 바꿉니다 (최대 50개). 메뉴 여러 개를 바꿀 때는 set_menu_price 를 여러 번 부르지 말고 이걸 쓰세요. 하나라도 못 찾으면 아무것도 바꾸지 않아요.',
+      inputSchema: {
+        items: z
+          .array(
+            z.object({
+              menu: z.string().describe('메뉴 이름 또는 id'),
+              price: z.number().int().min(0).optional().describe('잔 판매가, 원'),
+              bottle_price: z.number().int().min(0).optional().describe('보틀 판매가, 원'),
+            }),
+          )
+          .min(1)
+          .max(50),
+      },
+      annotations: WRITE,
+    },
+    (args) => write('set_menu_prices', (d) => setMenuPrices(d, args)),
+  );
+
+  server.registerTool(
     'create_menu_category',
     {
       title: '메뉴 분류 만들기',
@@ -140,6 +166,8 @@ export function buildServer(env, uid, fetchImpl = fetch) {
 
 /** POST /mcp (Streamable HTTP, 상태 없이 요청마다 새로) */
 export async function handleMcp(request, env, uid, fetchImpl = fetch) {
+  // 상태 없는 서버: 알림 스트림(GET)·세션 종료(DELETE)는 쓰지 않음
+  if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { allow: 'POST' } });
   const server = buildServer(env, uid, fetchImpl);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);

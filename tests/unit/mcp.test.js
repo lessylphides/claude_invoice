@@ -102,6 +102,7 @@ describe('도구 (장부 계산)', () => {
     expect(() => createCategory(d, { name: '하이볼' })).toThrow(/이미/);
     expect(() => moveMenu(d, { menu: 'm1', category: '없는분류' })).toThrow(/없어요/);
     expect(() => findMenu(d, '라떼')).toThrow(/찾지 못했어요/);
+    for (const bad of ['constructor', '__proto__', 'a<b>', '전체']) expect(() => createCategory(d, { name: bad })).toThrow(/쓸 수 없는/);
     // 분류 만들기는 메뉴가 있으면 되돌리지 않음 → 메뉴부터 되돌리면 됨
     expect(undoChange(d, c.changes[0]).ok).toBe(false);
     expect(undoChange(d, mv.changes[0]).ok).toBe(true);
@@ -126,7 +127,7 @@ describe('클로드 연결: 로그인부터 도구까지', () => {
       fetch: (request, e) => {
         const p = new URL(request.url).pathname;
         if (p === '/oauth/authorize') return handleAuthorize(request, e, { fetchImpl: sb.fetchImpl });
-        if (p.startsWith('/api/ai-changes')) return handleAiChanges(request, e, { fetchImpl: sb.fetchImpl });
+        if (p.startsWith('/api/ai-changes') || p.startsWith('/api/claude/')) return handleAiChanges(request, e, { fetchImpl: sb.fetchImpl });
         return new Response('app');
       },
     };
@@ -191,6 +192,12 @@ describe('클로드 연결: 로그인부터 도구까지', () => {
     return { isError: !!c.isError, data: c.isError ? c.content[0].text : JSON.parse(c.content[0].text) };
   };
 
+  it('허락 화면은 저장된 앱 로그인을 쓰지 않고 항상 비밀번호를 물음, GET /mcp 는 405', async () => {
+    const tok = await token();
+    const g = await call('/mcp', { headers: { authorization: `Bearer ${tok}` } });
+    expect(g.status).toBe(405);
+  });
+
   it('로그인 없이 /mcp 를 부르면 401 + 로그인 안내(메타데이터 주소)', async () => {
     const r = await call('/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     expect(r.status).toBe(401);
@@ -234,7 +241,7 @@ describe('클로드 연결: 로그인부터 도구까지', () => {
     expect(init.body.result.instructions).toContain('코스트노트');
     const list = await rpc(tok, 'tools/list');
     const names = list.body.result.tools.map((t) => t.name);
-    expect(names).toEqual(['get_cost_overview', 'list_menus', 'search_purchases', 'get_item_price_history', 'set_menu_price', 'create_menu_category', 'move_menu_to_category']);
+    expect(names).toEqual(['get_cost_overview', 'list_menus', 'search_purchases', 'get_item_price_history', 'set_menu_price', 'set_menu_prices', 'create_menu_category', 'move_menu_to_category']);
     expect(list.body.result.tools.find((t) => t.name === 'list_menus').annotations.readOnlyHint).toBe(true);
 
     const menus = await tool(tok, 'list_menus', { category: '위스키' });
@@ -266,6 +273,24 @@ describe('클로드 연결: 로그인부터 도구까지', () => {
     // 다른 계정은 내 기록을 못 봄
     const other = await (await call('/api/ai-changes', { headers: { authorization: 'Bearer sb-other' } })).json();
     expect(other.changes).toEqual([]);
+
+    // 여러 메뉴 한 번에: 하나라도 못 찾으면 아무것도 안 바꿈
+    const bulkBad = await tool(tok, 'set_menu_prices', { items: [{ menu: 'm1', price: 37000 }, { menu: '없는메뉴', price: 1 }] });
+    expect(bulkBad.isError).toBe(true);
+    expect(rows.get(UID).data.menus[0].price).toBe(33000);
+    const bulk = await tool(tok, 'set_menu_prices', { items: [{ menu: 'm1', price: 37000, bottle_price: 460000 }] });
+    expect(bulk.data.changed).toHaveLength(2);
+
+    // 연결된 클로드 목록 → 끊으면 그 토큰으로 더는 못 씀 (다른 계정은 내 연결을 못 봄)
+    const grants = await (await call('/api/claude/grants', { headers: auth })).json();
+    expect(grants.grants).toHaveLength(1);
+    expect(grants.grants[0].client).toBe('Claude');
+    expect((await (await call('/api/claude/grants', { headers: { authorization: 'Bearer sb-other' } })).json()).grants).toEqual([]);
+    const notMine = await call('/api/claude/revoke', { method: 'POST', headers: { authorization: 'Bearer sb-other', 'content-type': 'application/json' }, body: JSON.stringify({ id: grants.grants[0].id }) });
+    expect(notMine.status).toBe(404);
+    const rv = await call('/api/claude/revoke', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ id: grants.grants[0].id }) });
+    expect(rv.status).toBe(200);
+    expect((await rpc(tok, 'tools/list')).status).toBe(401);
   });
 
   it('앱에서 동시에 저장해 번호가 바뀌면 다시 읽어서 반영 (앱 변경을 덮지 않음)', async () => {
@@ -287,5 +312,16 @@ describe('클로드 연결: 로그인부터 도구까지', () => {
     const set = await tool(tok, 'set_menu_price', { menu: 'm1', price: 35000 });
     expect(set.isError).toBe(false);
     expect(rows.get(UID).data.menus[0]).toMatchObject({ price: 35000, bottlePrice: 470000 });
+  });
+});
+
+describe('분류 이름이 constructor 같아도 원가 계산이 깨지지 않음', () => {
+  it('currentMinMargin', async () => {
+    const { currentMinMargin } = await import('../../src/lib/cost.js');
+    expect(currentMinMargin({}, 'constructor')).toBe(null);
+    expect(currentMinMargin({ 위스키: [{ value: 1000, bottle: 0 }] }, '위스키')).toBe(1000);
+    const d = migrate({ menuCategories: ['constructor'], menus: [{ id: 'z', name: 'x', category: 'constructor', price: 1000 }] });
+    expect(() => overview(d)).not.toThrow();
+    expect(() => listMenus(d)).not.toThrow();
   });
 });

@@ -116,7 +116,7 @@ async function resolveConflict(row) {
     title: '다른 곳에서 장부가 바뀌었어요',
     text: `이 기기에서 바꾼 내용이 아직 서버에 올라가지 않았는데, 그 사이 다른 기기나 클로드에서 장부가 바뀌었어요.<br>어느 쪽을 남길까요? <span class="muted small">(남기지 않은 쪽은 사라집니다. 걱정되면 먼저 ⚙ 설정에서 백업 파일을 저장하세요.)</span>`,
     options: [
-      { value: 'server', label: '다른 기기 내용 받기' },
+      { value: 'server', label: '다른 곳(기기·클로드) 내용 받기' },
       { value: 'local', label: '이 기기 내용으로 덮어쓰기' },
     ],
   });
@@ -265,6 +265,8 @@ async function reconcile() {
 let unsubChange = null;
 addEventListener('online', () => uid && (st.dirty ? push() : pull()));
 document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && pull());
+// 앱을 켜 둔 채로 클로드가 장부를 바꿀 수 있어서, 화면이 보이는 동안 1분마다 받아 옴 (바꾼 게 없으면 서버에 묻기만)
+setInterval(() => document.visibilityState === 'visible' && pull(), 60000);
 
 export const sync = {
   get status() {

@@ -15,7 +15,7 @@ import { billing } from '../billing.js';
 import { PLANS } from '../lib/plans.js';
 import { openPlans } from './plans.js';
 import { openAdmin } from './admin.js';
-import { openClaudeConnect } from './claude.js';
+import { openClaudeConnect, disconnectClaude } from './claude.js';
 
 function syncLine() {
   const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -186,6 +186,7 @@ export function openSettings() {
         setAuthNotice('탈퇴가 끝났어요. 그동안 이용해 주셔서 감사합니다.'); // 로그인 화면이 그려질 때 보이도록 먼저
         try {
           await billing.close(); // 자동 결제부터 멈춤 (실패하면 탈퇴도 하지 않음)
+          await disconnectClaude().catch(() => {}); // 클로드 연결도 모두 끊음
           await auth.deleteAccount();
           sync.forget();
           close();

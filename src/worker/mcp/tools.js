@@ -198,12 +198,28 @@ export function setMenuPrice(data, { menu, price, bottle_price }) {
 }
 
 const RESERVED = ['전체', UNCATEGORIZED];
+const UNSAFE = new Set(['__proto__', 'constructor', 'prototype', 'toString', 'valueOf', 'hasOwnProperty']);
+
+/** 여러 메뉴 판매가를 한 번에 (동시에 여러 번 부르면 서로 엇갈려서) */
+export function setMenuPrices(data, { items }) {
+  if (!Array.isArray(items) || !items.length) throw new LedgerError('bad_input', '바꿀 메뉴 목록(items)을 알려 주세요.');
+  if (items.length > 50) throw new LedgerError('bad_input', '한 번에 50개까지 바꿀 수 있어요.');
+  for (const it of items) findMenu(data, it.menu); // 하나라도 못 찾으면 아무것도 안 바꿈
+  const changes = [];
+  const menus = [];
+  for (const it of items) {
+    const r = setMenuPrice(data, it);
+    changes.push(...r.changes);
+    menus.push(r.menu);
+  }
+  return { changes, menus };
+}
 
 /** 메뉴 분류 만들기 */
 export function createCategory(data, { name }) {
   const n = String(name ?? '').trim();
   if (!n || n.length > 20) throw new LedgerError('bad_input', '분류 이름은 1~20자로 알려 주세요.');
-  if (RESERVED.includes(n)) throw new LedgerError('bad_input', `"${n}"은(는) 쓸 수 없는 분류 이름이에요.`);
+  if (RESERVED.includes(n) || UNSAFE.has(n) || /[\u0000-\u001f\u007f<>]/.test(n)) throw new LedgerError('bad_input', `"${n}"은(는) 쓸 수 없는 분류 이름이에요.`);
   if (data.menuCategories.includes(n)) throw new LedgerError('exists', `"${n}" 분류는 이미 있어요.`);
   if (data.menuCategories.length >= 30) throw new LedgerError('bad_input', '분류는 30개까지 만들 수 있어요.');
   data.menuCategories.push(n);
@@ -239,8 +255,7 @@ export function undoChange(data, ch) {
   if (ch.kind === 'category_create') {
     if (!data.menuCategories.includes(ch.category)) return { ok: true, message: `"${ch.category}" 분류는 이미 없어요.` };
     if (data.menus.some((m) => m.category === ch.category)) return { ok: false, message: `"${ch.category}" 분류에 메뉴가 있어서 지우지 않았어요.` };
-    data.menuCategories = data.menuCategories.filter((c) => c !== ch.category);
-    delete data.minMargins[ch.category];
+    data.menuCategories = data.menuCategories.filter((c) => c !== ch.category); // 그 사이 정한 최소 마진 기록은 남겨 둠
     return { ok: true, message: `"${ch.category}" 분류를 지웠어요.` };
   }
   return { ok: false, message: '되돌릴 수 없는 기록이에요.' };

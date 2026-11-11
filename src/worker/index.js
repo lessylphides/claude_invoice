@@ -44,7 +44,7 @@ const app = {
     if (url.hostname === 'www.costnote.co.kr') return Response.redirect(`https://costnote.co.kr${url.pathname}${url.search}`, 301);
     if (url.hostname === 'costnote.co.kr') return serveFile(request, url, LANDING, LANDING_CSP, 'landing');
     if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
-    if (url.pathname === '/api/ai-changes' || url.pathname === '/api/ai-changes/undo') return handleAiChanges(request, env);
+    if (url.pathname.startsWith('/api/ai-changes') || url.pathname.startsWith('/api/claude/')) return handleAiChanges(request, env);
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
     if (url.pathname === '/api/ocr/feedback') return handleOcrFeedback(request, env);
     if (url.pathname.startsWith('/api/admin')) return handleAdmin(request, env);

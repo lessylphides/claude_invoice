@@ -57,7 +57,9 @@ export const priceForMargin = (cost, minMargin) => Math.ceil((cost + minMargin) 
  * @param {'glass'|'bottle'} kind 잔 / 보틀
  */
 export function currentMinMargin(margins, category, kind = 'glass') {
-  const last = margins?.[category]?.at(-1);
+  // 분류 이름이 constructor 같은 이름이어도 안전하게 (자기 값만)
+  const hist = margins && Object.hasOwn(margins, category) ? margins[category] : null;
+  const last = Array.isArray(hist) ? hist.at(-1) : null;
   const v = kind === 'bottle' ? last?.bottle : last?.value;
   return v > 0 ? v : null;
 }

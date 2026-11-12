@@ -86,6 +86,11 @@ export const auth = {
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) return 'exists';
     return 'sent';
   },
+  /** 메일의 인증 코드(숫자)로 인증 → 가입한 이 화면에서 바로 로그인 (메일을 어느 앱에서 열든 상관없음) */
+  async verifyCode(email, code) {
+    const { error } = await (await client()).auth.verifyOtp({ email, token: code, type: 'email' });
+    if (error) throw error;
+  },
   async resend(email) {
     const { error } = await (await client()).auth.resend({ type: 'signup', email, options: { emailRedirectTo: appUrl() } });
     if (error) throw error;

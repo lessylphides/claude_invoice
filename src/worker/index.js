@@ -10,6 +10,7 @@ import { makeProvider } from './mcp/provider.js';
 import { handleAuthorize } from './mcp/authorize.js';
 import { handleAiChanges } from './mcp/changes.js';
 import { withLandingRef, handleRef } from './ref.js';
+import { withBanner } from './inappBanner.js';
 export { BillingStore } from './billingStore.js';
 
 const cache = new Map();
@@ -43,7 +44,7 @@ const app = {
     const url = new URL(request.url);
     // www → 소개 페이지 주소로, costnote.co.kr → 소개 페이지, 그 밖(app. 등) → 앱
     if (url.hostname === 'www.costnote.co.kr') return Response.redirect(`https://costnote.co.kr${url.pathname}${url.search}`, 301);
-    if (url.hostname === 'costnote.co.kr') return withLandingRef(request, serveFile(request, url, LANDING, LANDING_CSP, 'landing'), env);
+    if (url.hostname === 'costnote.co.kr') return withLandingRef(request, await withBanner(request, url, serveFile(request, url, LANDING, LANDING_CSP, 'landing')), env);
     if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
     if (url.pathname.startsWith('/api/ai-changes') || url.pathname.startsWith('/api/claude/')) return handleAiChanges(request, env);
     if (url.pathname === '/api/ref') return handleRef(request, env);

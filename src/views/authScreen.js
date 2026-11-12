@@ -2,6 +2,24 @@
 import { esc } from '../lib/format.js';
 import { auth, landing } from '../auth.js';
 import { authMessage, isEmail, passwordProblem, MIN_PASSWORD } from '../lib/authErrors.js';
+import { inAppOf, escapeUrl, escapeHint } from '../lib/inapp.js';
+
+// 인증 코드를 기다리는 가입 (앱 안 브라우저는 메일 앱을 다녀오면 새로 열리기도 해서 기기에 1시간 기억)
+const PENDING = 'costnote:pending-signup';
+const pendingEmail = () => {
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING) || 'null');
+    return p && Date.now() - p.at < 3600_000 ? p.email : null;
+  } catch {
+    return null;
+  }
+};
+const setPending = (e) => {
+  try {
+    if (e) localStorage.setItem(PENDING, JSON.stringify({ email: e, at: Date.now() }));
+    else localStorage.removeItem(PENDING);
+  } catch {}
+};
 
 // 소개 페이지의 [지금 써 보기]는 ?start=signup 으로 와서 가입 화면부터 보여 줌
 const startSignup = new URLSearchParams(location.search).get('start') === 'signup';
@@ -10,8 +28,9 @@ if (startSignup) {
   q.delete('start');
   history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '') + location.hash);
 }
-let mode = startSignup ? 'signup' : 'login'; // login | signup | sent | forgot | forgot-sent
-let email = '';
+const waiting = !startSignup && pendingEmail();
+let mode = startSignup ? 'signup' : waiting ? 'sent' : 'login'; // login | signup | sent | forgot | forgot-sent
+let email = waiting || '';
 let notice = null; // {kind: 'error'|'ok', text}
 
 // 메일 링크로 들어왔을 때 첫 안내 (링크 확인은 로그인 기능을 불러온 뒤 끝나므로 처음 그릴 때 정함)
@@ -50,12 +69,16 @@ function body() {
       <p class="auth-links">이미 계정이 있나요? ${link('login', '로그인')}</p>`;
   if (mode === 'sent')
     return `<h2>메일함을 확인해 주세요</h2>
-      <p class="auth-text"><b>${esc(email)}</b>(으)로 인증 메일을 보냈어요.<br>메일의 <b>인증 링크</b>를 누른 뒤, 이 앱으로 돌아와 로그인하세요.</p>
-      <p class="muted small">메일이 안 보이면 스팸함도 확인해 주세요.</p>
-      ${noticeHtml()}
+      <p class="auth-text"><b>${esc(email)}</b>(으)로 인증 메일을 보냈어요.<br>메일에 있는 <b>인증 코드 6자리</b>를 아래에 넣어 주세요.</p>
+      <form data-auth="code" novalidate>
+        <label>인증 코드<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="숫자 6자리" class="code-input" required></label>
+        ${noticeHtml()}
+        <button class="btn primary" type="submit">인증하고 시작하기</button>
+      </form>
+      <p class="muted small">메일이 안 보이면 스팸함도 확인해 주세요. 메일의 버튼으로 인증했다면 여기서 로그인하면 돼요.</p>
       <div class="btn-col">
-        <button class="btn primary" type="button" data-auth-go="login">로그인하러 가기</button>
         <button class="btn ghost" type="button" data-auth-act="resend">인증 메일 다시 보내기</button>
+        <button class="btn ghost" type="button" data-auth-go="login">로그인하러 가기</button>
       </div>`;
   if (mode === 'forgot')
     return `<h2>비밀번호 찾기</h2>
@@ -85,12 +108,24 @@ function body() {
 export function renderAuth(app) {
   checkLanding();
   app.innerHTML = `<main class="auth-screen">
+    ${inAppNote()}
     <header class="auth-brand"><img src="./icon.svg" alt="" width="56" height="56"><h1>코스트노트</h1><p class="muted">매입 · 원가 관리</p></header>
     <section class="auth-card">${body()}</section>
   </main>`;
 }
 
+/** 인스타·카카오톡 등 앱 안 브라우저면 밖에서 열기 권하기 (여기서 가입해도 인증 코드로 문제없음) */
+function inAppNote() {
+  const info = inAppOf(navigator.userAgent);
+  if (!info) return '';
+  const browser = info.os === 'android' ? '크롬' : 'Safari';
+  const direct = escapeUrl(info, location.href);
+  return `<aside class="inapp-note" role="note"><p>📱 지금 <b>${esc(info.name)}</b> 앱 안에서 열려 있어요. <b>${browser}</b>에서 열면 홈 화면에 앱으로 설치해 쓸 수 있어요.</p>
+    ${direct ? `<a class="btn small-btn" href="${esc(direct)}">${browser}에서 열기</a>` : `<p>${escapeHint(info)}</p>`}</aside>`;
+}
+
 const go = (m, n = null) => {
+  if (m !== 'sent' && mode === 'sent') setPending(null);
   mode = m;
   notice = n;
 };
@@ -134,18 +169,39 @@ export async function handleAuthEvent(e, rerender) {
   }
   if (kind === 'signup' && !form.elements.agree.checked) return fail('이용약관과 개인정보 처리에 동의해 주세요.');
   if (kind === 'login' && !v('password')) return fail('비밀번호를 넣어 주세요.');
+  const code = v('code').replace(/\D/g, '');
+  if (kind === 'code' && code.length < 6) return fail('메일에 있는 숫자 6자리를 넣어 주세요.');
 
   const btn = form.querySelector('[type=submit]');
   btn.disabled = true;
   btn.setAttribute('aria-busy', 'true');
   try {
     if (kind === 'login') {
-      await auth.signIn(email, v('password'));
+      try {
+        await auth.signIn(email, v('password'));
+      } catch (err) {
+        // 아직 인증 안 한 계정: 코드 넣는 화면으로
+        if (err?.code === 'email_not_confirmed' || /not confirmed/i.test(err?.message || '')) {
+          go('sent', { kind: 'error', text: '아직 이메일 인증을 하지 않았어요. 메일의 인증 코드를 넣어 주세요.' });
+          setPending(email);
+          return rerender();
+        }
+        throw err;
+      }
       go('login'); // 로그인되면 앱 화면으로 바뀜
+    } else if (kind === 'code') {
+      try {
+        await auth.verifyCode(email, code);
+      } catch (err) {
+        if (err?.code === 'otp_expired' || /expired|invalid/i.test(err?.message || '')) return fail('코드가 맞지 않거나 시간이 지났어요. 다시 확인하거나 메일을 다시 받아 주세요.');
+        throw err;
+      }
+      go('login'); // 인증되면 바로 로그인 → 앱 화면으로 바뀜
     } else if (kind === 'signup') {
       const r = await auth.signUp(email, v('password'));
       if (r === 'exists') return fail('이미 가입된 이메일이에요. 로그인하거나 비밀번호 찾기를 해 주세요.');
       go('sent');
+      setPending(email);
     } else if (kind === 'forgot') {
       await auth.sendReset(email);
       go('forgot-sent');

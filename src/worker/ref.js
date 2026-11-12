@@ -13,7 +13,8 @@ export async function withLandingRef(request, response, env, now = Date.now()) {
   const ref = cleanRef(new URL(request.url).searchParams.get('ref'));
   if (!ref || request.method !== 'GET') return response;
   const first = !cookieOf(request, REF_COOKIE);
-  if (first) {
+  // nv=1: 앱 안 브라우저에서 '밖에서 열기'로 다시 온 것 (이미 센 방문)
+  if (first && new URL(request.url).searchParams.get('nv') !== '1') {
     const d = db(env);
     if (d) {
       const key = `refvisit:${ref}`;

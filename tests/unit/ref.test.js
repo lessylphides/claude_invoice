@@ -45,6 +45,12 @@ describe('소개 페이지: 쿠키 + 방문 수', () => {
     expect(again.headers.get('set-cookie')).toBeNull(); // 처음 온 경로를 덮어쓰지 않음
     expect(env.BILLING.m.has('refvisit:ig2')).toBe(false);
   });
+  it('앱 안 브라우저에서 밖으로 다시 연 것(nv=1)은 쿠키만 남기고 방문은 세지 않음', async () => {
+    const env = { BILLING: memKV() };
+    const r = await withLandingRef(new Request('https://costnote.co.kr/?ref=igad1&nv=1'), page(), env, NOW);
+    expect(r.headers.get('set-cookie')).toContain('cn_ref=igad1');
+    expect(env.BILLING.m.size).toBe(0);
+  });
   it('꼬리표가 없거나 이상하면 그대로', async () => {
     const env = { BILLING: memKV() };
     for (const u of ['https://costnote.co.kr/', 'https://costnote.co.kr/?ref=%3Cx%3E']) {

@@ -203,3 +203,56 @@ test('광고 링크(?ref=)로 들어와 가입하면 계정 정보에 가입 경
   const signup = page.authCalls.find((c) => c.path.startsWith('/auth/v1/signup'));
   expect(signup.body.data).toEqual({ ref: 'ig1' });
 });
+
+test('인증 코드: 틀리면 안내, 맞으면 가입한 화면에서 바로 로그인 (메일 앱을 다녀와 새로 열려도 코드 화면 유지)', async ({ page }) => {
+  await openApp(page, {
+    loggedIn: false,
+    auth: (path, body) => {
+      if (path.startsWith('/auth/v1/signup')) return { body: { ...TEST_USER, email: body.email, identities: [{}] } };
+      if (path.startsWith('/auth/v1/verify'))
+        return body.token === '482913' ? { body: fakeSession({ ...TEST_USER, email: body.email }) } : { status: 403, body: { code: 403, error_code: 'otp_expired', msg: 'Token has expired or is invalid' } };
+      return null;
+    },
+  });
+  await page.locator('[data-auth-go=signup]').click();
+  await fill(page, { email: 'code@example.com', password: 'goodpass12', password2: 'goodpass12' });
+  await page.locator('.auth-screen input[name=agree]').check();
+  await submit(page);
+  await expect(page.locator('.auth-card h2')).toHaveText('메일함을 확인해 주세요');
+  // 인스타그램 앱 안 브라우저는 메일 앱을 다녀오면 새로 열리기도 함
+  await page.reload();
+  await expect(page.locator('.auth-card h2')).toHaveText('메일함을 확인해 주세요');
+  await expect(page.locator('.auth-text')).toContainText('code@example.com');
+  await fill(page, { code: '123' });
+  await submit(page);
+  await expect(notice(page)).toContainText('숫자 6자리');
+  await fill(page, { code: '111111' });
+  await submit(page);
+  await expect(notice(page)).toContainText('코드가 맞지 않거나');
+  await fill(page, { code: '482 913' });
+  await submit(page);
+  await expect(page.locator('.tabbar')).toBeVisible();
+  const verify = page.authCalls.filter((c) => c.path.startsWith('/auth/v1/verify')).at(-1);
+  expect(verify.body).toMatchObject({ email: 'code@example.com', token: '482913', type: 'email' });
+  expect(await page.evaluate(() => localStorage.getItem('costnote:pending-signup'))).toBeNull();
+});
+
+test('인증 안 한 계정으로 로그인하면 코드 넣는 화면으로', async ({ page }) => {
+  await openApp(page, {
+    loggedIn: false,
+    auth: (path) => (path.startsWith('/auth/v1/token') ? { status: 400, body: { code: 400, error_code: 'email_not_confirmed', msg: 'Email not confirmed' } } : null),
+  });
+  await fill(page, { email: 'late@example.com', password: 'goodpass12' });
+  await submit(page);
+  await expect(page.locator('.auth-card h2')).toHaveText('메일함을 확인해 주세요');
+  await expect(page.locator('input[name=code]')).toBeVisible();
+});
+
+test.describe('인스타그램 앱 안 브라우저', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 350.0.0.0 (iPhone15,2; iOS 18_0; ko_KR)' });
+  test('밖(Safari)에서 열기 안내가 보임', async ({ page }) => {
+    await openApp(page, { loggedIn: false });
+    await expect(page.locator('.inapp-note')).toContainText('인스타그램');
+    await expect(page.locator('.inapp-note')).toContainText('외부 브라우저에서 열기');
+  });
+});

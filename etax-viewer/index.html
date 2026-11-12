@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- 이 페이지는 어떤 서버와도 통신하지 않음: 파일·번호는 이 기기 밖으로 나가지 않음 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="세금계산서">
+  <title>세금계산서 뷰어</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <main>
+    <header class="top">
+      <h1>세금계산서 뷰어</h1>
+      <p class="lead">국세청 메일 첨부파일 <b>NTS_eTaxInvoice.html</b>을 열어요. 파일과 번호는 이 기기 밖으로 나가지 않아요.</p>
+    </header>
+
+    <section id="step-file" class="card">
+      <label class="pick">
+        <input id="file" type="file" accept=".html,.htm,text/html">
+        <span class="btn primary">첨부파일 고르기</span>
+      </label>
+      <p class="help">아이폰: 메일에서 첨부파일을 길게 눌러 <b>‘파일에 저장’</b>한 뒤 여기서 고르세요.</p>
+    </section>
+
+    <section id="step-id" class="card" hidden>
+      <p class="filename" id="filename"></p>
+      <form id="id-form" autocomplete="off">
+        <label for="bizno">공급받는 사업자등록번호</label>
+        <input id="bizno" inputmode="numeric" placeholder="숫자 10자리" maxlength="16" required>
+        <label class="check"><input id="remember" type="checkbox" checked> 이 기기에 기억하기</label>
+        <button class="btn primary" type="submit">열기</button>
+      </form>
+      <p id="error" class="error" role="alert" hidden></p>
+    </section>
+
+    <section id="result" hidden>
+      <div id="summary"></div>
+      <div class="actions">
+        <button id="toggle-original" class="btn" type="button">원본 화면 보기</button>
+        <button id="save-xml" class="btn" type="button" hidden>XML 저장</button>
+        <button id="again" class="btn" type="button">다른 파일 열기</button>
+      </div>
+      <div id="original" class="original" hidden></div>
+    </section>
+
+    <footer class="foot">
+      홈택스 서버에 접속하지 않고 이 페이지 안에서 직접 풀어요 (SEED·MD5).
+      <button id="forget" class="link" type="button" hidden>기억한 번호 지우기</button>
+    </footer>
+  </main>
+</body>
+</html>

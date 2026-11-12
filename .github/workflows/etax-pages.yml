@@ -1,0 +1,51 @@
+# 세금계산서 뷰어(etax-viewer/)를 GitHub Pages 로 배포
+# 코스트노트 앱(Cloudflare)과 따로 떨어진 정적 페이지. main 에 etax-viewer 가 바뀌면 자동으로 올라감
+name: eTax Viewer Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'etax-viewer/**'
+      - 'tests/unit/etax*.js'
+      - '.github/workflows/etax-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 해독(MD5·SEED)·보안메일 열기 단위 테스트
+        run: npx vitest run tests/unit/etax.test.js
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: etax-viewer
+      - id: deployment
+        uses: actions/deploy-pages@v4

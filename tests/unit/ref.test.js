@@ -80,7 +80,7 @@ describe('가입 계정 기록', () => {
   it('꼬리표 없는 계정은 기록 안 함, 로그인 없으면 401', async () => {
     const env = { BILLING: memKV() };
     expect(await (await post(env, {})).json()).toEqual({ ref: null });
-    expect(env.BILLING.m.size).toBe(0);
+    expect([...env.BILLING.m.keys()].some((k) => k.startsWith('refuser:'))).toBe(false);
     const r = await handleRef(new Request('https://app.costnote.co.kr/api/ref', { method: 'POST' }), env, { fetchImpl: fetchWith({}) });
     expect(r.status).toBe(401);
   });
@@ -111,13 +111,42 @@ describe('앱: 꼬리표 기억·보내기', () => {
     expect(captureRef({ search: '?ref=ig3' }, { cookie: '' }, mem())).toBe('ig3');
     expect(captureRef({ search: '' }, { cookie: '' }, mem())).toBeNull();
   });
-  it('가입 경로가 있는 계정만, 계정마다 한 번 보냄', async () => {
+  it('로그인한 계정마다 한 번 보냄', async () => {
     const ls = mem();
     let n = 0;
     const f = async () => (n++, new Response('{}', { status: 200 }));
-    expect(await reportRef({ id: 'u1', user_metadata: {} }, 't', f, ls)).toBe(false);
+    expect(await reportRef({ id: 'u1', user_metadata: {} }, null, f, ls)).toBe(false);
     expect(await reportRef({ id: 'u1', user_metadata: { ref: 'ig1' } }, 't', f, ls)).toBe(true);
     expect(await reportRef({ id: 'u1', user_metadata: { ref: 'ig1' } }, 't', f, ls)).toBe(false);
     expect(n).toBe(1);
+  });
+});
+
+describe('새 가입 알림 메일', () => {
+  const UID = '11111111-2222-3333-4444-555555555555';
+  const run = async (env, { created, email = 'new@b.c', meta = {} }) => {
+    const mails = [];
+    const fetchImpl = async (u, init) => {
+      if (String(u).endsWith('/auth/v1/user')) return new Response(JSON.stringify({ id: UID, email, user_metadata: meta, created_at: created }), { status: 200 });
+      if (String(u).includes('api.resend.com')) return mails.push(JSON.parse(init.body)), new Response('{}', { status: 200 });
+      throw new Error(String(u));
+    };
+    await handleRef(new Request('https://app.costnote.co.kr/api/ref', { method: 'POST', headers: { authorization: 'Bearer t' } }), env, { fetchImpl, now: NOW });
+    return mails;
+  };
+  const base = () => ({ BILLING: memKV(), RESEND_API_KEY: 'k', OWNER_EMAILS: 'boss@x.com' });
+
+  it('새로 가입한 회원이 처음 로그인하면 운영자에게 한 번만 메일 (가입 경로 포함)', async () => {
+    const env = base();
+    const m1 = await run(env, { created: new Date(NOW - 3600_000).toISOString(), meta: { ref: 'igad1' } });
+    expect(m1).toHaveLength(1);
+    expect(m1[0].to).toEqual(['boss@x.com']);
+    expect(m1[0].subject).toContain('igad1');
+    expect(m1[0].text).toContain('new@b.c');
+    expect(await run(env, { created: new Date(NOW - 3600_000).toISOString() })).toHaveLength(0);
+  });
+  it('예전 회원·운영자 본인은 알리지 않음', async () => {
+    expect(await run(base(), { created: '2026-10-01T00:00:00Z' })).toHaveLength(0);
+    expect(await run(base(), { created: new Date(NOW).toISOString(), email: 'boss@x.com' })).toHaveLength(0);
   });
 });

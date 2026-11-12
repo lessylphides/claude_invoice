@@ -95,3 +95,12 @@ export function ownerRenewalMail(out, lines) {
     ...layout('오늘 정기결제 결과', [`성공 ${out.renewed}건 · 실패 ${out.failed}건 · 종료 ${out.ended}건`, ...lines]),
   };
 }
+
+/** 운영자에게: 새 회원 가입 (인증을 마치고 처음 로그인했을 때) */
+export function newSignupMail({ email, ref }) {
+  const subject = `[코스트노트] 새 회원 가입${ref ? ` (${ref})` : ''}`;
+  return {
+    subject,
+    ...layout('새 회원이 가입했어요 🎉', [`이메일: ${email}`, `가입 경로: ${ref || '직접·기타 (꼬리표 없음)'}`], { label: '운영 현황 보기', href: APP }),
+  };
+}

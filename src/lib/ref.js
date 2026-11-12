@@ -28,10 +28,10 @@ export function storedRef(ls = globalThis.localStorage) {
   }
 }
 
-/** 로그인 뒤 한 번: 서버에 '이 계정의 가입 경로' 기록 요청 (꼬리표는 서버가 계정 정보에서 직접 읽음) */
+/** 로그인 뒤 계정마다 한 번: 서버에 '가입 경로 기록 + 새 가입 알림' 요청 (꼬리표는 서버가 계정 정보에서 직접 읽음) */
 export async function reportRef(user, token, fetchImpl = fetch, ls = globalThis.localStorage) {
-  if (!user?.id || !cleanRef(user.user_metadata?.ref) || !token) return false;
-  const sent = `costnote:ref-sent:${user.id}`;
+  if (!user?.id || !token) return false;
+  const sent = `costnote:joined-sent:${user.id}`;
   try {
     if (ls.getItem(sent)) return false;
     const r = await fetchImpl('./api/ref', { method: 'POST', headers: { authorization: `Bearer ${token}` } });

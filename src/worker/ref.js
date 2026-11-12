@@ -4,7 +4,10 @@
 // 3) 로그인 뒤 앱이 POST /api/ref → 서버가 계정 정보에서 꼬리표를 읽어 '이 계정은 ig1 로 가입' 기록 (한 번만)
 import { cleanRef, REF_COOKIE, REF_DAYS } from '../lib/ref.js';
 import { json, fail, authUser } from './common.js';
-import { db, kstDate } from './billing.js';
+import { db, kstDate, isOwner } from './billing.js';
+import { sendMail, newSignupMail } from './mail.js';
+
+const NEW_WINDOW = 3 * 86400000; // 가입한 지 3일 안에 처음 로그인한 회원만 '새 가입'으로 알림 (기능 넣기 전 회원 제외)
 
 const cookieOf = (request, name) => (request.headers.get('cookie') || '').match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`))?.[1] ?? null;
 
@@ -31,16 +34,27 @@ export async function withLandingRef(request, response, env, now = Date.now()) {
   return res;
 }
 
-/** POST /api/ref: 로그인한 계정의 가입 경로 기록 (계정 정보에 저장된 꼬리표만 믿음) */
+/** POST /api/ref: 로그인 뒤 계정마다 한 번. 가입 경로 기록 (계정 정보에 저장된 꼬리표만 믿음) + 새 가입이면 운영자에게 메일 */
 export async function handleRef(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (request.method !== 'POST') return fail(405, 'method', 'POST 만 받습니다.');
   const a = await authUser(request, fetchImpl);
   if (a.error) return a.error;
   const ref = cleanRef(a.user.meta?.ref);
   const d = db(env);
-  if (!ref || !d) return json(200, { ref: null });
-  const key = `refuser:${a.user.id}`;
-  if (!(await d.get(key))) await d.put(key, { ref, at: now, created: a.user.createdAt ?? null });
+  if (!d) return json(200, { ref });
+  if (ref) {
+    const key = `refuser:${a.user.id}`;
+    if (!(await d.get(key))) await d.put(key, { ref, at: now, created: a.user.createdAt ?? null });
+  }
+  const joinedKey = `joined:${a.user.id}`;
+  if (!(await d.get(joinedKey))) {
+    await d.put(joinedKey, { at: now, ref });
+    const created = Date.parse(a.user.createdAt || '');
+    if (created && now - created < NEW_WINDOW && !isOwner(env, a.user.email)) {
+      const owner = String(env.OWNER_EMAILS || '').split(',')[0]?.trim();
+      if (owner) await sendMail(env, fetchImpl, { to: owner, ...newSignupMail({ email: a.user.email, ref }) });
+    }
+  }
   return json(200, { ref });
 }
 

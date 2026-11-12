@@ -226,11 +226,10 @@ test('인증 코드: 틀리면 안내, 맞으면 가입한 화면에서 바로 �
   await fill(page, { code: '123' });
   await submit(page);
   await expect(notice(page)).toContainText('숫자 6자리');
+  // 6자리가 되면 버튼을 안 눌러도 바로 인증
   await fill(page, { code: '111111' });
-  await submit(page);
   await expect(notice(page)).toContainText('코드가 맞지 않거나');
   await fill(page, { code: '482 913' });
-  await submit(page);
   await expect(page.locator('.tabbar')).toBeVisible();
   const verify = page.authCalls.filter((c) => c.path.startsWith('/auth/v1/verify')).at(-1);
   expect(verify.body).toMatchObject({ email: 'code@example.com', token: '482913', type: 'email' });
@@ -255,4 +254,28 @@ test.describe('인스타그램 앱 안 브라우저', () => {
     await expect(page.locator('.inapp-note')).toContainText('인스타그램');
     await expect(page.locator('.inapp-note')).toContainText('외부 브라우저에서 열기');
   });
+});
+
+test('복사한 코드 붙여넣기: 메일 글에서 6자리를 찾아 바로 인증', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openApp(page, {
+    loggedIn: false,
+    auth: (path, body) => {
+      if (path.startsWith('/auth/v1/signup')) return { body: { ...TEST_USER, email: body.email, identities: [{}] } };
+      if (path.startsWith('/auth/v1/verify')) return { body: fakeSession({ ...TEST_USER, email: body.email }) };
+      return null;
+    },
+  });
+  await page.locator('[data-auth-go=signup]').click();
+  await fill(page, { email: 'paste@example.com', password: 'goodpass12', password2: 'goodpass12' });
+  await page.locator('.auth-screen input[name=agree]').check();
+  await submit(page);
+  await page.evaluate(() => navigator.clipboard.writeText('안녕하세요'));
+  await page.locator('[data-auth-act=paste]').click();
+  await expect(notice(page)).toContainText('6자리 코드가 없어요');
+  await page.evaluate(() => navigator.clipboard.writeText('[코스트노트] 인증 코드 482913 입니다'));
+  await page.locator('[data-auth-act=paste]').click();
+  await expect(page.locator('.tabbar')).toBeVisible();
+  const verify = page.authCalls.filter((c) => c.path.startsWith('/auth/v1/verify')).at(-1);
+  expect(verify.body).toMatchObject({ token: '482913' });
 });

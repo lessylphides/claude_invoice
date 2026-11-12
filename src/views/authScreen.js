@@ -71,7 +71,8 @@ function body() {
     return `<h2>메일함을 확인해 주세요</h2>
       <p class="auth-text"><b>${esc(email)}</b>(으)로 인증 메일을 보냈어요.<br>메일에 있는 <b>인증 코드 6자리</b>를 아래에 넣어 주세요.</p>
       <form data-auth="code" novalidate>
-        <label>인증 코드<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="숫자 6자리" class="code-input" required></label>
+        <label>인증 코드<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="12" placeholder="숫자 6자리" class="code-input" required></label>
+        <button type="button" class="btn ghost small-btn code-paste" data-auth-act="paste">📋 복사한 코드 붙여넣기</button>
         ${noticeHtml()}
         <button class="btn primary" type="submit">인증하고 시작하기</button>
       </form>
@@ -112,6 +113,7 @@ export function renderAuth(app) {
     <header class="auth-brand"><img src="./icon.svg" alt="" width="56" height="56"><h1>코스트노트</h1><p class="muted">매입 · 원가 관리</p></header>
     <section class="auth-card">${body()}</section>
   </main>`;
+  bindCodeInput(app);
 }
 
 /** 인스타·카카오톡 등 앱 안 브라우저면 밖에서 열기 권하기 (여기서 가입해도 인증 코드로 문제없음) */
@@ -122,6 +124,42 @@ function inAppNote() {
   const direct = escapeUrl(info, location.href);
   return `<aside class="inapp-note" role="note"><p>📱 지금 <b>${esc(info.name)}</b> 앱 안에서 열려 있어요. <b>${browser}</b>에서 열면 홈 화면에 앱으로 설치해 쓸 수 있어요.</p>
     ${direct ? `<a class="btn small-btn" href="${esc(direct)}">${browser}에서 열기</a>` : `<p>${escapeHint(info)}</p>`}</aside>`;
+}
+
+const CODE_LEN = 6;
+const digits = (s) => String(s || '').replace(/\D/g, '');
+
+/** 코드 칸: 숫자만 남기고, 6자리가 되면 바로 인증 (자동 채우기·붙여넣기를 누르면 그대로 끝) */
+function submitCode(form) {
+  const btn = form?.querySelector('[type=submit]');
+  if (!btn || btn.disabled) return;
+  form.requestSubmit();
+}
+function bindCodeInput(app) {
+  const input = app.querySelector('input[name=code]');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const d = digits(input.value).slice(0, CODE_LEN);
+    if (input.value !== d) input.value = d;
+    if (d.length === CODE_LEN) submitCode(input.form);
+  });
+}
+
+/** 클립보드의 메일 글에서 6자리 숫자를 찾아 넣기 */
+async function pasteCode(root) {
+  const input = root.querySelector('input[name=code]');
+  let text = '';
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    input?.focus();
+    return { kind: 'error', text: '붙여넣기를 할 수 없어요. 코드 칸을 길게 눌러 붙여넣어 주세요.' };
+  }
+  const code = text.match(/(?<!\d)\d{6}(?!\d)/)?.[0] || (digits(text).length === CODE_LEN ? digits(text) : null);
+  if (!code) return { kind: 'error', text: '복사한 내용에 6자리 코드가 없어요. 메일에서 코드를 복사해 주세요.' };
+  input.value = code;
+  submitCode(input.form);
+  return null;
 }
 
 const go = (m, n = null) => {
@@ -137,6 +175,16 @@ export async function handleAuthEvent(e, rerender) {
     rememberEmail(e.target.closest('main'));
     go(nav.dataset.authGo);
     return rerender();
+  }
+  if (e.type === 'click' && e.target.closest?.('[data-auth-act=paste]')) {
+    const n = await pasteCode(e.target.closest('main'));
+    if (n) {
+      const form = e.target.closest('main').querySelector('form[data-auth=code]');
+      form.querySelector('.auth-notice')?.remove();
+      notice = n;
+      form.querySelector('[type=submit]').insertAdjacentHTML('beforebegin', noticeHtml());
+    }
+    return;
   }
   if (e.type === 'click' && e.target.closest?.('[data-auth-act=resend]')) {
     try {

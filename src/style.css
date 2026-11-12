@@ -748,3 +748,7 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .pdf-link { margin: 0 0 10px; font-size: 14px; }
 .refunded { display: block; font-size: 11px; font-weight: 600; color: var(--warn); text-align: right; }
 .refund-form label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+
+/* 앱처럼: 두 손가락 확대·두 번 탭 확대 막기 (영수증 사진은 확대 가능) */
+html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.photo img { touch-action: auto; }

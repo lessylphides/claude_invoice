@@ -14,8 +14,10 @@ import { takeBillingReturn } from './billing.js';
 import { finishCardRegistration } from './views/plans.js';
 import { levelAfterRender, openLevelSheet, scheduleClaim } from './views/level.js';
 import { captureRef, reportRef } from './lib/ref.js';
+import { preventZoom } from './ui/noZoom.js';
 
 captureRef(); // 광고 링크로 들어온 경우 가입 경로 꼬리표 기억
+preventZoom();
 const app = document.getElementById('app');
 
 function tabBar() {

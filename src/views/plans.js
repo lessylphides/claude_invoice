@@ -97,6 +97,7 @@ function render(body, st, close) {
           : ''
       }
       ${paymentsList(sub)}
+      <p class="muted small">인식 1회는 영수증 사진 2장(PDF 2쪽)까지예요. 3~4장을 한 건으로 합쳐 인식하면 2회로 계산돼요.</p>
       <p class="muted small">카드 정보는 토스페이먼츠 결제창에만 입력되고 코스트노트에는 저장되지 않아요. 환불은 <a href="https://costnote.co.kr/refund" target="_blank" rel="noopener">환불정책</a>을 따르며, 문의는 hanguk.soek@me.com 으로 해 주세요.</p>
     </div>`;
 

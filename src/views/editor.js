@@ -25,7 +25,9 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
   });
   if (!p.items.length) p.items.push(blankItem());
   p.items.forEach((i) => (i.id ||= uid()));
-  const imgUrls = imageFiles.map((f) => URL.createObjectURL(f));
+  const pdfFiles = imageFiles.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || ''));
+  const pdfUrls = pdfFiles.map((f) => URL.createObjectURL(f));
+  const imgUrls = imageFiles.filter((f) => !pdfFiles.includes(f)).map((f) => URL.createObjectURL(f));
   const beforeIndex = store.index; // 저장 뒤 원가가 바뀐 메뉴를 찾으려고 지금 상태를 기억
 
   return new Promise((resolve) => {
@@ -35,6 +37,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
       title: isEdit ? '매입 내역 수정' : '매입 내역 확인',
       onClose: async () => {
         imgUrls.forEach((u) => URL.revokeObjectURL(u));
+        pdfUrls.forEach((u) => URL.revokeObjectURL(u));
         // 저장한 새 품목 이름이 기존 품목과 비슷하면 같은 물건인지 물어봄 (다음 영수증 확인 전에)
         // 이름·용량이 확실히 같으면(서울우유 1L ↔ 1000ml) 묻지 않고 바로 묶음
         const sure = suggestions.filter((x) => x.sure);
@@ -59,6 +62,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
               : ''
           }
           ${note ? `<p class="notice">${esc(note)}</p>` : ''}
+          ${pdfUrls.map((u, i) => `<p class="pdf-link"><a href="${u}" target="_blank" rel="noopener">📄 원본 PDF 열기 <span class="muted small">${esc(pdfFiles[i].name || '')}</span></a></p>`).join('')}
           ${
             imgUrls.length
               ? `<details class="photo"><summary>촬영한 사진 보기${imgUrls.length > 1 ? ` (${imgUrls.length}장)` : ''}</summary>${imgUrls

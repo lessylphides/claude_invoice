@@ -92,8 +92,10 @@ export function entitlement(env, user, sub, now = Date.now()) {
   return { kind: 'trial', day: TRIAL.day, month: null, total: TRIAL.total };
 }
 
-/** 한도를 넘었으면 {code, message} */
-export function overLimit(ent, usage) {
+/** 한도를 넘었으면 {code, message}. units: 이번에 쓸 인식 횟수 (사진 2장·PDF 2쪽마다 1회) */
+export function overLimit(ent, usage, units = 1) {
+  const need = Math.max(1, units) - 1; // 이미 쓴 횟수 + (units-1) 이 한도 이상이면 이번 요청은 못 함
+  usage = { ...usage, total: usage.total + need, day: usage.day + need, month: usage.month + need, period: usage.period + need };
   if (ent.kind === 'trial' && usage.total >= ent.total)
     return {
       code: 'trial_used',

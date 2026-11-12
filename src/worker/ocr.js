@@ -3,6 +3,7 @@
 // 1) Supabase 로그인 확인  2) 계정별 하루·한 달 사용량 확인  3) 사진 확인  4) Claude 호출  5) 성공한 인식만 사용량에 기록
 import Anthropic from '@anthropic-ai/sdk';
 import { validateOcrInput, buildOcrRequest, parseOcrResponse } from '../lib/ocrRequest.js';
+import { countPdfPages, b64ToBytes, ocrUnits, MAX_PAGES } from '../lib/pdfPages.js';
 import { fail, json, authUser, usageNow } from './common.js';
 import { entitlement, overLimit, getSub } from './billing.js';
 import { recordOcrStat } from './stats.js';
@@ -24,6 +25,21 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   if (a.error) return a.error;
   const { user, sb } = a;
 
+  // 사진·PDF 확인 (몇 회로 셀지 정하려고 먼저): 사진 2장·PDF 2쪽마다 1회. PDF 쪽수는 서버가 직접 셈
+  let input;
+  try {
+    input = validateOcrInput(await request.json());
+  } catch (e) {
+    return fail(400, 'bad_request', e instanceof SyntaxError ? '요청 형식이 올바르지 않습니다.' : e.message);
+  }
+  let pages = input.images.length;
+  if (input.pdf) {
+    pages = await countPdfPages(b64ToBytes(input.pdf)).catch(() => 0);
+    if (!pages) return fail(400, 'bad_pdf', 'PDF 쪽수를 확인하지 못했어요. 화면을 사진으로 찍어 올려 주세요.');
+    if (pages > MAX_PAGES) return fail(400, 'too_many_pages', `PDF는 ${MAX_PAGES}쪽까지 인식할 수 있어요 (이 파일은 ${pages}쪽). 필요한 쪽만 저장해서 올려 주세요.`);
+  }
+  const units = ocrUnits(pages);
+
   // 2. 사용량 확인 (요금제·무료 체험에 따라 한도가 다름)
   const ent = entitlement(env, user, await getSub(env, user.id).catch(() => null), now);
   const usage = await usageNow(sb, ent.since ?? null);
@@ -34,24 +50,19 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   const limits = { day: ent.day, month: ent.month, total: ent.total ?? null, kind: ent.kind, plan: ent.plan ?? null };
   if (usage.account.suspended)
     return fail(403, 'suspended', `이용이 정지된 계정이에요.${usage.account.reason ? ` (사유: ${usage.account.reason})` : ''} 문의: hanguk.soek@me.com`);
-  const over = overLimit(ent, usage);
-  // 한도를 넘었어도 운영자가 준 추가 인식이 남아 있으면 거기서 1회 차감하고 진행
-  const useBonus = !!over && usage.account.bonus > 0;
-  if (over && !useBonus) return fail(429, over.code, over.message, { usage, limits });
-
-  // 3. 사진 확인
-  let input;
-  try {
-    input = validateOcrInput(await request.json());
-  } catch (e) {
-    return fail(400, 'bad_request', e instanceof SyntaxError ? '요청 형식이 올바르지 않습니다.' : e.message);
-  }
+  let over = overLimit(ent, usage, units);
+  // 1회는 남았지만 이번 요청(여러 회)에는 모자랄 때: 알아듣기 쉬운 말로
+  if (over && units > 1 && !overLimit(ent, usage, 1))
+    over = { code: over.code, message: `남은 인식 횟수가 모자라요. 이번 ${input.pdf ? `PDF ${pages}쪽` : `사진 ${pages}장`}은 인식 ${units}회로 계산돼요. 장수를 줄이거나 나눠서 올려 주세요.` };
+  // 한도를 넘었어도 추가 인식(레벨 선물·운영자가 준 것)이 넉넉하면 거기서 차감하고 진행
+  const useBonus = !!over && usage.account.bonus >= units;
+  if (over && !useBonus) return fail(429, over.code, over.message, { usage, limits, units });
 
   // 4. Claude 호출
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, fetch: fetchImpl });
   let res;
   try {
-    res = await client.beta.messages.create(buildOcrRequest(input, { model: env.OCR_MODEL || DEFAULTS.model }));
+    res = await client.beta.messages.create(buildOcrRequest({ ...input, pages }, { model: env.OCR_MODEL || DEFAULTS.model }));
   } catch (e) {
     console.error('[ocr] claude', e?.status, e?.message);
     if (e instanceof Anthropic.RateLimitError) return fail(503, 'busy', '요청이 많아요. 잠시 후 다시 시도해 주세요.');
@@ -74,18 +85,24 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   );
   if (parseError) return fail(422, parseError.code || 'bad_result', parseError.message);
 
-  // 5. 성공한 인식만 기록 (기록에 실패해도 결과는 돌려줌)
-  const rec = await sb('/rest/v1/rpc/record_ocr_use', { method: 'POST', body: '{}' }).catch((e) => ({ ok: false, status: String(e) }));
-  if (!rec.ok) console.error('[ocr] record usage failed', rec.status);
-  const after = { day: usage.day + 1, month: usage.month + 1, total: usage.total + 1, period: usage.period + 1, account: { ...usage.account } };
+  // 5. 성공한 인식만 기록: 이번에 쓴 횟수(units)만큼 (기록에 실패해도 결과는 돌려줌)
+  for (let i = 0; i < units; i++) {
+    const rec = await sb('/rest/v1/rpc/record_ocr_use', { method: 'POST', body: '{}' }).catch((e) => ({ ok: false, status: String(e) }));
+    if (!rec.ok) console.error('[ocr] record usage failed', rec.status);
+  }
+  const after = { day: usage.day + units, month: usage.month + units, total: usage.total + units, period: usage.period + units, account: { ...usage.account } };
   if (useBonus) {
     // 레벨업 선물부터 쓰고, 없으면 운영자가 준 추가 인식
-    const usedGift = gift > 0 && (await useGift(env, user.id).catch(() => false));
-    if (!usedGift) {
-      const b = await sb('/rest/v1/rpc/use_bonus', { method: 'POST', body: '{}' }).catch(() => null);
-      if (!b?.ok) console.error('[ocr] use_bonus failed', b?.status);
+    let giftLeft = gift;
+    for (let i = 0; i < units; i++) {
+      const usedGift = giftLeft > 0 && (await useGift(env, user.id).catch(() => false));
+      if (usedGift) giftLeft--;
+      else {
+        const b = await sb('/rest/v1/rpc/use_bonus', { method: 'POST', body: '{}' }).catch(() => null);
+        if (!b?.ok) console.error('[ocr] use_bonus failed', b?.status);
+      }
     }
-    after.account.bonus = Math.max(0, usage.account.bonus - 1);
+    after.account.bonus = Math.max(0, usage.account.bonus - units);
   }
-  return json(200, { result, usage: after, limits });
+  return json(200, { result, usage: after, limits, units });
 }

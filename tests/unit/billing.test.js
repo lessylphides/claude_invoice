@@ -223,7 +223,8 @@ describe('영수증 인식 한도', () => {
     const e = env({ ANTHROPIC_API_KEY: 'sk' });
     await subscribe(e, fakeFetch(), 'lite');
     const f = fakeFetch({ usage: { day: 0, month: 0, total: 70, period: 50 } });
-    const req = new Request('https://app.costnote.co.kr/api/ocr', { method: 'POST', headers: { authorization: 'Bearer jwt' }, body: '{}' });
+    const body = JSON.stringify({ images: ['iVBORw0KGgo='], categories: ['기타'] });
+    const req = new Request('https://app.costnote.co.kr/api/ocr', { method: 'POST', headers: { authorization: 'Bearer jwt' }, body });
     const res = await handleOcr(req, e, { fetchImpl: f.fetchImpl, now: NOW + 1000 });
     expect(res.status).toBe(429);
     expect((await res.json()).error.code).toBe('monthly_limit');

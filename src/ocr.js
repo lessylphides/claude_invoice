@@ -31,9 +31,19 @@ export async function fileToJpegBase64(file, maxSide = 1568) {
  * @param {File|File[]} files  여러 장이면 '영수증 한 장을 나눠 찍은 사진들'로 보고 한 건으로 인식
  * @returns 인식 결과 (서버가 Claude 응답을 정리한 JSON)
  */
+/** 파일 → base64 (PDF 는 그대로 보냄) */
+async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+export const isPdf = (f) => f?.type === 'application/pdf' || /\.pdf$/i.test(f?.name || '');
+
 export async function extractReceipt(files, { categories, knownVendors = [] }) {
   files = Array.isArray(files) ? files : [files];
-  const images = await Promise.all(files.map((f) => fileToJpegBase64(f)));
+  const pdf = files.length === 1 && isPdf(files[0]) ? await fileToBase64(files[0]) : null;
+  const images = pdf ? [] : await Promise.all(files.map((f) => fileToJpegBase64(f)));
   const token = await auth.accessToken();
   if (!token) throw new Error('로그인이 만료됐어요. 다시 로그인해 주세요.');
   let res;
@@ -41,7 +51,7 @@ export async function extractReceipt(files, { categories, knownVendors = [] }) {
     res = await fetch('./api/ocr', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ images, categories, knownVendors: knownVendors.slice(0, 60) }),
+      body: JSON.stringify({ ...(pdf ? { pdf } : { images }), categories, knownVendors: knownVendors.slice(0, 60) }),
     });
   } catch {
     throw new Error('인터넷 연결을 확인해 주세요.');

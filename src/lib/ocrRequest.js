@@ -1,4 +1,6 @@
 // 영수증 인식 요청 만들기 (서버가 Claude API 에 보낼 내용). 브라우저 기능을 쓰지 않아 서버·테스트에서 함께 씀
+// 사진(JPEG 여러 장) 또는 PDF 1개. 인식 횟수는 사진 2장·PDF 2쪽마다 1회 (lib/pdfPages.js ocrUnits)
+import { MAX_PDF_B64, MAX_PAGES } from './pdfPages.js';
 
 export const MAX_IMAGES = 6;
 export const MAX_IMAGE_B64 = 3_000_000; // 사진 한 장(base64) 최대 약 3MB — 앱은 1568px JPEG 로 줄여 보내므로 보통 0.3~0.6MB
@@ -42,7 +44,7 @@ export function buildSchema(categories) {
 }
 
 export const SYSTEM = `당신은 한국 식당·소상공인의 매입 장부 입력을 돕는 도우미입니다.
-사진 속 구매 영수증, 거래명세서, 세금계산서를 읽어 매입 내역을 정확히 추출합니다.
+사진이나 PDF 속 구매 영수증, 거래명세서, 세금계산서를 읽어 매입 내역을 정확히 추출합니다.
 - 금액은 원 단위 숫자만 (쉼표·'원' 제외). 품목별 amount 는 부가세 포함 실제 지불 금액으로 적고, 거래명세서에 공급가액과 세액이 따로 있으면 합산합니다.
 - 특정 상품에 대한 쿠폰·할인 줄(예: 상품 바로 아래의 "*** CPN", "할인", "쿠폰" 줄, 또는 할인 줄에 상품명이 적힌 경우)은 별도 품목으로 만들지 말고, 해당 상품의 discount 에 양수로 더하고 그 상품의 amount 에서 뺍니다. unitPrice 는 할인 전 정가로 둡니다.
 - 어느 상품에도 속하지 않는 할인(영수증 전체 할인 등)과 봉투값 등만 별도 품목으로 넣고, 할인은 음수 금액으로 적습니다.
@@ -60,28 +62,34 @@ export const kstToday = (now = Date.now()) => new Date(now + 9 * 3600 * 1000).to
 
 /**
  * 앱이 보낸 요청 확인. 이상하면 오류 문구를 던짐
- * @returns {{images: string[], categories: string[], knownVendors: string[]}}
+ * @returns {{images: string[], pdf: string|null, categories: string[], knownVendors: string[]}}
  */
 export function validateOcrInput(body) {
   const b = body && typeof body === 'object' ? body : {};
   const images = Array.isArray(b.images) ? b.images : [];
-  if (!images.length) throw new Error('사진이 없습니다.');
+  const pdf = typeof b.pdf === 'string' && b.pdf ? b.pdf : null;
+  if (pdf && images.length) throw new Error('PDF 와 사진은 따로 올려 주세요.');
+  if (pdf && (pdf.length > MAX_PDF_B64 || !/^[A-Za-z0-9+/=]+$/.test(pdf.slice(0, 200))))
+    throw new Error('PDF 파일이 너무 크거나 형식이 올바르지 않아요. (약 3MB까지)');
+  if (!pdf && !images.length) throw new Error('사진이 없습니다.');
   if (images.length > MAX_IMAGES) throw new Error(`사진은 한 번에 ${MAX_IMAGES}장까지 인식할 수 있어요.`);
   if (images.some((x) => typeof x !== 'string' || !x || x.length > MAX_IMAGE_B64 || !/^[A-Za-z0-9+/=]+$/.test(x.slice(0, 200))))
     throw new Error('사진 형식이 올바르지 않습니다.');
   const strings = (v, max, len) => (Array.isArray(v) ? v : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, len)).slice(0, max);
   const categories = [...new Set(strings(b.categories, 40, 30))];
   if (!categories.length) throw new Error('분류 목록이 없습니다.');
-  return { images, categories, knownVendors: strings(b.knownVendors, 60, 40) };
+  return { images: pdf ? [] : images, pdf, categories, knownVendors: strings(b.knownVendors, 60, 40) };
 }
 
 /** Claude API 요청 본문 */
-export function buildOcrRequest({ images, categories, knownVendors = [] }, { model, today = kstToday() }) {
+export function buildOcrRequest({ images, pdf = null, pages = 1, categories, knownVendors = [] }, { model, today = kstToday() }) {
   const prompt = `오늘 날짜: ${today} (연도가 생략된 문서는 오늘 기준 가장 가까운 과거 날짜로 판단)
 분류 목록: ${categories.join(', ')}
 ${knownVendors.length ? `기존 거래처(같은 곳이면 이 표기를 그대로 사용): ${knownVendors.join(', ')}` : ''}
 ${
-    images.length > 1
+    pdf
+      ? `위 PDF(${pages}쪽)는 영수증·거래명세서·세금계산서 한 건입니다. 여러 쪽이면 한 문서가 이어진 것이니 하나로 이어서 한 건의 매입 내역으로 추출하세요.`
+      : images.length > 1
       ? `위 사진 ${images.length}장은 영수증(또는 거래명세서) 한 장을 위에서부터 순서대로 나눠 찍은 것입니다. 하나로 이어서 한 건의 매입 내역으로 추출하세요. 사진끼리 겹쳐 찍힌 줄은 한 번만 넣습니다. 상호·날짜·합계는 어느 사진에 있든 찾아서 채웁니다.`
       : '이 사진의 매입 내역을 추출해 주세요.'
   }`;
@@ -96,6 +104,7 @@ ${
       {
         role: 'user',
         content: [
+          ...(pdf ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } }] : []),
           ...images.flatMap((data, i) => [
             ...(images.length > 1 ? [{ type: 'text', text: `사진 ${i + 1}/${images.length}` }] : []),
             { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },

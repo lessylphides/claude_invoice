@@ -62,10 +62,14 @@ export function db(env) {
   return null;
 }
 
+/** 실제 결제로 바뀐 뒤에는 시험 결제(테스트 키)로 만든 구독을 없는 것으로 봄 (테스트 카드 등록은 실제 키로 결제할 수 없음) */
+const isTestSubInLive = (env, sub) => !!sub && billingMode(env) === 'live' && sub.mode !== 'live';
+
 export async function getSub(env, uid) {
   const d = db(env);
   if (!d || !uid) return null;
-  return (await d.get(subKey(uid))) ?? null;
+  const sub = (await d.get(subKey(uid))) ?? null;
+  return isTestSubInLive(env, sub) ? null : sub;
 }
 const putSub = (env, sub) => db(env).put(subKey(sub.uid), sub);
 
@@ -292,6 +296,7 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
       plan: plan.id,
       payments: sub?.payments ?? [],
       createdAt: sub?.createdAt ?? now,
+      mode: billingMode(env), // 시험 결제(test) / 실제 결제(live) 구독 구분
     };
     const r = await charge(env, fetchImpl, fresh, { amount: plan.price, orderName: `코스트노트 ${plan.name} 요금제 (1개월)`, kind: 'new' }, now);
     if (!r.ok) return fail(402, 'charge_failed', `결제하지 못했어요. ${r.message}`);
@@ -365,7 +370,7 @@ export async function runRenewals(env, { fetchImpl = fetch, now = Date.now() } =
     const page = await d.list('sub:', cursor);
     for (const name of page.keys) {
       const sub = await d.get(name);
-      if (!sub || (sub.status !== 'active' && sub.status !== 'past_due') || now < sub.periodEnd) continue;
+      if (!sub || isTestSubInLive(env, sub) || (sub.status !== 'active' && sub.status !== 'past_due') || now < sub.periodEnd) continue;
 
       if (sub.cancelAtPeriodEnd || !sub.billingKey) {
         Object.assign(sub, { status: 'ended', billingKey: null, endedAt: now });

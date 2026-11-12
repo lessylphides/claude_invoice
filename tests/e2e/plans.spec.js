@@ -71,7 +71,7 @@ test('구독 시작: 동의해야 카드 등록창으로 가고, 돌아오면 �
   // 카드 등록창(가짜)을 거쳐 돌아옴 → 서버에 구독 요청 → 안내
   await expect(page.locator('.toast').last()).toContainText('기본 요금제를 시작했어요');
   const toss = await page.evaluate(() => JSON.parse(sessionStorage.getItem('__toss')));
-  expect(toss.clientKey).toMatch(/^test_ck_/);
+  expect(toss.clientKey).toMatch(/^live_ck_/); // 2026-11-12 실제 결제 전환
   expect(toss.customerKey).toBe(CK);
   expect(toss.o).toMatchObject({ method: 'CARD', windowTarget: 'self', customerEmail: TEST_USER.email });
   expect(server.requests.find((r) => r.action === 'subscribe')).toMatchObject({

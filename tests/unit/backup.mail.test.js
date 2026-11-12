@@ -65,7 +65,7 @@ describe('장부 백업', () => {
 describe('정기결제 실패 메일', () => {
   const UID = 'u-1';
   const sub = () => ({
-    uid: UID, email: 'shop@example.com', customerKey: customerKeyFor(UID), billingKey: 'bk', plan: 'basic', status: 'active',
+    uid: UID, email: 'shop@example.com', customerKey: customerKeyFor(UID), billingKey: 'bk', plan: 'basic', status: 'active', mode: 'live',
     periodStart: NOW - 30 * 86400000, periodEnd: NOW - 1000, cancelAtPeriodEnd: false, payments: [],
   });
   function fake() {

@@ -5,5 +5,6 @@ export const SUPABASE_URL = 'https://azcpuihnuumfdcoouyew.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_He9WhHA2VNjLrd2ImlDZTg_x3p0ZYM2';
 
 // 결제(토스페이먼츠) '클라이언트 키': 앱 안에 들어가는 공개용 값 (비밀 아님)
-// 시크릿 키는 서버(Cloudflare 비밀 값 TOSS_SECRET_KEY)에만 있습니다. 실제 결제를 시작할 때 live_ck_ 키로 바꿉니다.
-export const TOSS_CLIENT_KEY = 'test_ck_c19x04T4SU93uKVuTK1sC36KfCLQU8W7np';
+// 시크릿 키는 서버(Cloudflare 비밀 값 TOSS_SECRET_KEY)에만 있습니다. 둘은 같은 종류(live/test)여야 합니다.
+// 2026-11-12: 토스페이먼츠 계약 완료 → 실제 결제 키 (상점아이디 bill_costny7rx)
+export const TOSS_CLIENT_KEY = 'live_ck_c19wZFOxTYvQyRcEnJxS4huEq4JUepv5vp';

@@ -272,3 +272,22 @@ describe('구독 저장소', () => {
     expect(f.toss().at(-1).url).toContain('/billing/bk_old');
   });
 });
+
+describe('실제 결제 전환', () => {
+  it('실제 결제(live)에서는 시험 결제로 만든 구독을 없는 것으로 보고, 정기결제도 하지 않음', async () => {
+    const { getSub, runRenewals } = await import('../../src/worker/billing.js');
+    const store = new Map();
+    const kv = { get: async (k) => (store.has(k) ? JSON.parse(store.get(k)) : null), put: async (k, v) => void store.set(k, v), list: async () => ({ keys: [...store.keys()].map((name) => ({ name })), list_complete: true }) };
+    const old = { uid: 'u1', plan: 'lite', status: 'active', billingKey: 'test-bk', periodStart: 0, periodEnd: 1, payments: [] };
+    store.set('sub:u1', JSON.stringify(old));
+    expect(await getSub({ BILLING: kv, BILLING_MODE: 'test' }, 'u1')).toMatchObject({ plan: 'lite' });
+    expect(await getSub({ BILLING: kv, BILLING_MODE: 'live' }, 'u1')).toBe(null);
+    store.set('sub:u2', JSON.stringify({ ...old, uid: 'u2', mode: 'live' }));
+    expect(await getSub({ BILLING: kv, BILLING_MODE: 'live' }, 'u2')).toMatchObject({ mode: 'live' });
+    let charged = 0;
+    const fetchImpl = async () => ((charged++), new Response('{}', { status: 500 }));
+    await runRenewals({ BILLING: kv, BILLING_MODE: 'live', TOSS_SECRET_KEY: 'live_sk_x' }, { fetchImpl, now: 10 });
+    expect(JSON.parse(store.get('sub:u1')).billingKey).toBe('test-bk'); // 시험 구독은 건드리지 않음
+    expect(charged).toBeLessThanOrEqual(1); // 실제 구독(u2)만 결제 시도
+  });
+});

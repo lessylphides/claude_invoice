@@ -1,8 +1,7 @@
-name: Test & Deploy
+# 자동 테스트만 (배포는 Cloudflare: npm run deploy). GitHub Pages 배포는 2026-11 에 그만둠
+name: Test
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -35,29 +34,3 @@ jobs:
           name: playwright-traces
           path: test-results
           retention-days: 7
-
-  # 테스트를 통과한 main 만 배포
-  deploy:
-    needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-      - id: deployment
-        uses: actions/deploy-pages@v4

@@ -1,6 +1,7 @@
 // 서버 운영 통계: 영수증 인식마다 실제 AI 비용을 기록하고, 운영자 화면(/api/admin)에 모아 보여 줌
 // 기록은 서버 저장소(Durable Object)에만 남고, 사진·인식 내용은 기록하지 않음 (횟수·토큰·비용만)
-import { db, billingMode, kstDate, isOwner } from './billing.js';
+import { db, billingMode, kstDate, isOwner, refundPayment } from './billing.js';
+import { sendMail, refundMail } from './mail.js';
 import { PLANS } from '../lib/plans.js';
 import { ACC_FIELDS } from '../lib/ocrAccuracy.js';
 import { json, fail, authUser } from './common.js';
@@ -187,8 +188,8 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
       if (s.status === 'past_due') pastDue++;
     }
     for (const p of s.payments || []) {
-      if (p.at >= now - 30 * 86400000) paid30 += p.amount;
-      payments.push({ email: s.email, amount: p.amount, orderName: p.orderName, at: p.at });
+      if (p.at >= now - 30 * 86400000) paid30 += p.amount - (p.canceled || 0);
+      payments.push({ uid: s.uid, email: s.email, amount: p.amount, canceled: p.canceled || 0, orderName: p.orderName, at: p.at, paymentKey: p.paymentKey ?? null, receipt: p.receipt ?? null, card: s.card ?? null, subStatus: s.status, mode: s.mode ?? 'test' });
     }
   }
   payments.sort((a, b) => b.at - a.at);
@@ -217,7 +218,7 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
       canceling,
       pastDue,
       paid30,
-      payments: payments.slice(0, 10),
+      payments: payments.slice(0, 20),
     },
   };
 }
@@ -256,14 +257,23 @@ async function adminSetAccount(sb, id, body) {
 export async function handleAdmin(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
   const url = new URL(request.url);
   const backupNow = url.pathname === '/api/admin/backup-now';
+  const refund = url.pathname === '/api/admin/refund';
   const userAction = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})$/);
-  const wantPost = backupNow || !!userAction;
+  const wantPost = backupNow || refund || !!userAction;
   if (request.method !== (wantPost ? 'POST' : 'GET')) return fail(405, 'method', '허용되지 않은 요청이에요.');
   const a = await authUser(request, fetchImpl);
   if (a.error) return a.error;
   if (!isOwner(env, a.user.email)) return fail(403, 'forbidden', '운영자만 볼 수 있어요.');
   if (url.pathname === '/api/admin/users') return adminUsers(env, a.sb, url.searchParams.get('q') || '', now);
   if (userAction) return adminSetAccount(a.sb, userAction[1], await request.json().catch(() => ({})));
+  if (refund) {
+    const body = await request.json().catch(() => ({}));
+    const r = await refundPayment(env, body, { fetchImpl, now });
+    if (!r.ok) return fail(r.status, 'refund_failed', r.message);
+    // 손님에게 환불 안내 메일 (못 보내도 환불은 끝난 것)
+    if (r.email) await sendMail(env, fetchImpl, { to: r.email, ...refundMail({ orderName: r.orderName, refunded: r.amount, total: r.total, ended: r.ended }) }).catch(() => {});
+    return json(200, r);
+  }
   if (backupNow) {
     const r = await runBackup(env, { fetchImpl, now }).catch((e) => ({ ok: false, error: String(e) }));
     if (r.skipped) return fail(503, 'not_configured', '백업 비밀 값(BACKUP_SECRET)이 서버에 없어요.');

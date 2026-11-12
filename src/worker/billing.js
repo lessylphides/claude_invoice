@@ -120,6 +120,39 @@ export function overLimit(ent, usage, units = 1) {
   return null;
 }
 
+// ── 운영자: 결제 취소(환불) ──────────────────────────────────
+
+/**
+ * 결제 하나를 전액 또는 일부 환불 (토스 결제 취소 API). 운영자 화면에서만
+ * @param {{uid: string, paymentKey: string, amount?: number|null, reason: string, endSub?: boolean}} req amount 가 없으면 남은 금액 전부
+ */
+export async function refundPayment(env, req, { fetchImpl = fetch, now = Date.now() } = {}) {
+  const d = db(env);
+  if (!d || !env.TOSS_SECRET_KEY) return { ok: false, status: 503, message: '결제 서버 설정이 아직 끝나지 않았어요.' };
+  const sub = await d.get(subKey(req.uid));
+  const pay = sub?.payments?.find((p) => p.paymentKey && p.paymentKey === req.paymentKey);
+  if (!pay) return { ok: false, status: 404, message: '결제를 찾지 못했어요.' };
+  const left = pay.amount - (pay.canceled || 0);
+  if (left <= 0) return { ok: false, status: 409, message: '이미 전액 환불한 결제예요.' };
+  const amount = req.amount == null ? left : Math.round(Number(req.amount));
+  if (!Number.isFinite(amount) || amount <= 0 || amount > left) return { ok: false, status: 400, message: `환불 금액은 1원 이상 ${left.toLocaleString('ko-KR')}원 이하로 넣어 주세요.` };
+  const reason = String(req.reason || '').trim().slice(0, 200) || '고객 요청 환불';
+  const r = await toss(
+    env,
+    fetchImpl,
+    `/payments/${encodeURIComponent(pay.paymentKey)}/cancel`,
+    { cancelReason: reason, ...(amount < left || pay.canceled ? { cancelAmount: amount } : {}) },
+    `refund-${pay.paymentKey}-${(pay.canceled || 0) + amount}`,
+  );
+  if (!r.ok) return { ok: false, status: 502, message: `토스에서 환불하지 못했어요. ${r.data?.message || ''}`.trim() };
+  pay.canceled = (pay.canceled || 0) + amount;
+  pay.cancels = [...(pay.cancels || []), { amount, reason, at: now }];
+  const ended = !!req.endSub && (sub.status === 'active' || sub.status === 'past_due');
+  if (ended) Object.assign(sub, { status: 'ended', billingKey: null, cancelAtPeriodEnd: true, nextPlan: null, endedAt: now, periodEnd: now });
+  await putSub(env, sub);
+  return { ok: true, amount, left: pay.amount - pay.canceled, ended, email: sub.email, orderName: pay.orderName, total: pay.amount };
+}
+
 // ── 토스페이먼츠 API ──────────────────────────────────────────
 
 async function toss(env, fetchImpl, path, body, idempotencyKey) {
@@ -185,7 +218,7 @@ function publicSub(sub, now) {
     nextPlan: sub.nextPlan ?? null,
     card: sub.card ? { ...sub.card, company: cardCompanyName(sub.card.company) } : null,
     lastError: sub.status === 'past_due' ? sub.lastError ?? null : null,
-    payments: (sub.payments || []).slice(0, 6).map(({ amount, orderName, at, receipt }) => ({ amount, orderName, at, receipt })),
+    payments: (sub.payments || []).slice(0, 6).map(({ amount, orderName, at, receipt, canceled }) => ({ amount, orderName, at, receipt, canceled: canceled || 0 })),
   };
 }
 

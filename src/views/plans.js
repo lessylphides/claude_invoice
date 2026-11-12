@@ -32,7 +32,7 @@ function paymentsList(sub) {
   return `<h3 class="sub">결제 내역</h3>
     <ul class="pay-list">${sub.payments
       .map(
-        (x) => `<li><span>${new Date(x.at).toLocaleDateString('ko-KR')} · ${esc(x.orderName)}</span><span>${won(x.amount)}${
+        (x) => `<li><span>${new Date(x.at).toLocaleDateString('ko-KR')} · ${esc(x.orderName)}${x.canceled ? ` <b class="warn">${x.canceled >= x.amount ? '환불됨' : `${won(x.canceled)} 환불`}</b>` : ''}</span><span>${won(x.amount)}${
           x.receipt ? ` <a href="${esc(x.receipt)}" target="_blank" rel="noopener">영수증</a>` : ''
         }</span></li>`,
       )

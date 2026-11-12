@@ -84,3 +84,29 @@ test('정지된 계정은 설정에 정지 안내, 추가 인식이 있으면 �
   await expect(sheet(page).locator('.ocr-usage')).toContainText('이용 정지');
   await expect(sheet(page).locator('.ocr-usage')).toContainText('약관 위반');
 });
+
+test('최근 결제 누르기 → 사용 횟수로 환불 금액 계산 → 환불하기', async ({ page }) => {
+  const pay = { uid: 'u1', email: 'shop@example.com', amount: 4900, canceled: 0, orderName: '코스트노트 라이트 요금제 (1개월)', at: Date.parse('2026-11-12T09:00:00+09:00'), paymentKey: 'pk1', receipt: null, card: { company: '신한', number: '1234****' }, subStatus: 'active', mode: 'live' };
+  const live = { ...stats, mode: 'live', billing: { ...stats.billing, payments: [pay] } };
+  const refunds = [];
+  await page.route('**/api/billing**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...status(true), mode: 'live' }) }));
+  await page.route('**/api/admin', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(live) }));
+  await page.route('**/api/admin/refund', async (r) => {
+    refunds.push(JSON.parse(r.request().postData()));
+    await r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, amount: 2940, left: 1960, ended: true }) });
+  });
+  const errors = await openApp(page);
+  await page.locator('[data-act=settings]').click();
+  await sheet(page).locator('[data-act=admin]').click();
+  await sheet(page).locator('[data-pay="0"]').click();
+  const s = sheet(page);
+  await expect(s).toContainText('신한 1234****');
+  await expect(s.locator('[name=amount]')).toHaveValue('4900');
+  await s.locator('[name=used]').fill('20'); // 라이트 1회당 98원 × 20 = 1,960원 차감
+  await expect(s.locator('[name=amount]')).toHaveValue('2940');
+  page.once('dialog', (d) => d.accept());
+  await s.locator('.refund-form [type=submit]').click();
+  await expect(page.locator('.toast').last()).toContainText('2,940원 환불했어요. 구독도 종료했어요.');
+  expect(refunds).toEqual([{ uid: 'u1', paymentKey: 'pk1', amount: 2940, reason: '고객 요청 환불', endSub: true }]);
+  expect(errors).toEqual([]);
+});

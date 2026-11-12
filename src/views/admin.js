@@ -162,7 +162,9 @@ function render(body, s) {
           b.payments.length
             ? b.payments
                 .map(
-                  (p) => `<div class="set-row static"><span class="grow">${esc(p.orderName)}<small>${new Date(p.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${esc(p.email ?? '')}</small></span><b>${won(p.amount)}</b></div>`,
+                  (p, i) => `<button type="button" class="set-row" data-pay="${i}"><span class="grow">${esc(p.orderName)}<small>${new Date(p.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${esc(p.email ?? '')}${
+                    p.mode !== 'live' ? ' · 시험 결제' : ''
+                  }</small></span><b>${won(p.amount)}${p.canceled ? `<small class="refunded">${p.canceled >= p.amount ? '전액 환불' : `환불 ${won(p.canceled)}`}</small>` : ''}</b><span class="chev" aria-hidden="true">›</span></button>`,
                 )
                 .join('')
             : '<p class="set-pad muted small">아직 결제가 없어요.</p>'
@@ -187,6 +189,9 @@ function render(body, s) {
     </div>`;
 
   body.querySelector('[data-act=members]').addEventListener('click', openMembers);
+  body.querySelectorAll('[data-pay]').forEach((btn) =>
+    btn.addEventListener('click', () => openRefund(s.billing.payments[Number(btn.dataset.pay)], s.mode, async () => body.isConnected && render(body, await load()))),
+  );
   body.querySelectorAll('[data-backup]').forEach((btn) =>
     btn.addEventListener('click', async () => {
       const date = btn.dataset.backup;
@@ -232,6 +237,76 @@ function render(body, s) {
     btn.addEventListener('click', () => show(btn));
     btn.addEventListener('mouseenter', () => show(btn));
     btn.addEventListener('focus', () => show(btn));
+  });
+}
+
+/** 결제 한 건: 자세히 보기 + 환불 (전액·일부, 구독 종료 함께) */
+function openRefund(p, mode, onDone) {
+  const left = p.amount - (p.canceled || 0);
+  const plan = PLAN_ORDER.map((id) => PLANS[id]).find((x) => p.orderName?.includes(x.name));
+  // 환불정책: 사용했으면 결제 금액 − 사용 횟수 × 1회당 금액 (무제한은 프로와 같이 계산)
+  const perUnit = plan ? Math.round(plan.price / (plan.month || PLANS.pro.month)) : null;
+  const canRefund = p.paymentKey && left > 0 && (p.mode === 'live') === (mode === 'live');
+  openSheet({
+    title: '결제 자세히',
+    render(body, close) {
+      body.innerHTML = `
+        <div class="set-card list">
+          <div class="set-row static"><span class="grow">${esc(p.orderName)}<small>${new Date(p.at).toLocaleString('ko-KR')}</small></span><b>${won(p.amount)}</b></div>
+          <div class="set-row static"><span class="grow">손님</span><span>${esc(p.email ?? '')}</span></div>
+          ${p.card ? `<div class="set-row static"><span class="grow">카드</span><span>${esc(p.card.company ?? '')} ${esc(p.card.number ?? '')}</span></div>` : ''}
+          ${p.canceled ? `<div class="set-row static"><span class="grow">환불한 금액</span><b class="warn">${won(p.canceled)}</b></div>` : ''}
+          ${p.receipt ? `<a class="set-row" href="${esc(p.receipt)}" target="_blank" rel="noopener"><span class="grow">카드 영수증 보기</span><span class="chev" aria-hidden="true">›</span></a>` : ''}
+        </div>
+        ${
+          canRefund
+            ? `<form class="settings refund-form" novalidate>
+          <h3 class="set-title" style="margin-top:16px">환불</h3>
+          ${perUnit ? `<p class="set-note">환불정책: 7일 이내 · 인식을 안 썼으면 전액, 썼으면 <b>결제 금액 − 사용 횟수 × ${won(perUnit)}</b></p>
+          <label>사용한 인식 횟수 (계산용)<input name="used" type="number" inputmode="numeric" min="0" placeholder="0"></label>` : ''}
+          <label>환불 금액 (원) <small>남은 금액 ${won(left)}</small><input name="amount" type="number" inputmode="numeric" min="1" max="${left}" value="${left}" required></label>
+          <label>사유 (손님 카드사·토스에 남아요)<input name="reason" maxlength="200" value="고객 요청 환불"></label>
+          <label class="check"><input type="checkbox" name="endSub" ${p.subStatus === 'active' || p.subStatus === 'past_due' ? 'checked' : 'disabled'}> 구독도 바로 종료 (다음 달 자동 결제 안 함)</label>
+          <button type="submit" class="btn primary">환불하기</button>
+          <p class="set-note">토스페이먼츠로 바로 취소 요청이 가고, 손님에게 환불 안내 메일이 가요. 카드사 반영은 3~7영업일이 걸릴 수 있어요.</p>
+        </form>`
+            : `<p class="set-note" style="margin-top:12px">${
+                left <= 0 ? '이미 전액 환불한 결제예요.' : !p.paymentKey ? '결제 키가 없어 앱에서 환불할 수 없어요. 토스 상점관리자에서 취소해 주세요.' : '시험 결제(테스트 키)라 지금 결제 서버에서는 환불할 수 없어요.'
+              }</p>`
+        }`;
+      const form = body.querySelector('.refund-form');
+      if (!form) return;
+      form.used?.addEventListener('input', () => {
+        const n = Math.max(0, Math.round(Number(form.used.value) || 0));
+        form.amount.value = Math.max(0, Math.min(left, p.amount - n * perUnit - (p.canceled || 0)));
+      });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const amount = Math.round(Number(form.amount.value));
+        if (!(amount > 0 && amount <= left)) return toast(`환불 금액은 1원 ~ ${won(left)} 사이로 넣어 주세요.`);
+        if (!confirm(`${p.email ?? '손님'}에게 ${won(amount)}을 환불할까요?${form.endSub.checked ? '\n구독도 바로 종료돼요.' : ''}`)) return;
+        const btn = form.querySelector('[type=submit]');
+        btn.disabled = true;
+        btn.textContent = '환불하는 중…';
+        try {
+          const token = await auth.accessToken();
+          const res = await fetch('./api/admin/refund', {
+            method: 'POST',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ uid: p.uid, paymentKey: p.paymentKey, amount, reason: form.reason.value, endSub: form.endSub.checked }),
+          });
+          const r = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(r?.error?.message || `환불하지 못했어요 (${res.status})`);
+          toast(`${won(r.amount)} 환불했어요.${r.ended ? ' 구독도 종료했어요.' : ''}`, 4000);
+          close();
+          onDone();
+        } catch (err) {
+          toast(err.message, 6000);
+          btn.disabled = false;
+          btn.textContent = '환불하기';
+        }
+      });
+    },
   });
 }
 

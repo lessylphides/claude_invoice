@@ -72,6 +72,22 @@ export function subscriptionEndedMail({ planName }) {
   };
 }
 
+/** 환불했을 때 손님에게 */
+export function refundMail({ orderName, refunded, total, ended }) {
+  return {
+    subject: '[코스트노트] 결제를 환불했어요',
+    ...layout(
+      '결제를 환불했어요',
+      [
+        `${orderName} 결제 중 ${won(refunded)}${refunded < total ? ` (결제 금액 ${won(total)} 중)` : ''}을 환불했어요.`,
+        '카드사에 따라 취소가 반영되기까지 3~7영업일이 걸릴 수 있어요.',
+        ended ? '구독은 종료되어 다음 달 자동 결제가 되지 않아요. 장부와 직접 입력은 계속 쓸 수 있어요.' : '구독은 그대로 유지돼요.',
+      ],
+      { label: '앱 열기', href: APP },
+    ),
+  };
+}
+
 /** 운영자에게: 오늘 정기결제 결과 (실패·종료가 있을 때만) */
 export function ownerRenewalMail(out, lines) {
   return {

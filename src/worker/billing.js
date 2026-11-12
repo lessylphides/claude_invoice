@@ -90,9 +90,11 @@ export function entitlement(env, user, sub, now = Date.now()) {
     const p = PLANS[sub.plan];
     return { kind: 'plan', plan: p.id, day: p.day, month: p.month, since: kstDate(sub.periodStart) };
   }
-  if (billingMode(env) !== 'live' || isOwner(env, user.email))
-    // 결제 시작 전(또는 운영자): 예전처럼 계정별 하루·한 달(달력 기준) 한도
-    return { kind: billingMode(env) === 'live' ? 'owner' : 'legacy', day: Number(env.OCR_DAILY_LIMIT) || 30, month: Number(env.OCR_MONTHLY_LIMIT) || 300 };
+  // 운영자(사장님 본인): 인식 한도 없음 (본인 상점에 본인 카드로 결제하는 '자가 결제'는 금지라 구독할 수 없음)
+  if (isOwner(env, user.email)) return { kind: 'owner', day: null, month: null };
+  if (billingMode(env) !== 'live')
+    // 결제 시작 전: 예전처럼 계정별 하루·한 달(달력 기준) 한도
+    return { kind: 'legacy', day: Number(env.OCR_DAILY_LIMIT) || 30, month: Number(env.OCR_MONTHLY_LIMIT) || 300 };
   return { kind: 'trial', day: TRIAL.day, month: null, total: TRIAL.total };
 }
 
@@ -105,7 +107,7 @@ export function overLimit(ent, usage, units = 1) {
       code: 'trial_used',
       message: `무료 체험 ${ent.total}장을 다 썼어요. ⚙ 설정 → 요금제에서 구독하면 계속 쓸 수 있어요. 직접 입력은 계속 쓸 수 있어요.`,
     };
-  if (usage.day >= ent.day)
+  if (ent.day != null && usage.day >= ent.day)
     return { code: 'daily_limit', message: `오늘 영수증 인식(${ent.day}회)을 다 썼어요. 내일 다시 쓸 수 있어요. 지금은 직접 입력해 주세요.` };
   const used = ent.kind === 'plan' ? usage.period : usage.month;
   if (ent.month != null && used >= ent.month)
@@ -250,6 +252,8 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
 
   const active = liveSub(sub, now);
 
+  if ((action === 'subscribe' || action === 'change') && isOwner(env, user.email))
+    return fail(403, 'owner_self_payment', '운영자 계정은 본인 상점에 본인 카드로 결제(자가 결제)할 수 없어 구독하지 않아요. 인식 제한 없이 쓸 수 있어요.');
   if (action === 'subscribe' || action === 'change') {
     const acc = (await usageNow(sb))?.account;
     if (acc?.suspended) return fail(403, 'suspended', '이용이 정지된 계정이라 결제할 수 없어요. 문의: hanguk.soek@me.com');

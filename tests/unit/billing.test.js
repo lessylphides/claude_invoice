@@ -291,3 +291,14 @@ describe('실제 결제 전환', () => {
     expect(charged).toBeLessThanOrEqual(1); // 실제 구독(u2)만 결제 시도
   });
 });
+
+describe('운영자 계정', () => {
+  it('인식 한도 없음, 구독(자가 결제)은 서버가 막음', async () => {
+    const { entitlement, overLimit } = await import('../../src/worker/billing.js');
+    const env = { BILLING_MODE: 'live', OWNER_EMAILS: 'owner@example.com' };
+    const ent = entitlement(env, { email: 'owner@example.com' }, null, Date.now());
+    expect(ent).toMatchObject({ kind: 'owner', day: null, month: null });
+    expect(overLimit(ent, { day: 9999, month: 99999, total: 99999, period: 0 }, 3)).toBeNull();
+    expect(entitlement(env, { email: 'other@example.com' }, null, Date.now()).kind).toBe('trial');
+  });
+});

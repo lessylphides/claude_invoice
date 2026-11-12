@@ -61,7 +61,7 @@ async function showOcrUsage(el, planBtn, adminSec) {
       title = '<b>무료 체험</b> <span class="badge">영수증 자동 인식 20장</span>';
       meters = meter('무료 체험', Math.min(u.total, e.total), e.total) + meter('오늘', u.day, e.day);
     } else {
-      title = `<b>${e.kind === 'owner' ? '운영자 계정' : '시범 운영'}</b>`;
+      title = e.kind === 'owner' ? '<b>운영자 계정</b> <span class="badge ok-badge">인식 제한 없음</span>' : '<b>시범 운영</b>';
       meters = meter('오늘', u.day, e.day) + meter('이번 달', u.month, e.month);
     }
     const acc = u.account ?? {};
@@ -72,7 +72,7 @@ async function showOcrUsage(el, planBtn, adminSec) {
     if (!acc.suspended && st.levelGift && !st.levelGift.usable && st.levelGift.balance)
       meters += `<p class="set-note">🎁 레벨업 선물 <b>${num(st.levelGift.balance)}장</b>이 쌓여 있어요. 구독하면 바로 쓸 수 있어요.</p>`;
     el.innerHTML = `<p class="usage-title">${title}</p>${meters}`;
-    if (mode !== 'off' && planBtn) planBtn.hidden = false;
+    if (mode !== 'off' && planBtn && !st.owner) planBtn.hidden = false; // 운영자는 자가 결제 금지라 구독 화면 없음
     if (st.owner && adminSec) adminSec.hidden = false;
   } catch {
     if (el.isConnected) el.textContent = '사용량을 불러오지 못했어요.';

@@ -2,6 +2,7 @@
 // - 비밀번호는 이 앱이 아니라 Supabase 가 안전하게 보관합니다.
 // - 이메일 인증·비밀번호 재설정 링크는 메일 앱에서 열리므로(아이폰은 홈 화면 앱과 Safari 저장 공간이 다름)
 //   링크로 연 브라우저에서 끝내고, 앱에서는 다시 로그인하면 되게 만듭니다 (implicit 방식: 같은 브라우저 조건 없음).
+import { storedRef } from './lib/ref.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
 export const AUTH_STORAGE_KEY = 'costnote.auth';
@@ -79,7 +80,8 @@ export const auth = {
   },
   /** @returns {'sent' | 'exists'} 'exists' = 이미 가입된 이메일 (Supabase 는 보안상 오류 대신 빈 계정을 돌려줌) */
   async signUp(email, password) {
-    const { data, error } = await (await client()).auth.signUp({ email, password, options: { emailRedirectTo: appUrl() } });
+    const ref = storedRef();
+    const { data, error } = await (await client()).auth.signUp({ email, password, options: { emailRedirectTo: appUrl(), ...(ref ? { data: { ref } } : {}) } });
     if (error) throw error;
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) return 'exists';
     return 'sent';

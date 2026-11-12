@@ -21,7 +21,7 @@ export async function authUser(request, fetchImpl) {
   const res = await sb('/auth/v1/user');
   if (!res.ok) return { error: fail(401, 'login', '로그인이 만료됐어요. 다시 로그인해 주세요.') };
   const u = await res.json().catch(() => ({}));
-  return { user: { id: u.id ?? null, email: u.email ?? '' }, sb };
+  return { user: { id: u.id ?? null, email: u.email ?? '', meta: u.user_metadata ?? {}, createdAt: u.created_at ?? null }, sb };
 }
 
 /** 오늘·이번 달·전체·결제 기간(since 부터) 인식 횟수 */

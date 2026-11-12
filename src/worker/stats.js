@@ -1,5 +1,6 @@
 // 서버 운영 통계: 영수증 인식마다 실제 AI 비용을 기록하고, 운영자 화면(/api/admin)에 모아 보여 줌
 // 기록은 서버 저장소(Durable Object)에만 남고, 사진·인식 내용은 기록하지 않음 (횟수·토큰·비용만)
+import { refStats } from './ref.js';
 import { db, billingMode, kstDate, isOwner, refundPayment } from './billing.js';
 import { sendMail, refundMail } from './mail.js';
 import { PLANS } from '../lib/plans.js';
@@ -178,11 +179,13 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
   let pastDue = 0;
   let paid30 = 0;
   const payments = [];
+  const payingUids = new Set();
   for (const s of subs) {
     if (!s) continue;
     const live = (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
     if (live && PLANS[s.plan]) {
       byPlan[s.plan]++;
+      if (s.uid) payingUids.add(s.uid);
       if (!s.cancelAtPeriodEnd) mrr += PLANS[s.nextPlan || s.plan].price;
       if (s.cancelAtPeriodEnd) canceling++;
       if (s.status === 'past_due') pastDue++;
@@ -220,6 +223,7 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
       paid30,
       payments: payments.slice(0, 20),
     },
+    refs: await refStats(env, payingUids).catch(() => []),
   };
 }
 

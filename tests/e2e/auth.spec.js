@@ -187,3 +187,19 @@ test('회원 탈퇴: "탈퇴"를 입력해야 진행, 자동 결제를 먼저 �
   expect(await page.evaluate(() => localStorage.getItem('costnote.sync'))).toBeNull();
   expect(order.filter((p) => p !== '/api/billing')).toEqual(['/api/billing/close', 'delete_my_account']);
 });
+
+test('광고 링크(?ref=)로 들어와 가입하면 계정 정보에 가입 경로가 함께 저장됨', async ({ page }) => {
+  await openApp(page, {
+    loggedIn: false,
+    path: '/?ref=IG1',
+    auth: (path, body) => (path.startsWith('/auth/v1/signup') ? { body: { ...TEST_USER, email: body.email, identities: [{}] } } : null),
+  });
+  expect(await page.evaluate(() => localStorage.getItem('costnote:ref'))).toBe('ig1');
+  await page.locator('[data-auth-go=signup]').click();
+  await fill(page, { email: 'ad@example.com', password: 'goodpass12', password2: 'goodpass12' });
+  await page.locator('.auth-screen input[name=agree]').check();
+  await submit(page);
+  await expect(page.locator('.auth-card h2')).toHaveText('메일함을 확인해 주세요');
+  const signup = page.authCalls.find((c) => c.path.startsWith('/auth/v1/signup'));
+  expect(signup.body.data).toEqual({ ref: 'ig1' });
+});

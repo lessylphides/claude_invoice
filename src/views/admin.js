@@ -171,6 +171,19 @@ function render(body, s) {
         }</div>
       </section>
       <section>
+        <h3 class="set-title">가입 경로 (광고 링크)</h3>
+        <div class="set-card list ref-stats">${
+          s.refs?.length
+            ? s.refs
+                .map(
+                  (r) => `<div class="set-row"><span class="grow"><b>${esc(r.ref)}</b><small>방문 ${num(r.visits)}명 → 가입 ${num(r.signups)}명 → 구독 ${num(r.paying)}명</small></span><b>${r.visits ? `${Math.round((r.signups / r.visits) * 1000) / 10}%` : '-'}</b></div>`,
+                )
+                .join('')
+            : '<p class="set-pad muted small">아직 광고 링크로 들어온 방문이 없어요.</p>'
+        }</div>
+        <p class="set-note">costnote.co.kr/?ref=ig1 처럼 꼬리표를 붙인 링크로 들어온 사람만 세요. 방문은 같은 브라우저 30일에 한 번, 오른쪽 %는 방문 대비 가입이에요. 꼬리표 없이 가입한 사람은 여기 없어요.</p>
+      </section>
+      <section>
         <h3 class="set-title">장부 백업 (매일, 14일 보관)</h3>
         <div class="set-card list">${
           s.backups?.length

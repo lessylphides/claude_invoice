@@ -753,3 +753,22 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 /* 앱처럼: 두 손가락 확대·두 번 탭 확대 막기 (영수증 사진은 확대 가능) */
 html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .photo img { touch-action: auto; }
+
+/* 문의하기 */
+.support { display: flex; flex-direction: column; gap: 12px; }
+.support-intro { margin: 0; font-size: 14px; line-height: 1.6; }
+.support-kinds { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.support-kinds legend { font-weight: 700; font-size: 14px; margin-bottom: 8px; padding: 0; }
+.support-kinds .chip { position: relative; cursor: pointer; font-size: 14px; padding: 8px 12px; }
+.support-kinds .chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.support-kinds .chip:has(input:checked) { background: var(--accent-fill); color: #fff; border-color: var(--accent-fill); }
+.support-kinds .chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.support-guide { margin: 0; }
+.support-text { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.support-text textarea { resize: vertical; line-height: 1.5; }
+.support-shots { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.support-thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.support-thumbs:empty { display: none; }
+.support-thumbs .thumb { position: relative; }
+.support-thumbs img { width: 72px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
+.support-thumbs .icon-btn { position: absolute; top: -8px; right: -8px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 12px; padding: 0; }

@@ -6,7 +6,7 @@ const FROM = '코스트노트 <noreply@costnote.co.kr>';
 const APP = 'https://app.costnote.co.kr';
 
 /** @returns {Promise<boolean>} 보냈으면 true */
-export async function sendMail(env, fetchImpl, { to, subject, text, html }) {
+export async function sendMail(env, fetchImpl, { to, subject, text, html, replyTo, attachments }) {
   if (!env.RESEND_API_KEY || !to) {
     console.log('[mail] skipped (no key or address):', subject);
     return false;
@@ -15,7 +15,7 @@ export async function sendMail(env, fetchImpl, { to, subject, text, html }) {
     const res = await fetchImpl('https://api.resend.com/emails', {
       method: 'POST',
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [to], subject, text, html }),
+      body: JSON.stringify({ from: FROM, to: [to], subject, text, html, ...(replyTo ? { reply_to: replyTo } : {}), ...(attachments?.length ? { attachments } : {}) }),
     });
     if (!res.ok) console.error('[mail] resend', res.status, await res.text().catch(() => ''));
     return res.ok;
@@ -102,5 +102,37 @@ export function newSignupMail({ email, ref }) {
   return {
     subject,
     ...layout('새 회원이 가입했어요 🎉', [`이메일: ${email}`, `가입 경로: ${ref || '직접·기타 (꼬리표 없음)'}`], { label: '운영 현황 보기', href: APP }),
+  };
+}
+
+/** 운영자에게: 문의 (답장하면 회원에게 감). 본문은 그대로 클로드에게 붙여 넣기 좋은 형식 */
+export function supportOwnerMail(i) {
+  const short = i.text.replace(/\s+/g, ' ').slice(0, 30);
+  const lines = [
+    `■ 종류: ${i.kind}`,
+    '■ 내용:',
+    i.text,
+    '',
+    `■ 회원: ${i.email} (가입 ${i.joined}, ${i.plan})`,
+    `■ 기기: ${i.device}`,
+    `■ 앱 버전: ${i.version}`,
+    `■ 보낸 화면: ${i.tab}`,
+    `■ 보낸 시각: ${i.at} (한국)`,
+    `■ 첨부: ${i.images ? `화면 캡처 ${i.images}장` : '없음'}`,
+    `■ 회원 id: ${i.uid}`,
+  ];
+  const text = ['코스트노트 문의가 왔어요. 이 메일에 답장하면 회원에게 바로 가요.', '(클로드에게 그대로 붙여 넣으면 바로 살펴볼 수 있어요)', '', ...lines].join('\n');
+  const html = `<div style="font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#1b1e24;line-height:1.6">
+  <p style="margin:0 0 12px;font-size:13px;color:#636a77">이 메일에 답장하면 회원에게 바로 가요. 클로드에게 그대로 붙여 넣으면 바로 살펴볼 수 있어요.</p>
+  <pre style="white-space:pre-wrap;font-family:inherit;font-size:15px;background:#f4f6fb;border-radius:12px;padding:16px;margin:0">${esc(lines.join('\n'))}</pre>
+</div>`;
+  return { subject: `[코스트노트 문의] ${i.kind} · ${short}${i.text.length > 30 ? '…' : ''}`, text, html };
+}
+
+/** 회원에게: 문의 접수 */
+export function supportAckMail(i) {
+  return {
+    subject: '[코스트노트] 문의를 받았어요',
+    ...layout('문의를 잘 받았어요', ['보내 주신 내용을 확인하고 보통 하루 안에 이 메일 주소로 답장드릴게요.', `[${i.kind}]`, i.text.length > 500 ? `${i.text.slice(0, 500)}…` : i.text], null),
   };
 }

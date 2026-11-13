@@ -20,7 +20,8 @@ export async function handleSupport(request, env, { fetchImpl = fetch, now = Dat
   } catch {
     return fail(400, 'bad_request', '요청을 읽지 못했어요.');
   }
-  const owner = String(env.OWNER_EMAILS || '').split(',')[0]?.trim();
+  // 문의 받는 곳: 대표 메일(help@, 클라우드플레어가 운영자 메일함으로 전달). 없으면 운영자 메일
+  const owner = env.SUPPORT_EMAIL || String(env.OWNER_EMAILS || '').split(',')[0]?.trim();
   const text = String(body?.text ?? '').trim();
   if (text.length < SUPPORT_MIN) return fail(400, 'too_short', `내용을 ${SUPPORT_MIN}자 이상 적어 주세요.`);
   if (text.length > SUPPORT_MAX) return fail(400, 'too_long', `내용은 ${SUPPORT_MAX.toLocaleString()}자까지 보낼 수 있어요.`);

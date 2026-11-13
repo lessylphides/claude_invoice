@@ -49,7 +49,7 @@ export async function handleOcr(request, env, { fetchImpl = fetch, now = Date.no
   usage.account.bonus += gift;
   const limits = { day: ent.day, month: ent.month, total: ent.total ?? null, kind: ent.kind, plan: ent.plan ?? null };
   if (usage.account.suspended)
-    return fail(403, 'suspended', `이용이 정지된 계정이에요.${usage.account.reason ? ` (사유: ${usage.account.reason})` : ''} 문의: hanguk.soek@me.com`);
+    return fail(403, 'suspended', `이용이 정지된 계정이에요.${usage.account.reason ? ` (사유: ${usage.account.reason})` : ''} 문의: help@costnote.co.kr`);
   let over = overLimit(ent, usage, units);
   // 1회는 남았지만 이번 요청(여러 회)에는 모자랄 때: 알아듣기 쉬운 말로
   if (over && units > 1 && !overLimit(ent, usage, 1))

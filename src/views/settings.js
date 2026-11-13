@@ -68,7 +68,7 @@ async function showOcrUsage(el, planBtn, adminSec) {
     const acc = u.account ?? {};
     if (acc.suspended) {
       title = '<b class="warn">이용 정지</b>';
-      meters = `<p class="ci-advice">이용이 정지된 계정이에요.${acc.reason ? ` 사유: ${esc(acc.reason)}` : ''} 문의: hanguk.soek@me.com</p>`;
+      meters = `<p class="ci-advice">이용이 정지된 계정이에요.${acc.reason ? ` 사유: ${esc(acc.reason)}` : ''} 문의: help@costnote.co.kr</p>`;
     } else if (acc.bonus) meters += `<p class="set-note">추가 인식 <b>${num(acc.bonus)}장</b> 남음 (한도를 다 쓰면 여기서 써요)</p>`;
     if (!acc.suspended && st.levelGift && !st.levelGift.usable && st.levelGift.balance)
       meters += `<p class="set-note">🎁 레벨업 선물 <b>${num(st.levelGift.balance)}장</b>이 쌓여 있어요. 구독하면 바로 쓸 수 있어요.</p>`;
@@ -165,7 +165,7 @@ export function openSettings() {
             <p class="set-note">탈퇴하면 계정과 서버에 저장된 장부가 바로 지워지고 되돌릴 수 없어요. 필요하면 먼저 백업 파일을 저장하세요.</p>
           </section>
 
-          <p class="set-foot">코스트노트 · 문의 hanguk.soek@me.com</p>
+          <p class="set-foot">코스트노트 · 문의 help@costnote.co.kr</p>
         </form>`;
       body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
       const planBtn = body.querySelector('[data-act=plans]');

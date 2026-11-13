@@ -27,12 +27,12 @@ export async function sendMail(env, fetchImpl, { to, subject, text, html, replyT
 
 /** 간단한 메일 본문 (글자 + 버튼 하나) */
 function layout(title, paragraphs, button) {
-  const text = [title, '', ...paragraphs, '', button ? `${button.label}: ${button.href}` : '', '', '코스트노트 · 문의 hanguk.soek@me.com'].join('\n');
+  const text = [title, '', ...paragraphs, '', button ? `${button.label}: ${button.href}` : '', '', '코스트노트 · 문의 help@costnote.co.kr'].join('\n');
   const html = `<div style="font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1b1e24;line-height:1.6">
   <h2 style="font-size:18px;margin:0 0 12px">${esc(title)}</h2>
   ${paragraphs.map((p) => `<p style="margin:0 0 10px;font-size:15px">${esc(p)}</p>`).join('')}
   ${button ? `<p style="margin:20px 0"><a href="${button.href}" style="background:#2459c4;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700;display:inline-block">${esc(button.label)}</a></p>` : ''}
-  <p style="margin:24px 0 0;font-size:12px;color:#636a77">코스트노트 · 문의 hanguk.soek@me.com</p>
+  <p style="margin:24px 0 0;font-size:12px;color:#636a77">코스트노트 · 문의 help@costnote.co.kr</p>
 </div>`;
   return { text, html };
 }

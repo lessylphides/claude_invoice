@@ -289,7 +289,7 @@ export async function handleBilling(request, env, { fetchImpl = fetch, now = Dat
     return fail(403, 'owner_self_payment', '운영자 계정은 본인 상점에 본인 카드로 결제(자가 결제)할 수 없어 구독하지 않아요. 인식 제한 없이 쓸 수 있어요.');
   if (action === 'subscribe' || action === 'change') {
     const acc = (await usageNow(sb))?.account;
-    if (acc?.suspended) return fail(403, 'suspended', '이용이 정지된 계정이라 결제할 수 없어요. 문의: hanguk.soek@me.com');
+    if (acc?.suspended) return fail(403, 'suspended', '이용이 정지된 계정이라 결제할 수 없어요. 문의: help@costnote.co.kr');
   }
 
   if (action === 'subscribe') {

@@ -54,6 +54,13 @@ async function fetchRow() {
   return data;
 }
 
+/** 서버 장부 번호만 (장부 내용 없이 아주 작게): 바뀌었는지 확인용 */
+async function fetchRev() {
+  const { data, error } = await (await client()).from('ledgers').select('rev').eq('user_id', uid).maybeSingle();
+  if (error) throw error;
+  return data ? data.rev : null;
+}
+
 async function insertRow(payload) {
   const { data, error } = await (await client()).from('ledgers').insert({ user_id: uid, data: payload, rev: 1 }).select('rev').single();
   if (error) throw error;
@@ -182,10 +189,14 @@ async function pull(force = false) {
   if (st.dirty) return push();
   if (!force && document.querySelector('.sheet-wrap')) return; // 입력 중인 화면이 있으면 다음에
   try {
-    const row = await fetchRow();
-    if (row && row.rev !== st.rev) {
-      adoptServer(row);
-      toast('다른 기기나 클로드에서 바뀐 장부를 불러왔어요.');
+    // 1분마다 확인하므로 번호만 먼저 보고, 바뀌었을 때만 장부 전체를 받음 (큰 장부는 수 MB)
+    const rev = await fetchRev();
+    if (rev != null && rev !== st.rev) {
+      const row = await fetchRow();
+      if (row && row.rev !== st.rev) {
+        adoptServer(row);
+        toast('다른 기기나 클로드에서 바뀐 장부를 불러왔어요.');
+      }
     }
     setStatus('idle');
   } catch (err) {

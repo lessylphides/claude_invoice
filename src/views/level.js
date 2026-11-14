@@ -4,7 +4,8 @@ import { esc, num } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { auth } from '../auth.js';
-import { todayFortune, todayTip } from '../lib/fortune.js';
+// 운세 문장(약 170KB)은 운세를 열 때만 불러옴 (레벨 화면을 열면 미리 받아 둠)
+const loadFortune = () => import('../lib/fortune.js');
 
 // ── 오늘의 운세: 오늘 아직 안 봤으면 배지에 빨간 점 ──
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -131,7 +132,8 @@ function firstPrintToday() {
 }
 
 /** 오늘의 운세: 영수증으로 출력되는 화면 */
-export function openFortuneSheet() {
+export async function openFortuneSheet() {
+  const { todayFortune, todayTip } = await loadFortune();
   const who = auth.user?.id || 'local';
   const day = kstToday();
   const f = todayFortune(who, day);
@@ -189,6 +191,7 @@ const missionLi = (x) =>
   }</span><b class="ms-pt">+${x.points}</b></li>`;
 
 export function openLevelSheet() {
+  loadFortune().catch(() => {}); // 운세 버튼을 누르기 전에 미리 받아 둠
   const lv = currentLevel();
   const nextName = levelName(lv.level + 1);
   const gift = nextGiftLevel(lv.level);

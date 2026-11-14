@@ -13,12 +13,15 @@ import { setAuthNotice } from './authScreen.js';
 import { sync } from '../sync.js';
 import { billing } from '../billing.js';
 import { PLANS } from '../lib/plans.js';
-import { openPlans } from './plans.js';
-import { openAdmin } from './admin.js';
-import { openClaudeConnect, disconnectClaude } from './claude.js';
-import { openSupport } from './support.js';
+// 가끔 여는 화면은 누를 때 불러옴 (앱을 켤 때 받는 양을 줄임)
+const openPlans = () => import('./plans.js').then((m) => m.openPlans());
+const openAdmin = () => import('./admin.js').then((m) => m.openAdmin());
+const openClaudeConnect = () => import('./claude.js').then((m) => m.openClaudeConnect());
+const disconnectClaude = () => import('./claude.js').then((m) => m.disconnectClaude());
+const openSupport = () => import('./support.js').then((m) => m.openSupport());
 import { openNotices } from './notices.js';
 import { noticeState } from '../lib/notices.js';
+import { APP_VERSION, RELEASED, FIRST_OFFICIAL } from '../version.js';
 
 function syncLine() {
   const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -92,9 +95,12 @@ function backupLine() {
 }
 
 export function openSettings() {
+  let unsubSync = null; // 설정을 닫으면 동기화 알림 구독도 끊음 (안 끊으면 닫은 화면이 메모리에 계속 남음)
   openSheet({
     title: '설정',
+    onClose: () => unsubSync?.(),
     render(body, close) {
+      unsubSync?.();
       const s = store.settings;
       body.innerHTML = `
         <form class="settings">
@@ -168,7 +174,7 @@ export function openSettings() {
             <p class="set-note">탈퇴하면 계정과 서버에 저장된 장부가 바로 지워지고 되돌릴 수 없어요. 필요하면 먼저 백업 파일을 저장하세요.</p>
           </section>
 
-          <p class="set-foot">코스트노트 · 문의 help@costnote.co.kr</p>
+          <p class="set-foot app-version">코스트노트 <b>버전 ${APP_VERSION}</b>${APP_VERSION === FIRST_OFFICIAL ? ' · 최초 공식 버전' : ''} · ${RELEASED.replaceAll('-', '.')}<br>문의 help@costnote.co.kr</p>
         </form>`;
       body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
       const planBtn = body.querySelector('[data-act=plans]');
@@ -182,10 +188,9 @@ export function openSettings() {
         close();
         openPlans();
       });
-      const unsubSync = sync.subscribe(() => {
+      unsubSync = sync.subscribe(() => {
         const el = body.querySelector('.sync-line');
         if (el?.isConnected) el.innerHTML = syncLine();
-        else unsubSync();
       });
       body.querySelector('[data-act=delete-account]').addEventListener('click', async () => {
         const typed = prompt('탈퇴하면 계정과 서버의 장부가 모두 지워지고 되돌릴 수 없어요. 구독 중이면 바로 해지되고 등록한 카드도 지워져요.\n계속하려면 "탈퇴"라고 입력하세요.');

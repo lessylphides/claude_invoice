@@ -6,8 +6,10 @@ import { auth } from '../auth.js';
 import { view } from '../state.js';
 import { fileToJpegBase64 } from '../ocr.js';
 import { SUPPORT_KINDS, kindOf, SUPPORT_MIN, SUPPORT_MAX, SUPPORT_MAX_IMAGES } from '../lib/support.js';
+import { APP_VERSION } from '../version.js';
 
-const appVersion = () => document.querySelector('script[type=module][src]')?.getAttribute('src')?.split('/').pop()?.replace(/\.js$/, '') || 'dev';
+// 문의 메일의 앱 버전: '1.0.0 (index-AbC123)' — 버전 번호 + 실제로 받은 화면 파일
+const appVersion = () => `${APP_VERSION} (${document.querySelector('script[type=module][src]')?.getAttribute('src')?.split('/').pop()?.replace(/\.js$/, '') || 'dev'})`;
 const tabName = () => ({ purchase: '매입 탭', cost: '원가 탭' })[view.tab] || view.tab;
 
 export function openSupport() {

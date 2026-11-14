@@ -11,7 +11,6 @@ import { renderAuth, handleAuthEvent } from './views/authScreen.js';
 import { closeTopSheet, toast } from './ui/sheet.js';
 import { sync } from './sync.js';
 import { takeBillingReturn } from './billing.js';
-import { finishCardRegistration } from './views/plans.js';
 import { levelAfterRender, openLevelSheet, scheduleClaim } from './views/level.js';
 import { captureRef, reportRef } from './lib/ref.js';
 import { preventZoom } from './ui/noZoom.js';
@@ -46,7 +45,7 @@ const boot = { auth: 'loading', data: 'loading', dataError: null, authError: nul
 function finishBillingReturn() {
   if (!auth.user || auth.recovery) return;
   const ret = takeBillingReturn();
-  if (ret) finishCardRegistration(ret);
+  if (ret) import('./views/plans.js').then((m) => m.finishCardRegistration(ret)); // 결제창에서 돌아왔을 때만 불러옴
 }
 
 /** 로그인했고 장부를 불러왔으면 서버 동기화 시작, 로그아웃하면 멈춤 */
@@ -77,9 +76,10 @@ function syncWithAuth() {
 }
 
 function render() {
-  if (boot.auth === 'loading') return (app.innerHTML = '<p class="boot-msg" role="status">불러오는 중…</p>');
+  // 저장된 로그인 기록이 있으면 로그인 확인(로그인 기능 불러오기)을 기다리지 않고 장부부터 그림
+  if (boot.auth === 'loading' && !auth.shownUser) return (app.innerHTML = '<p class="boot-msg" role="status">불러오는 중…</p>');
   if (boot.auth === 'error') return renderAuthError(boot.authError);
-  if (!auth.user || auth.recovery) {
+  if (!auth.shownUser || auth.recovery) {
     closeTopSheet();
     return renderAuth(app);
   }

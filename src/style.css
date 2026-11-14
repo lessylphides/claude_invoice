@@ -800,3 +800,6 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .nt-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
 .nt-form label.agree { flex-direction: row; align-items: flex-start; gap: 8px; }
 .nt-form label.agree input { width: auto; margin-top: 3px; }
+
+/* 성능: 화면 밖 메뉴 카드는 스크롤해서 보일 때 그림 (메뉴가 많을 때 원가 탭이 빨리 열림) */
+.menu-card { content-visibility: auto; contain-intrinsic-size: auto 110px; }

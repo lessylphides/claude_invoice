@@ -19,6 +19,20 @@ export const landing = {
 };
 
 const state = { ready: false, session: null, recovery: landing.type === 'recovery' && !landing.error };
+
+/**
+ * 이 기기에 저장된 로그인 기록의 사용자 (로그인 기능을 다 불러오기 전에 장부부터 그리려고 씀).
+ * 메일 링크로 들어온 경우는 확인이 끝나야 하므로 쓰지 않음. 실제 확인이 끝나면 auth.user 로 바뀜
+ */
+const peekUser = (() => {
+  if (landing.type || tokenHash) return null;
+  try {
+    const s = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null');
+    return s?.user?.id && s.refresh_token ? s.user : null;
+  } catch {
+    return null;
+  }
+})();
 const listeners = new Set();
 const notify = () => listeners.forEach((f) => f());
 
@@ -39,6 +53,10 @@ export const auth = {
   },
   get user() {
     return state.session?.user ?? null;
+  },
+  /** 확인 전이면 저장된 로그인 기록의 사용자, 확인 뒤에는 실제 사용자 */
+  get shownUser() {
+    return state.ready ? (state.session?.user ?? null) : peekUser;
   },
   /** 비밀번호 재설정 링크로 들어와 새 비밀번호를 정해야 하는 상태 */
   get recovery() {

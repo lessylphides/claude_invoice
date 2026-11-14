@@ -11,6 +11,7 @@ import { handleAuthorize } from './mcp/authorize.js';
 import { handleAiChanges } from './mcp/changes.js';
 import { withLandingRef, handleRef } from './ref.js';
 import { handleSupport } from './support.js';
+import { handleNotices } from './notices.js';
 import { withBanner } from './inappBanner.js';
 export { BillingStore } from './billingStore.js';
 
@@ -50,6 +51,7 @@ const app = {
     if (url.pathname.startsWith('/api/ai-changes') || url.pathname.startsWith('/api/claude/')) return handleAiChanges(request, env);
     if (url.pathname === '/api/ref') return handleRef(request, env);
     if (url.pathname === '/api/support') return handleSupport(request, env);
+    if (url.pathname === '/api/notices' || url.pathname === '/api/admin/notices') return handleNotices(request, env);
     if (url.pathname === '/api/ocr') return handleOcr(request, env);
     if (url.pathname === '/api/ocr/feedback') return handleOcrFeedback(request, env);
     if (url.pathname.startsWith('/api/admin')) return handleAdmin(request, env);

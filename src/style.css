@@ -772,3 +772,31 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .support-thumbs .thumb { position: relative; }
 .support-thumbs img { width: 72px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
 .support-thumbs .icon-btn { position: absolute; top: -8px; right: -8px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 12px; padding: 0; }
+
+/* 공지사항 */
+.top .settings { position: relative; }
+.nt-dot { position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--bg); }
+.nt-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; margin-right: 4px; }
+.nt-list { display: flex; flex-direction: column; gap: 10px; }
+.nt-item { padding: 0; overflow: hidden; }
+.nt-item summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nt-item summary::-webkit-details-marker { display: none; }
+.nt-title { flex-basis: 100%; font-size: 15.5px; line-height: 1.45; }
+.nt-item summary small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.nt-tag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--ink-2); }
+.nt-feature { background: #e6eefc; color: #2459c4; }
+.nt-fix { background: #e7f5ec; color: #1f7a45; }
+.nt-imp, .nt-new { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+.nt-imp { background: #fde8e8; color: #c62828; }
+.nt-new { background: #e5484d; color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .nt-feature { background: #1e2c48; color: #9dbcf5; }
+  .nt-fix { background: #183526; color: #8fd6aa; }
+  .nt-imp { background: #3d1c1c; color: #f2a1a1; }
+}
+.nt-body { padding: 0 16px 14px; font-size: 14.5px; line-height: 1.65; color: var(--ink-2); }
+.nt-body p { margin: 0 0 10px; }
+.nt-form { display: flex; flex-direction: column; gap: 12px; }
+.nt-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.nt-form label.agree { flex-direction: row; align-items: flex-start; gap: 8px; }
+.nt-form label.agree input { width: auto; margin-top: 3px; }

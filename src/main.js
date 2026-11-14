@@ -1,7 +1,7 @@
 // 앱 시작: 탭(매입 | 원가) 그리기, 클릭 연결, 서비스워커 등록
 import './style.css';
 import { store, ready, warmIndex } from './store.js';
-import { view, setRenderer, setTab, shiftMonth } from './state.js';
+import { view, setRenderer, setTab, shiftMonth, rerender } from './state.js';
 import { renderPurchaseTab, handlePurchaseClick } from './views/purchase.js';
 import { renderCostTab, handleCostClick } from './views/cost.js';
 import { openSettings } from './views/settings.js';
@@ -15,6 +15,8 @@ import { finishCardRegistration } from './views/plans.js';
 import { levelAfterRender, openLevelSheet, scheduleClaim } from './views/level.js';
 import { captureRef, reportRef } from './lib/ref.js';
 import { preventZoom } from './ui/noZoom.js';
+import { loadNotices, noticeState } from './lib/notices.js';
+import { openNotices } from './views/notices.js';
 
 captureRef(); // 광고 링크로 들어온 경우 가입 경로 꼬리표 기억
 preventZoom();
@@ -48,12 +50,28 @@ function finishBillingReturn() {
 }
 
 /** 로그인했고 장부를 불러왔으면 서버 동기화 시작, 로그아웃하면 멈춤 */
+// 공지: 로그인 뒤·다시 열 때(1시간마다) 받아 오고, 안 읽은 '중요' 공지는 한 번 띄움
+let noticesAt = 0;
+function checkNotices() {
+  if (Date.now() - noticesAt < 3600_000) return;
+  noticesAt = Date.now();
+  loadNotices().then((ok) => {
+    if (!ok || !auth.user) return;
+    rerender();
+    if (document.querySelector('.sheet-wrap')) return; // 다른 화면을 보고 있으면 다음에
+    const n = noticeState.takeImportant();
+    if (n) openNotices(n.id);
+  });
+}
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && auth.user && checkNotices());
+
 function syncWithAuth() {
   if (boot.auth !== 'ok' || boot.data !== 'ok') return;
   if (auth.user && !auth.recovery) {
     sync.start(auth.user);
     scheduleClaim(8000);
-    auth.accessToken().then((t) => reportRef(auth.user, t)).catch(() => {}); // 밀린 레벨업 선물이 있으면 받기 (장부가 서버에 올라간 뒤)
+    auth.accessToken().then((t) => reportRef(auth.user, t)).catch(() => {});
+    checkNotices(); // 밀린 레벨업 선물이 있으면 받기 (장부가 서버에 올라간 뒤)
   }
   else sync.stop();
 }

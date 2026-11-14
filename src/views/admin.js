@@ -5,6 +5,8 @@ import { PLANS, PLAN_ORDER } from '../lib/plans.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { download } from '../ui/download.js';
 import { openMembers } from './members.js';
+import { openNoticeEditor } from './notices.js';
+import { noticeState, NOTICE_KINDS } from '../lib/notices.js';
 
 const won = (n) => (n == null ? '—' : `${num(n)}원`);
 const md = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
@@ -184,6 +186,22 @@ function render(body, s) {
         <p class="set-note">costnote.co.kr/?ref=ig1 처럼 꼬리표를 붙인 링크로 들어온 사람만 세요. 방문은 같은 브라우저 30일에 한 번, 오른쪽 %는 방문 대비 가입이에요. 꼬리표 없이 가입한 사람은 여기 없어요.</p>
       </section>
       <section>
+        <h3 class="set-title">공지사항</h3>
+        <div class="set-card list admin-notices">${
+          noticeState.list.length
+            ? noticeState.list
+                .slice(0, 10)
+                .map(
+                  (n, i) => `<button type="button" class="set-row" data-notice="${i}"><span class="grow">${NOTICE_KINDS[n.kind]?.icon ?? ''} ${esc(n.title)}${n.important ? ' · <b>중요</b>' : ''}<small>${new Date(n.at).toLocaleDateString('ko-KR')}</small></span><span class="chev" aria-hidden="true">›</span></button>`,
+                )
+                .join('')
+            : '<p class="set-pad muted small">아직 공지가 없어요.</p>'
+        }</div>
+        <button type="button" class="btn ghost set-save" data-act="notice-new">✏️ 공지 쓰기</button>
+        <p class="set-note">공지를 올리면 회원 앱의 설정 아이콘에 빨간 점이 떠요. '중요'는 앱을 열 때 한 번 띄워요.</p>
+      </section>
+
+      <section>
         <h3 class="set-title">장부 백업 (매일, 14일 보관)</h3>
         <div class="set-card list">${
           s.backups?.length
@@ -202,6 +220,9 @@ function render(body, s) {
     </div>`;
 
   body.querySelector('[data-act=members]').addEventListener('click', openMembers);
+  const redraw = async () => body.isConnected && render(body, await load());
+  body.querySelector('[data-act=notice-new]').addEventListener('click', () => openNoticeEditor(null, redraw));
+  body.querySelectorAll('[data-notice]').forEach((btn) => btn.addEventListener('click', () => openNoticeEditor(noticeState.list[Number(btn.dataset.notice)], redraw)));
   body.querySelectorAll('[data-pay]').forEach((btn) =>
     btn.addEventListener('click', () => openRefund(s.billing.payments[Number(btn.dataset.pay)], s.mode, async () => body.isConnected && render(body, await load()))),
   );

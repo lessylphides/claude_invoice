@@ -38,3 +38,18 @@ test('중요 공지는 앱을 열 때 한 번만 펼쳐서 보여 줌', async ({
   await page.waitForTimeout(500);
   await expect(page.locator('.sheet-wrap')).toHaveCount(0);
 });
+
+test('설정에서 연 공지사항·문의하기를 닫으면 설정으로 돌아옴', async ({ page }) => {
+  await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await page.route('**/api/notices', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ notices: NOTICES }) }));
+  await openApp(page, { data: {} });
+  await page.locator('[data-act=settings]').first().click();
+  await page.locator('[data-act=notices]').click();
+  await expect(page.locator('.sheet[aria-label=공지사항]')).toBeVisible();
+  await page.locator('.sheet[aria-label=공지사항] .close').click();
+  await expect(page.locator('.sheet[aria-label=설정]')).toBeVisible();
+  await expect(page.locator('[data-act=notices] .nt-count')).toHaveCount(0);
+  await page.locator('[data-act=support]').click();
+  await page.locator('.sheet[aria-label=문의하기] .close').click();
+  await expect(page.locator('.sheet[aria-label=설정]')).toBeVisible();
+});

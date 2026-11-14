@@ -33,6 +33,7 @@ export function openNotices(openId = null) {
     },
   });
   noticeState.markSeen();
+  document.querySelectorAll('[data-act=notices] .nt-count').forEach((el) => el.remove()); // 아래에 열려 있는 설정의 개수 표시
   rerender();
 }
 

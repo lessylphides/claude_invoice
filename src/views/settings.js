@@ -173,22 +173,11 @@ export function openSettings() {
       body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
       const planBtn = body.querySelector('[data-act=plans]');
       showOcrUsage(body.querySelector('.ocr-usage'), planBtn, body.querySelector('.admin-sec'));
-      body.querySelector('[data-act=admin]').addEventListener('click', () => {
-        close();
-        openAdmin();
-      });
-      body.querySelector('[data-act=notices]').addEventListener('click', () => {
-        close();
-        openNotices();
-      });
-      body.querySelector('[data-act=support]').addEventListener('click', () => {
-        close();
-        openSupport();
-      });
-      body.querySelector('[data-act=claude]').addEventListener('click', () => {
-        close();
-        openClaudeConnect();
-      });
+      // 설정 위에 겹쳐 열기: 닫으면 설정으로 돌아옴
+      body.querySelector('[data-act=admin]').addEventListener('click', () => openAdmin());
+      body.querySelector('[data-act=notices]').addEventListener('click', () => openNotices());
+      body.querySelector('[data-act=support]').addEventListener('click', () => openSupport());
+      body.querySelector('[data-act=claude]').addEventListener('click', () => openClaudeConnect());
       planBtn.addEventListener('click', () => {
         close();
         openPlans();

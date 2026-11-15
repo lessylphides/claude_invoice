@@ -54,9 +54,10 @@ test('설정에서 연 공지사항·문의하기를 닫으면 설정으로 돌�
   await expect(page.locator('.sheet[aria-label=설정]')).toBeVisible();
 });
 
-test('설정 맨 아래에 앱 버전 (최초 공식 버전 1.0.0)', async ({ page }) => {
+test('설정 맨 아래에 앱 버전과 최초 공식 버전 1.0.0', async ({ page }) => {
   await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
   await openApp(page, { data: {} });
   await page.locator('[data-act=settings]').first().click();
-  await expect(page.locator('.app-version')).toContainText('버전 1.0.0 · 최초 공식 버전 · 2026.11.14');
+  await expect(page.locator('.app-version')).toContainText('버전 1.1.0 · 2026.11.15');
+  await expect(page.locator('.app-version')).toContainText('최초 공식 버전 1.0.0 · 2026.11.14');
 });

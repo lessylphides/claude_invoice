@@ -12,6 +12,7 @@ import { handleAiChanges } from './mcp/changes.js';
 import { withLandingRef, handleRef } from './ref.js';
 import { handleSupport } from './support.js';
 import { handleNotices } from './notices.js';
+import { runNudges } from './nudge.js';
 import { withBanner } from './inappBanner.js';
 export { BillingStore } from './billingStore.js';
 
@@ -80,7 +81,10 @@ export default {
         .catch((e) => console.error('[billing] renewals failed', String(e)))
         .then(() => runBackup(env))
         .then((r) => console.log('[backup]', JSON.stringify(r)))
-        .catch((e) => console.error('[backup] failed', String(e))),
+        .catch((e) => console.error('[backup] failed', String(e)))
+        .then(() => runNudges(env))
+        .then((r) => console.log('[nudge]', JSON.stringify(r)))
+        .catch((e) => console.error('[nudge] failed', String(e))),
     );
   },
 };

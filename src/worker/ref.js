@@ -48,7 +48,7 @@ export async function handleRef(request, env, { fetchImpl = fetch, now = Date.no
   }
   const joinedKey = `joined:${a.user.id}`;
   if (!(await d.get(joinedKey))) {
-    await d.put(joinedKey, { at: now, ref });
+    await d.put(joinedKey, { at: now, ref, email: a.user.email }); // email: 다음 날 사용 안내 메일용
     const created = Date.parse(a.user.createdAt || '');
     if (created && now - created < NEW_WINDOW && !isOwner(env, a.user.email)) {
       const owner = String(env.OWNER_EMAILS || '').split(',')[0]?.trim();

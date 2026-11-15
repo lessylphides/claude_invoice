@@ -803,3 +803,22 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 
 /* 성능: 화면 밖 메뉴 카드는 스크롤해서 보일 때 그림 (메뉴가 많을 때 원가 탭이 빨리 열림) */
 .menu-card { content-visibility: auto; contain-intrinsic-size: auto 110px; }
+
+/* 시작하기 3단계 */
+.onboard { background: var(--surface); border-radius: var(--radius); padding: 14px 14px 10px; margin: 0 0 12px; border: 1.5px solid var(--accent); }
+.ob-head { display: flex; align-items: center; gap: 8px; }
+.ob-head b { font-size: 15.5px; }
+.ob-count { font-size: 13px; font-weight: 700; color: var(--accent); }
+.ob-x { margin-left: auto; width: 32px; height: 32px; font-size: 14px; color: var(--muted); }
+.ob-bar { height: 6px; border-radius: 999px; background: var(--line); margin: 8px 0 6px; overflow: hidden; }
+.ob-bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.ob-steps { list-style: none; margin: 0; padding: 0; }
+.ob-steps li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.ob-steps li:first-child { border-top: 0; }
+.ob-steps li .grow { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.ob-steps li small { color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
+.ob-steps li.done b { color: var(--muted); text-decoration: line-through; font-weight: 500; }
+.ob-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--line); color: var(--ink-2); }
+.ob-steps li.now .ob-n { background: var(--accent); color: #fff; }
+.ob-steps li.done .ob-n { background: var(--ok, #1f9d55); color: #fff; }
+.ob-steps .btn { flex: none; white-space: nowrap; }

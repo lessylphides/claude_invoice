@@ -21,7 +21,7 @@ const disconnectClaude = () => import('./claude.js').then((m) => m.disconnectCla
 const openSupport = () => import('./support.js').then((m) => m.openSupport());
 import { openNotices } from './notices.js';
 import { noticeState } from '../lib/notices.js';
-import { APP_VERSION, RELEASED, FIRST_OFFICIAL } from '../version.js';
+import { APP_VERSION, RELEASED, FIRST_OFFICIAL, FIRST_RELEASED } from '../version.js';
 
 function syncLine() {
   const t = sync.syncedAt ? new Date(sync.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -174,7 +174,7 @@ export function openSettings() {
             <p class="set-note">탈퇴하면 계정과 서버에 저장된 장부가 바로 지워지고 되돌릴 수 없어요. 필요하면 먼저 백업 파일을 저장하세요.</p>
           </section>
 
-          <p class="set-foot app-version">코스트노트 <b>버전 ${APP_VERSION}</b>${APP_VERSION === FIRST_OFFICIAL ? ' · 최초 공식 버전' : ''} · ${RELEASED.replaceAll('-', '.')}<br>문의 help@costnote.co.kr</p>
+          <p class="set-foot app-version">코스트노트 <b>버전 ${APP_VERSION}</b> · ${RELEASED.replaceAll('-', '.')}${APP_VERSION === FIRST_OFFICIAL ? ' · 최초 공식 버전' : `<br>최초 공식 버전 ${FIRST_OFFICIAL} · ${FIRST_RELEASED.replaceAll('-', '.')}`}<br>문의 help@costnote.co.kr</p>
         </form>`;
       body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
       const planBtn = body.querySelector('[data-act=plans]');

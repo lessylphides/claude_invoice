@@ -376,6 +376,9 @@ function openMarginSheet() {
 
 // ───────────────────────── 메뉴 등록/수정 ─────────────────────────
 
+/** 새 메뉴 추가 화면 (시작하기 안내에서 씀) */
+export const openNewMenu = () => openMenuEditor({ category: '' });
+
 function openMenuEditor(menu) {
   const m = structuredClone({ name: '', price: '', bottlePrice: 0, category: '', ingredients: [], ...menu });
   const isEdit = !!(menu.id && store.getMenu(menu.id));

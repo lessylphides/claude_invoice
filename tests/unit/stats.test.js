@@ -46,6 +46,15 @@ describe('운영자 화면 숫자', () => {
     expect(s.billing.payments[0]).toMatchObject({ email: 'a@x', amount: 9900 });
   });
 
+  it('실제 결제(live) 중이면 시험 결제로 만든 구독은 구독자·매출에서 빼고 결제 목록에만 남김', async () => {
+    const env = { BILLING: memKV(), BILLING_MODE: 'live' };
+    await env.BILLING.put('sub:t', JSON.stringify({ uid: 't', email: 'boss@x', plan: 'basic', status: 'active', mode: 'test', periodEnd: NOW + 1e9, payments: [{ amount: 9900, orderName: '기본', at: NOW - 1000 }] }));
+    await env.BILLING.put('sub:r', JSON.stringify({ uid: 'r', email: 'real@x', plan: 'lite', status: 'active', mode: 'live', periodEnd: NOW + 1e9, payments: [{ amount: 4900, orderName: '라이트', at: NOW - 500 }] }));
+    const s = await adminStats(env, { now: NOW, fx: 1450 });
+    expect(s.billing).toMatchObject({ paying: 1, byPlan: { basic: 0, lite: 1 }, mrr: 4900, paid30: 4900 });
+    expect(s.billing.payments.map((p) => [p.email, p.mode])).toEqual([['real@x', 'live'], ['boss@x', 'test']]);
+  });
+
   it('영수증 인식 서버가 성공·실패 모두 비용을 기록', async () => {
     const env = { ANTHROPIC_API_KEY: 'sk', BILLING: memKV() };
     const fetchImpl = async (url) => {

@@ -1,7 +1,7 @@
 // 서버 운영 통계: 영수증 인식마다 실제 AI 비용을 기록하고, 운영자 화면(/api/admin)에 모아 보여 줌
 // 기록은 서버 저장소(Durable Object)에만 남고, 사진·인식 내용은 기록하지 않음 (횟수·토큰·비용만)
 import { refStats } from './ref.js';
-import { db, billingMode, kstDate, isOwner, refundPayment } from './billing.js';
+import { db, billingMode, kstDate, isOwner, refundPayment, isTestSubInLive } from './billing.js';
 import { sendMail, refundMail } from './mail.js';
 import { PLANS } from '../lib/plans.js';
 import { ACC_FIELDS } from '../lib/ocrAccuracy.js';
@@ -182,7 +182,9 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
   const payingUids = new Set();
   for (const s of subs) {
     if (!s) continue;
-    const live = (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
+    // 실제 결제를 시작하기 전(시험 결제)에 만든 구독은 구독자·매출에 넣지 않음 (결제 목록에는 '시험 결제'로 남김)
+    const test = isTestSubInLive(env, s);
+    const live = !test && (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
     if (live && PLANS[s.plan]) {
       byPlan[s.plan]++;
       if (s.uid) payingUids.add(s.uid);
@@ -191,7 +193,7 @@ export async function adminStats(env, { now = Date.now(), fx = Number(env.USD_KR
       if (s.status === 'past_due') pastDue++;
     }
     for (const p of s.payments || []) {
-      if (p.at >= now - 30 * 86400000) paid30 += p.amount - (p.canceled || 0);
+      if (!test && p.at >= now - 30 * 86400000) paid30 += p.amount - (p.canceled || 0);
       payments.push({ uid: s.uid, email: s.email, amount: p.amount, canceled: p.canceled || 0, orderName: p.orderName, at: p.at, paymentKey: p.paymentKey ?? null, receipt: p.receipt ?? null, card: s.card ?? null, subStatus: s.status, mode: s.mode ?? 'test' });
     }
   }
@@ -238,7 +240,7 @@ async function adminUsers(env, sb, q, now) {
   const d = db(env);
   for (const u of users) {
     const s = d ? await d.get(`sub:${u.id}`) : null;
-    const live = s && (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
+    const live = s && !isTestSubInLive(env, s) && (s.status === 'active' || s.status === 'past_due') && now < s.periodEnd + 3 * 86400000;
     u.plan = live ? { id: s.plan, name: PLANS[s.plan]?.name ?? s.plan, status: s.status, cancelAtPeriodEnd: !!s.cancelAtPeriodEnd, periodEnd: s.periodEnd } : null;
   }
   return json(200, { users });

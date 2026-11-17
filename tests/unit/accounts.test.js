@@ -80,7 +80,7 @@ describe('운영자 회원 관리 API', () => {
 
   it('회원 목록에 요금제를 붙여 줌, 추가 인식·정지는 Supabase 운영자 함수로', async () => {
     const e = env();
-    await e.BILLING.put(`sub:${UID}`, JSON.stringify({ uid: UID, plan: 'basic', status: 'active', periodEnd: Date.now() + 1e9 }));
+    await e.BILLING.put(`sub:${UID}`, JSON.stringify({ uid: UID, plan: 'basic', status: 'active', mode: 'live', periodEnd: Date.now() + 1e9 }));
     const f = fake({ usage: acct({}), email: 'boss@x.com', rpc: { admin_users: list, admin_set_account: { bonus: 30, suspended: true, reason: '테스트' } } });
     const r = await handleAdmin(req('/api/admin/users?q=shop'), e, { fetchImpl: f.fetchImpl });
     const body = await r.json();

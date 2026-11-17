@@ -47,7 +47,12 @@ function openMember(u, onChange) {
               <p class="mem-email big">${esc(u.email)}</p>
               <p class="mem-badges">${badges(u) || '<span class="badge">무료</span>'}</p>
               <p class="set-note">가입 ${day(u.created_at)} · 최근 접속 ${day(u.last_sign_in_at)} · 장부 ${u.has_ledger ? '있음' : '없음'}</p>
-              <p class="set-note">영수증 인식: 이번 달 ${num(u.ocr_month)}장 · 지금까지 ${num(u.ocr_total)}장${u.plan ? ` · ${esc(u.plan.name)} 요금제 (다음 결제일 ${day(u.plan.periodEnd)})` : ''}</p>
+              <p class="set-note">구독: ${
+                u.plan
+                  ? `<b>${esc(u.plan.name)} 요금제</b> · ${u.plan.status === 'past_due' ? '결제 실패(다시 시도 중)' : u.plan.cancelAtPeriodEnd ? `해지 예약 (${day(u.plan.periodEnd)}까지 사용)` : `다음 결제일 ${day(u.plan.periodEnd)}`}`
+                  : '구독 안 함 (무료)'
+              }</p>
+              <p class="set-note">영수증 인식: 이번 달 ${num(u.ocr_month)}장 · 지금까지 ${num(u.ocr_total)}장</p>
               ${u.suspended ? `<p class="ci-advice">이용 정지 중${u.reason ? ` — 사유: ${esc(u.reason)}` : ''}</p>` : ''}
             </div>
 

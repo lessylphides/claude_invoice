@@ -63,7 +63,7 @@ export function db(env) {
 }
 
 /** 실제 결제로 바뀐 뒤에는 시험 결제(테스트 키)로 만든 구독을 없는 것으로 봄 (테스트 카드 등록은 실제 키로 결제할 수 없음) */
-const isTestSubInLive = (env, sub) => !!sub && billingMode(env) === 'live' && sub.mode !== 'live';
+export const isTestSubInLive = (env, sub) => !!sub && billingMode(env) === 'live' && sub.mode !== 'live';
 
 export async function getSub(env, uid) {
   const d = db(env);

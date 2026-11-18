@@ -41,3 +41,15 @@ test('메뉴 수정: 최소·가게 기준·목표 가격, 누르면 판매가�
   await expect(g.locator('.pg-now')).toContainText('최소 가격보다 1,000원 낮아요');
   expect(errors).toEqual([]);
 });
+
+test('새 메뉴: 한 잔 양을 넣기 전에는 안내, 넣으면 추천 가격', async ({ page }) => {
+  await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await openApp(page, { data: data(), tab: 'cost' });
+  await page.locator('[data-cost=add]').click();
+  const s = page.locator('.sheet[aria-label="메뉴 추가"]');
+  await s.locator('[data-add=item]').click(); // 품목 고르기 화면이 바로 열림
+  await page.locator('.sheet[aria-label="매입 품목 선택"]').getByText('아부나흐700ML').click();
+  await expect(s.locator('.price-guide')).toContainText('한 잔에 쓰는 양');
+  await s.locator('input[data-f=use]').fill('30');
+  await expect(s.locator('.price-guide [data-fill-glass]').first()).toContainText('최소 가격');
+});

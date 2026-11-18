@@ -492,8 +492,15 @@ function openMenuEditor(menu) {
       const drawPriceGuide = (c, price, cat, t) => {
         const minMargin = store.minMarginOf(cat);
         const g = c.cost > 0 && c.missing < c.parts.length ? glassPriceGuide(c.cost, t, minMargin, c.missing) : null;
-        guideEl.hidden = !g;
-        if (!g) return;
+        guideEl.hidden = !c.parts.length;
+        if (!g) {
+          // 재료는 골랐는데 아직 원가를 못 구함 (한 잔 양·용량이 비었을 때): 무엇을 넣으면 나오는지 안내
+          const why = c.parts.map((p) => p.reason).find(Boolean);
+          guideEl.innerHTML = `<h4>잔 가격 정하기</h4><p class="muted small pg-empty">${
+            why === '사용량 미입력' ? '재료의 <b>한 잔에 쓰는 양</b>(예: 30ml)을 넣으면 최소 가격·목표 가격을 추천해 드려요.' : why === '1개 용량 미입력' ? '재료의 <b>1개 용량</b>(예: 700ml)을 넣으면 추천 가격이 나와요.' : '재료 원가를 계산할 수 있으면 추천 가격이 나와요.'
+          }</p>`;
+          return;
+        }
         const others = store.menus
           .filter((x) => x.id !== m.id && (x.category || '') === (cat || ''))
           .map((x) => {

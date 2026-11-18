@@ -65,18 +65,9 @@ export function openTrend(name, vendor = null) {
         </table>`;
       renderTrendChart(body.querySelector('.chart-host'), pts);
       body.addEventListener('click', async (e) => {
-        const t = e.target.closest('[data-scope],[data-date],[data-link],[data-unlink],[data-rename]');
+        const t = e.target.closest('[data-scope],[data-date],[data-link],[data-unlink]');
         if (!t) return;
-        if (t.dataset.rename !== undefined) {
-          const to = prompt(`'${name}'의 이름을 무엇으로 고칠까요?\n(매입 기록·메뉴 재료의 같은 이름이 모두 바뀌어요)`, name)?.trim();
-          if (!to || normKey(to) === normKey(name)) return;
-          const c = store.renameCounts(name);
-          if (!confirm(`'${name}' → '${to}'\n매입 기록 ${c.purchases}건${c.menus ? `, 메뉴 재료 ${c.menus}개` : ''}의 이름을 바꿀까요?`)) return;
-          store.renameItem(name, to);
-          toast(`'${to}'(으)로 고쳤어요.`);
-          close();
-          openTrend(to, vendor);
-        } else if (t.dataset.link !== undefined) {
+        if (t.dataset.link !== undefined) {
           const key = store.itemKey(name);
           const other = await pickItem({
             title: '같은 품목으로 묶을 이름',
@@ -117,9 +108,6 @@ function sameItemSection(name) {
             .join('')}</ul>`
         : '<p class="muted small">거래처마다 이름이 조금 다른 같은 물건이 있으면 묶어서 함께 볼 수 있습니다.</p>'
     }
-    <div class="same-actions">
-      <button type="button" class="btn ghost small-btn" data-link>+ 같은 품목 연결</button>
-      <button type="button" class="btn ghost small-btn" data-rename>✏️ 이름 고치기 (오타)</button>
-    </div>
+    <button type="button" class="btn ghost small-btn" data-link>+ 같은 품목 연결</button>
   </section>`;
 }

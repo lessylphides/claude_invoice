@@ -1,4 +1,4 @@
-// 품목 이름 오타 고치기: 영수증에서 고치면 다른 기록·메뉴 재료도 같이, 가격 추이에서도 고칠 수 있음
+// 품목 이름 오타 고치기: 영수증에서 고치면 다른 기록·메뉴 재료도 같이 (이름은 영수증에서만 고침)
 import { test, expect } from '@playwright/test';
 import { openApp, purchase, item, sheet } from './helpers.js';
 
@@ -52,18 +52,17 @@ test('이 영수증만 고르면 다른 기록·메뉴는 그대로', async ({ p
   await expect(sheet(page)).toContainText(OLD);
 });
 
-test('가격 추이에서 이름 고치기: 이미 오타 이름으로 묶여 있어도 정리됨', async ({ page }) => {
+test('이미 오타 이름 아래로 묶인 장부도 남은 영수증 하나를 고치면 모두 정리됨', async ({ page }) => {
   const d = data();
   d.purchases[1].items[0].name = NEW; // 고친 이름이 오타 이름 아래로 묶인 상태
   d.itemLinks = { '(93)rf벤로막10y': OLD };
   await openApp(page, { data: d });
   await page.locator('.cell[data-date="2026-11-02"]').click();
-  await sheet(page).locator('[data-trend]').first().click();
-  await expect(page.locator('.sheet-wrap').last()).toContainText('가격 추이');
-  const answers = [NEW, true];
-  page.on('dialog', (dlg) => dlg.accept(dlg.type() === 'prompt' ? String(answers[0]) : undefined));
-  await sheet(page).locator('[data-rename]').click();
-  await expect(page.locator('.sheet-wrap').last()).toContainText(`${NEW} 가격 추이`);
+  await sheet(page).locator('[data-edit="p1"]').click();
+  await sheet(page).locator('input[data-f=name]').first().fill(NEW);
+  await sheet(page).locator('button[type=submit]').click();
+  await expect(page.locator('.sheet[aria-label="품목 이름을 고쳤어요"]')).toHaveCount(0); // 다른 기록엔 없고 메뉴에만 → 묻지 않고 고침
+  await expect(page.locator('.toast').last()).toContainText('고쳤어요');
   while (await page.locator('.sheet-wrap').count()) await page.locator('.sheet-wrap .close').last().click();
   await page.locator('.tabbar button').nth(1).click();
   await page.locator('[data-cost-open="m"]').click();

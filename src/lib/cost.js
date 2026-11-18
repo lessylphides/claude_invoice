@@ -125,17 +125,20 @@ export function bottleRefList(refs) {
 }
 
 /**
- * 메뉴 판정
- * - 'rate'    원가율이 목표 이하 → 합격
- * - 'margin'  원가율은 넘었지만 한 잔 마진이 최소 마진 이상 → 합격(마진 기준). 일부 재료가 빠졌으면 실제 마진이 더 작을 수 있어 이 판정은 하지 않음
- * - 'over'    둘 다 못 채움 → ⚠
+ * 메뉴 판정. 최소 마진은 '항상 지키는 바닥선', 목표 원가율은 '목표'
+ * 최소 마진을 정한 분류:
+ * - 마진이 최소 마진보다 적으면 → 'over' ⚠ (원가율이 낮아도)
+ * - 마진이 충분하고 원가율도 목표 이하 → 'rate'
+ * - 마진은 충분한데 원가율이 목표를 넘음 → 'margin' (마진 기준 합격). 일부 재료가 빠졌으면 실제 마진이 더 작을 수 있어 이 판정은 하지 않음(⚠)
+ * 최소 마진을 안 정한 분류: 원가율이 목표 이하면 'rate', 아니면 'over'
  * - 'unknown' 원가율을 계산할 수 없음
  */
 export function judgeMenu(c, price, target, minMargin) {
   const margin = (Number(price) || 0) - c.cost;
   if (c.rate == null) return { status: 'unknown', margin, minMargin };
+  if (minMargin != null && margin < minMargin) return { status: 'over', margin, minMargin };
   if (c.rate <= target) return { status: 'rate', margin, minMargin };
-  if (minMargin != null && !c.missing && margin >= minMargin) return { status: 'margin', margin, minMargin };
+  if (minMargin != null && !c.missing) return { status: 'margin', margin, minMargin };
   return { status: 'over', margin, minMargin };
 }
 
@@ -172,17 +175,17 @@ export function summarizeMenus(menus, index, target, margins = {}) {
 export const up1000 = (v) => Math.ceil(v / 1000) * 1000;
 
 /**
- * 잔 가격 정하기: 원가 탭 판정과 같은 규칙
- * - min (최소 가격): 이 값 이상이면 ✓ — 목표 원가율 가격과 최소 마진 가격 중 낮은 값 (둘 중 하나만 채워도 합격)
- * - goal (목표 가격): 목표 원가율을 지키는 가격
- * 일부 재료 원가가 빠졌으면(missing) 마진 기준은 쓰지 않음 (판정과 같음). 1,000원 단위 올림
+ * 잔 가격 정하기: 원가 탭 판정과 같은 규칙 (1,000원 단위 올림)
+ * - min (최소 가격): 이 값 이상이면 ✓ — 최소 마진을 정했으면 '원가 + 최소 마진'(바닥선), 안 정했으면 목표 원가율 가격
+ * - goal (목표 가격): 목표 원가율을 지키는 가격 (최소 가격보다 낮으면 최소 가격과 같음)
+ * 일부 재료 원가가 빠졌으면(missing) 마진만으로는 합격시키지 않으므로 최소 가격 = 두 기준 중 높은 값
  */
 export function glassPriceGuide(cost, target, minMargin, missing = 0) {
   if (!(cost > 0) || !(target > 0)) return null;
-  const goal = up1000(cost / (target / 100));
-  const byMargin = minMargin && !missing ? up1000(cost + minMargin) : null;
-  const min = byMargin != null ? Math.min(goal, byMargin) : goal;
-  return { min, goal, minBy: byMargin != null && byMargin < goal ? 'margin' : 'rate' };
+  const byRate = up1000(cost / (target / 100));
+  const byMargin = minMargin ? up1000(cost + minMargin) : null;
+  const min = byMargin == null ? byRate : missing ? Math.max(byRate, byMargin) : byMargin;
+  return { min, goal: Math.max(byRate, min), minBy: byMargin != null && min === byMargin ? 'margin' : 'rate' };
 }
 
 /**

@@ -10,12 +10,23 @@ describe('잔 가격 정하기', () => {
     expect(judgeMenu({ cost: 9546, rate: (9546 / 26000) * 100, missing: 0 }, 26000, 25, 16000).status).toBe('margin');
     expect(judgeMenu({ cost: 9546, rate: (9546 / 25000) * 100, missing: 0 }, 25000, 25, 16000).status).toBe('over');
   });
-  it('싼 메뉴: 원가율 가격이 더 낮으면 최소 = 목표', () => {
-    expect(glassPriceGuide(3000, 25, 16000)).toEqual({ min: 12000, goal: 12000, minBy: 'rate' });
+  it('싼 메뉴: 원가율로는 12,000원이어도 최소 마진 16,000원이 바닥 → 최소 = 목표 = 19,000원', () => {
+    expect(glassPriceGuide(3000, 25, 16000)).toEqual({ min: 19000, goal: 19000, minBy: 'margin' });
+    // 벤로막(원가 3,668): 15,000원은 원가율 24.5%여도 마진 11,332원이라 ⚠, 20,000원부터 ✓
+    expect(glassPriceGuide(3668, 25, 16000)).toEqual({ min: 20000, goal: 20000, minBy: 'margin' });
+    expect(judgeMenu({ cost: 3668, rate: (3668 / 15000) * 100, missing: 0 }, 15000, 25, 16000).status).toBe('over');
+    expect(judgeMenu({ cost: 3668, rate: (3668 / 20000) * 100, missing: 0 }, 20000, 25, 16000).status).toBe('rate');
+  });
+  it('최소 마진을 올리면 추천도 바로 올라가고, 없애면 원가율만', () => {
+    expect(glassPriceGuide(9546, 25, 16000).min).toBe(26000);
+    expect(glassPriceGuide(9546, 25, 20000).min).toBe(30000);
+    expect(glassPriceGuide(9546, 25, 30000)).toEqual({ min: 40000, goal: 40000, minBy: 'margin' }); // 마진 기준이 목표보다 높으면 목표도 같이
+    expect(glassPriceGuide(3668, 25, null)).toEqual({ min: 15000, goal: 15000, minBy: 'rate' });
+    expect(judgeMenu({ cost: 3668, rate: (3668 / 15000) * 100, missing: 0 }, 15000, 25, null).status).toBe('rate');
   });
   it('최소 마진이 없거나 일부 재료가 빠졌으면 원가율 기준만', () => {
     expect(glassPriceGuide(9546, 25, null)).toEqual({ min: 39000, goal: 39000, minBy: 'rate' });
-    expect(glassPriceGuide(9546, 25, 16000, 1)).toEqual({ min: 39000, goal: 39000, minBy: 'rate' });
+    expect(glassPriceGuide(9546, 25, 16000, 1)).toEqual({ min: 39000, goal: 39000, minBy: 'rate' }); // 재료가 빠지면 두 기준 중 높은 값
     expect(glassPriceGuide(0, 25, 16000)).toBeNull();
   });
   it('가게 기준: 같은 분류 메뉴들이 최소~목표 사이 어디쯤 파는지(중간값)로 새 메뉴 가격', () => {

@@ -822,3 +822,14 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .ob-steps li.now .ob-n { background: var(--accent); color: #fff; }
 .ob-steps li.done .ob-n { background: var(--ok, #1f9d55); color: #fff; }
 .ob-steps .btn { flex: none; white-space: nowrap; }
+
+/* 잔 가격 정하기 */
+.price-guide { background: var(--surface); border-radius: 12px; padding: 12px; margin: 6px 0 2px; border: 1px solid var(--line); }
+.price-guide h4 { margin: 0 0 8px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.price-guide h4 small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.pg-opts { display: grid; gap: 6px; }
+.pg-opt { text-align: left; }
+.pg-opt small { font-size: 10.5px; opacity: 0.8; white-space: normal; line-height: 1.25; }
+.pg-now { margin: 8px 0 4px; font-size: 13px; font-weight: 600; }
+.pg-now.ok { color: var(--ok); }
+.price-guide p.muted { margin: 4px 0 0; line-height: 1.5; }

@@ -167,3 +167,42 @@ export function summarizeMenus(menus, index, target, margins = {}) {
     avg: complete.length ? complete.reduce((s, r) => s + r.c.rate, 0) / complete.length : null,
   };
 }
+
+/** 1,000원 단위 올림 (잔 가격 추천) */
+export const up1000 = (v) => Math.ceil(v / 1000) * 1000;
+
+/**
+ * 잔 가격 정하기: 원가 탭 판정과 같은 규칙
+ * - min (최소 가격): 이 값 이상이면 ✓ — 목표 원가율 가격과 최소 마진 가격 중 낮은 값 (둘 중 하나만 채워도 합격)
+ * - goal (목표 가격): 목표 원가율을 지키는 가격
+ * 일부 재료 원가가 빠졌으면(missing) 마진 기준은 쓰지 않음 (판정과 같음). 1,000원 단위 올림
+ */
+export function glassPriceGuide(cost, target, minMargin, missing = 0) {
+  if (!(cost > 0) || !(target > 0)) return null;
+  const goal = up1000(cost / (target / 100));
+  const byMargin = minMargin && !missing ? up1000(cost + minMargin) : null;
+  const min = byMargin != null ? Math.min(goal, byMargin) : goal;
+  return { min, goal, minBy: byMargin != null && byMargin < goal ? 'margin' : 'rate' };
+}
+
+/**
+ * 같은 분류 다른 메뉴들이 최소~목표 가격 사이 어디쯤 팔리는지 (0 = 최소, 1 = 목표, 중간값)
+ * 가게의 가격 기준을 그대로 새 메뉴에 이어 쓰려고. 비교할 메뉴가 2개 미만이면 null
+ * @param {Array<{price:number, cost:number, missing:number, minMargin:number|null}>} others
+ */
+export function housePosition(others, target) {
+  const pos = [];
+  for (const o of others) {
+    if (!(o.price > 0) || o.missing) continue;
+    const g = glassPriceGuide(o.cost, target, o.minMargin);
+    if (!g || g.goal <= g.min) continue;
+    pos.push(Math.max(0, Math.min(1.5, (o.price - g.min) / (g.goal - g.min))));
+  }
+  if (pos.length < 2) return null;
+  pos.sort((a, b) => a - b);
+  const mid = pos.length % 2 ? pos[(pos.length - 1) / 2] : (pos[pos.length / 2 - 1] + pos[pos.length / 2]) / 2;
+  return { position: mid, count: pos.length };
+}
+
+/** 가게 기준 가격: 최소 + (목표 - 최소) × 가게 위치, 1,000원 올림 (최소 아래로는 안 내려감) */
+export const housePrice = (guide, position) => Math.max(guide.min, up1000(guide.min + (guide.goal - guide.min) * position));

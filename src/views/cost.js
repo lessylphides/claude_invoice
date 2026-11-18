@@ -4,7 +4,7 @@
 import { noticeDot } from './notices.js';
 import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
-import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus } from '../lib/cost.js';
+import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus, glassPriceGuide, housePosition, housePrice } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
 import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -412,6 +412,7 @@ function openMenuEditor(menu) {
             <button type="button" class="btn ghost" data-add="manual">+ 직접 입력 재료</button>
           </div>
           <div class="total-bar"><span>잔 원가 · 원가율</span><strong class="sum"></strong></div>
+          <section class="price-guide" hidden aria-live="polite"></section>
           <div class="total-bar bottle-bar" hidden><span>보틀 원가 · 원가율</span><strong class="bsum"></strong></div>
           <p class="muted small bottle-info" hidden></p>
           <div class="actions">
@@ -444,6 +445,7 @@ function openMenuEditor(menu) {
         sumEl.innerHTML = `${won(c.cost)} · <span class="${j.status === 'over' ? 'warn' : j.status === 'margin' ? 'ok' : ''}">${pct(c.rate)}</span>${
           price ? `<small class="sum-margin">마진 ${won(j.margin)}${j.status === 'margin' ? ' ✔' : ''}</small>` : ''
         }`;
+        drawPriceGuide(c, price, cat, t);
         // 보틀: 첫 번째 매입 품목 한 병 기준. 보틀 칸이 열려 있으면 판매가를 안 적었어도 참고 가격은 보여 줌
         const open = drawBottleToggle();
         const bottlePrice = Number(form.elements.bottlePrice.value) || 0;
@@ -484,6 +486,48 @@ function openMenuEditor(menu) {
                   : '';
         });
       };
+
+      // 잔 가격 정하기: 최소 가격(이 아래면 ⚠) · 가게 기준(같은 분류 메뉴들과 같은 위치) · 목표 가격(원가율 목표)
+      const guideEl = body.querySelector('.price-guide');
+      const drawPriceGuide = (c, price, cat, t) => {
+        const minMargin = store.minMarginOf(cat);
+        const g = c.cost > 0 && c.missing < c.parts.length ? glassPriceGuide(c.cost, t, minMargin, c.missing) : null;
+        guideEl.hidden = !g;
+        if (!g) return;
+        const others = store.menus
+          .filter((x) => x.id !== m.id && (x.category || '') === (cat || ''))
+          .map((x) => {
+            const xc = costOf(x);
+            return { price: Number(x.price) || 0, cost: xc.cost, missing: xc.missing, minMargin };
+          });
+        const house = g.goal > g.min ? housePosition(others, t) : null;
+        const hp = house ? housePrice(g, house.position) : null;
+        const opts = [
+          ['최소 가격', g.min, g.minBy === 'margin' ? `마진 ${num(minMargin)}원` : `원가율 ${t}%`],
+          ...(hp != null && hp !== g.min && hp !== g.goal ? [['가게 기준', hp, `${cat || UNCATEGORIZED} 메뉴들과 같게`]] : []),
+          ...(g.goal !== g.min ? [['목표 가격', g.goal, `원가율 ${t}%`]] : []),
+        ];
+        const status = !price ? '' : price < g.min ? `<p class="pg-now warn">지금 ${won(price)} · 최소 가격보다 ${won(g.min - price)} 낮아요 (⚠)</p>` : `<p class="pg-now ok">지금 ${won(price)} · ✓ 최소 가격 이상${price >= g.goal ? ' · 목표 가격 이상' : ''}</p>`;
+        guideEl.innerHTML = `<h4>잔 가격 정하기 <small>잔 원가 ${won(c.cost)}${c.missing ? ' · 일부 재료 빠짐' : ''}</small></h4>
+          <div class="pg-opts" style="grid-template-columns:repeat(${opts.length},minmax(0,1fr))">${opts
+            .map(([label, v, why]) => `<button type="button" class="chip fill-chip pg-opt" data-fill-glass="${v}" aria-pressed="${price === v}" aria-label="잔 판매가를 ${label} ${num(v)}원으로">${label}<b>${num(v)}</b><small>${esc(why)}</small></button>`)
+            .join('')}</div>
+          ${status}
+          ${
+            house
+              ? `<p class="muted small">같은 분류 메뉴 ${house.count}개는 최소~목표 가격 사이 <b>${Math.round(house.position * 100)}%</b> 지점(중간값)에 팔고 있어요.${hp != null ? ' 가게 기준은 그 지점의 가격이에요.' : ''}</p>`
+              : g.goal > g.min
+                ? '<p class="muted small">같은 분류에 판매가를 넣은 메뉴가 2개 이상이면, 그 메뉴들과 같은 기준의 가격(가게 기준)도 알려 드려요.</p>'
+                : ''
+          }`;
+      };
+      guideEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-fill-glass]');
+        if (!btn) return;
+        form.elements.price.value = btn.dataset.fillGlass;
+        updateSum();
+        guideEl.querySelector(`[data-fill-glass="${btn.dataset.fillGlass}"]`)?.focus();
+      });
 
       const draw = () => {
         ingsEl.innerHTML = m.ingredients.length ? '' : '<p class="muted small ings-empty">아래 버튼으로 재료를 추가하세요. 매입 품목은 목록에서 고르면 됩니다.</p>';

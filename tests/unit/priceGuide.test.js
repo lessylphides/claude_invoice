@@ -33,3 +33,20 @@ describe('잔 가격 정하기', () => {
     expect(housePosition(others.slice(0, 1), 25)).toBeNull();
   });
 });
+
+import { commonPour } from '../../src/lib/cost.js';
+describe('한 잔 양 미리 채우기', () => {
+  const ing = (use, unit = '') => ({ type: 'item', itemName: 'x', use, unit });
+  it('같은 분류에서 가장 많이 쓰는 양 (2개 이상일 때만, 단위는 매입 기록에서)', () => {
+    const menus = [
+      { category: '위스키', ingredients: [ing(30)] },
+      { category: '위스키', ingredients: [ing(30)] },
+      { category: '위스키', ingredients: [ing(45)] },
+      { category: '칵테일', ingredients: [ing(45, 'ml'), ing(45, 'ml')] },
+    ];
+    expect(commonPour(menus, '위스키', () => ({ packUnit: 'ml' }))).toEqual({ use: 30, unit: 'ml', count: 2 });
+    expect(commonPour(menus, '칵테일')).toEqual({ use: 45, unit: 'ml', count: 2 });
+    expect(commonPour(menus.slice(2, 3), '위스키')).toBeNull();
+    expect(commonPour(menus, '')).toBeNull();
+  });
+});

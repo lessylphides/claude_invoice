@@ -833,3 +833,7 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .pg-now { margin: 8px 0 4px; font-size: 13px; font-weight: 600; }
 .pg-now.ok { color: var(--ok); }
 .price-guide p.muted { margin: 4px 0 0; line-height: 1.5; }
+.menu-editor .price-field { margin-top: 4px; }
+.menu-editor .price-field input { font-size: 18px; font-weight: 700; }
+.pour-note { margin: 2px 2px 0; }
+.menu-editor .price-field input::placeholder { font-weight: 400; font-size: 15px; }

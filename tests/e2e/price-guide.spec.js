@@ -53,3 +53,30 @@ test('새 메뉴: 한 잔 양을 넣기 전에는 안내, 넣으면 추천 가�
   await s.locator('input[data-f=use]').fill('30');
   await expect(s.locator('.price-guide [data-fill-glass]').first()).toContainText('최소 가격');
 });
+
+test('새 메뉴: 이름 → 분류 → 재료 순서, 위스키를 고르면 한 잔 양(30ml)이 미리 채워지고 추천 가격이 바로 나옴', async ({ page }) => {
+  await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await openApp(page, { data: data(), tab: 'cost' });
+  await page.locator('[data-cost=add]').click();
+  const s = page.locator('.sheet[aria-label="메뉴 추가"]');
+  // 화면 순서: 이름 → 분류 → 재료 → 잔 원가 → 잔 판매가 → 보틀
+  const order = await s.evaluate((el) => ['input[name=name]', '.cat-pick', '.ings', '.total-bar', 'input[name=price]', '.bottle-open'].map((q) => el.querySelector(q).getBoundingClientRect().top));
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
+  await expect(s.locator('input[name=price]')).toHaveAttribute('placeholder', /예:/);
+  await s.locator('.cat-pick label', { hasText: '위스키' }).click();
+  await s.locator('[data-add=item]').click();
+  await page.locator('.sheet[aria-label="매입 품목 선택"]').getByText('발베니700ML').click();
+  await expect(s.locator('input[data-f=use]')).toHaveValue('30');
+  await expect(s.locator('.pour-note')).toContainText('30ml');
+  await expect(s.locator('.price-guide [data-fill-glass]').first()).toContainText('최소 가격');
+});
+
+test('메뉴 수정: 열면 잔 원가·판매가가 바로 보이게 내려가 있음', async ({ page }) => {
+  await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await page.setViewportSize({ width: 390, height: 640 });
+  await openApp(page, { data: data(), tab: 'cost' });
+  await page.locator('[data-cost-open="a"]').click();
+  await sheet(page).getByRole('button', { name: /수정/ }).first().click();
+  const s = page.locator('.sheet[aria-label="메뉴 수정"]');
+  await expect(s.locator('input[name=price]')).toBeInViewport();
+});

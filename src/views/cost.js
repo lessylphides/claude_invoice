@@ -4,7 +4,7 @@
 import { noticeDot } from './notices.js';
 import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
-import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus, glassPriceGuide, housePosition, housePrice } from '../lib/cost.js';
+import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus, glassPriceGuide, housePosition, housePrice, commonPour } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
 import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -389,14 +389,7 @@ function openMenuEditor(menu) {
     render(body, close) {
       body.innerHTML = `
         <form class="editor menu-editor" novalidate>
-          <div class="row2">
-            <label>메뉴 이름<input name="name" required placeholder="예: 몽키숄더 한 잔" value="${esc(m.name)}"></label>
-            <label>판매가 (잔, 원)<input name="price" type="number" inputmode="numeric" required placeholder="12000" value="${m.price || ''}"></label>
-          </div>
-          <button type="button" class="link bottle-open">+ 보틀로도 판매</button>
-          <label class="bottle-price" hidden>보틀 판매가 (원, 선택)
-            <input name="bottlePrice" type="number" inputmode="numeric" placeholder="보틀로 안 팔면 비워 두세요" value="${m.bottlePrice || ''}">
-          </label>
+          <label>메뉴 이름<input name="name" required placeholder="예: 몽키숄더 한 잔" value="${esc(m.name)}"></label>
           <fieldset class="cat-pick">
             <legend>분류</legend>
             <div class="chips">${catOptions
@@ -411,8 +404,14 @@ function openMenuEditor(menu) {
             <button type="button" class="btn ghost" data-add="item">+ 매입 품목 재료</button>
             <button type="button" class="btn ghost" data-add="manual">+ 직접 입력 재료</button>
           </div>
+          <p class="muted small pour-note" hidden></p>
           <div class="total-bar"><span>잔 원가 · 원가율</span><strong class="sum"></strong></div>
+          <label class="price-field">잔 판매가 (원)<input name="price" type="number" inputmode="numeric" required placeholder="예: 12,000원 (아래 추천을 눌러도 돼요)" value="${m.price || ''}"></label>
           <section class="price-guide" hidden aria-live="polite"></section>
+          <button type="button" class="link bottle-open">+ 보틀로도 판매</button>
+          <label class="bottle-price" hidden>보틀 판매가 (원, 선택)
+            <input name="bottlePrice" type="number" inputmode="numeric" placeholder="보틀로 안 팔면 비워 두세요" value="${m.bottlePrice || ''}">
+          </label>
           <div class="total-bar bottle-bar" hidden><span>보틀 원가 · 원가율</span><strong class="bsum"></strong></div>
           <p class="muted small bottle-info" hidden></p>
           <div class="actions">
@@ -565,6 +564,8 @@ function openMenuEditor(menu) {
         updateSum();
       };
       draw();
+      // 수정할 때는 가장 자주 하는 '판매가 고치기'가 바로 보이게 (키보드는 안 띄움)
+      if (isEdit) requestAnimationFrame(() => body.querySelector('.total-bar')?.scrollIntoView({ block: 'start' }));
 
       ingsEl.addEventListener('input', (e) => {
         const f = e.target.dataset.f;
@@ -623,9 +624,20 @@ function openMenuEditor(menu) {
           if (!name) return;
           const g = blankItemIng();
           applyItem(g, name);
+          // 한 잔 양: 같은 분류 메뉴들이 가장 많이 쓰는 양으로 미리 채움 (단위가 맞을 때만)
+          const cat = form.elements.category?.value ?? m.category;
+          const pour = commonPour(store.menus, cat, specOf);
+          const unit = g.unit || specOf(name)?.packUnit || '';
+          const note = body.querySelector('.pour-note');
+          if (pour && (!unit || unit === pour.unit)) {
+            g.use = pour.use;
+            if (!unit) g.unit = pour.unit;
+            note.textContent = `한 잔 양은 ${cat} 메뉴에서 가장 많이 쓰는 ${num(pour.use)}${pour.unit}로 채웠어요. 다르면 고쳐 주세요.`;
+            note.hidden = false;
+          }
           m.ingredients.push(g);
           draw();
-          ingsEl.lastElementChild.querySelector('[data-f=use]')?.focus();
+          if (!g.use) ingsEl.lastElementChild.querySelector('[data-f=use]')?.focus();
         }),
       );
       form.elements.price.addEventListener('input', updateSum);

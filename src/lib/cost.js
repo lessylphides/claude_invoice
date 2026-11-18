@@ -206,3 +206,24 @@ export function housePosition(others, target) {
 
 /** 가게 기준 가격: 최소 + (목표 - 최소) × 가게 위치, 1,000원 올림 (최소 아래로는 안 내려감) */
 export const housePrice = (guide, position) => Math.max(guide.min, up1000(guide.min + (guide.goal - guide.min) * position));
+
+/**
+ * 같은 분류 메뉴들이 가장 많이 쓰는 한 잔 양 {use, unit, count} (2개 이상 메뉴가 같은 양일 때만, 없으면 null)
+ * @param {(name:string)=>{packUnit:string}|null} specOf 매입 기록의 용량 단위
+ */
+export function commonPour(menus, category, specOf = () => null) {
+  if (!category) return null;
+  const count = new Map();
+  for (const m of menus) {
+    if ((m.category || '') !== category) continue;
+    for (const g of m.ingredients || []) {
+      if (g.type !== 'item' || !(Number(g.use) > 0)) continue;
+      const unit = g.unit || specOf(g.itemName)?.packUnit || '';
+      const k = `${Number(g.use)}|${unit}`;
+      count.set(k, (count.get(k) || 0) + 1);
+    }
+  }
+  let best = null;
+  for (const [k, n] of count) if (!best || n > best.count) best = { use: Number(k.split('|')[0]), unit: k.split('|')[1], count: n };
+  return best && best.count >= 2 ? best : null;
+}

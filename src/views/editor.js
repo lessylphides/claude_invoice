@@ -1,6 +1,6 @@
 // 매입 내역 입력/수정 폼 (촬영 인식 결과 검토 포함)
 
-import { esc, num, shortDate, won, todayStr, uid } from '../lib/format.js';
+import { esc, num, shortDate, won, todayStr, uid, normKey } from '../lib/format.js';
 import { purchaseTotal, itemAmount } from '../lib/model.js';
 import { fillSpec } from '../lib/draft.js';
 import { findSimilar, isSureSame } from '../lib/itemLinks.js';
@@ -29,10 +29,13 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
   const pdfUrls = pdfFiles.map((f) => URL.createObjectURL(f));
   const imgUrls = imageFiles.filter((f) => !pdfFiles.includes(f)).map((f) => URL.createObjectURL(f));
   const beforeIndex = store.index; // 저장 뒤 원가가 바뀐 메뉴를 찾으려고 지금 상태를 기억
+  // 수정할 때: 원래 품목 이름 (이름을 고쳤으면 다른 기록·메뉴의 같은 이름도 고칠지 물어봄)
+  const origNames = new Map(isEdit ? store.get(draft.id).items.map((i) => [i.id, i.name]) : []);
 
   return new Promise((resolve) => {
     let saved = null;
     let suggestions = [];
+    let renames = []; // [{from, to}]
     openSheet({
       title: isEdit ? '매입 내역 수정' : '매입 내역 확인',
       onClose: async () => {
@@ -40,6 +43,7 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
         pdfUrls.forEach((u) => URL.revokeObjectURL(u));
         // 저장한 새 품목 이름이 기존 품목과 비슷하면 같은 물건인지 물어봄 (다음 영수증 확인 전에)
         // 이름·용량이 확실히 같으면(서울우유 1L ↔ 1000ml) 묻지 않고 바로 묶음
+        if (saved && renames.length) await applyRenames(renames, saved.id);
         const sure = suggestions.filter((x) => x.sure);
         if (saved && sure.length) {
           sure.forEach(({ name, match }) => store.linkItems(name, match));
@@ -229,9 +233,56 @@ export function openEditor(draft, { imageFiles = [], note } = {}) {
           // 저장 직전에도 한 번 더 (날짜·거래처·금액을 고쳤을 수 있음)
           const twin = findDuplicate(store.purchases, p);
           if (twin && !confirm(`이미 등록된 영수증 같아요.\n${shortDate(twin.date)} ${twin.vendor} ${num(purchaseTotal(twin))}원\n\n같은 날 실제로 한 번 더 산 거라면 [확인]을 눌러 저장하세요.`)) return;
-          suggestions = similarSuggestions(p.items);
+          renames = [];
+          for (const i of p.items) {
+            const from = origNames.get(i.id);
+            const to = String(i.name || '').trim();
+            if (from && to && normKey(from) !== normKey(to) && !renames.some((r) => normKey(r.from) === normKey(from))) renames.push({ from, to });
+          }
+          // 이름을 고친 품목은 '옛 이름과 같은 품목인가요?'로 묻지 않음 (고친 이름을 옛 이름 아래로 묶지 않게)
+          suggestions = similarSuggestions(p.items).filter((s) => !renames.some((r) => normKey(r.to) === normKey(s.name)));
           saved = store.upsert(p);
           toast('저장했습니다.');
+          close();
+        });
+      },
+    });
+  });
+}
+
+/** 영수증에서 품목 이름을 고쳤을 때: 다른 매입 기록·메뉴 재료의 같은 이름도 고칠지 */
+async function applyRenames(renames, purchaseId) {
+  for (const { from, to } of renames) {
+    const c = store.renameCounts(from, { exceptPurchaseId: purchaseId });
+    if (!c.purchases && !c.menus) continue;
+    // 다른 매입 기록에는 없고 메뉴 재료에만 남아 있으면 묻지 않고 메뉴도 고침 (옛 이름은 이제 어디에도 없음)
+    const all = !c.purchases || (await chooseRename(from, to, c));
+    if (all) {
+      const r = store.renameItem(from, to);
+      toast(`'${to}'(으)로 고쳤어요${r.purchases > 1 ? ` · 매입 기록 ${r.purchases}건` : ''}${r.menus ? ` · 메뉴 ${r.menus}개` : ''}`, 3500);
+    }
+  }
+}
+
+function chooseRename(from, to, c) {
+  return new Promise((resolve) => {
+    let pick = false;
+    openSheet({
+      title: '품목 이름을 고쳤어요',
+      onClose: () => resolve(pick),
+      render(body, close) {
+        const where = [c.purchases ? `다른 매입 기록 <b>${num(c.purchases)}건</b>` : '', c.menus ? `메뉴 재료 <b>${num(c.menus)}개</b>` : ''].filter(Boolean).join('과 ');
+        body.innerHTML = `<div class="sync-choice">
+          <p class="auth-text"><b>${esc(from)}</b> → <b>${esc(to)}</b><br>${where}에도 '${esc(from)}'이(가) 있어요. 같이 고칠까요?</p>
+          <p class="muted small">오타를 고친 거라면 모두 고치세요. 원가 탭 재료 이름과 가격 추이도 같이 바뀌어요.</p>
+          <div class="btn-col">
+            <button type="button" class="btn primary" data-r="all">모두 '${esc(to)}'(으)로 고치기</button>
+            <button type="button" class="btn ghost" data-r="one">이 영수증만 (다른 품목이에요)</button>
+          </div></div>`;
+        body.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-r]');
+          if (!b) return;
+          pick = b.dataset.r === 'all';
           close();
         });
       },

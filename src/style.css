@@ -822,3 +822,4 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .ob-steps li.now .ob-n { background: var(--accent); color: #fff; }
 .ob-steps li.done .ob-n { background: var(--ok, #1f9d55); color: #fff; }
 .ob-steps .btn { flex: none; white-space: nowrap; }
+.same-actions { display: flex; flex-wrap: wrap; gap: 8px; }

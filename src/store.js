@@ -7,6 +7,7 @@ import { currentMinMargin } from './lib/cost.js';
 import { buildItemIndex } from './lib/itemIndex.js';
 import { applyCategoryEdit } from './lib/menuCategories.js';
 import { linkInto, unlink, pairKey, groupKey } from './lib/itemLinks.js';
+import { renameItemInData, renameCounts } from './lib/itemRename.js';
 import * as persist from './persist.js';
 
 const SETTINGS_KEY = 'maeip.settings.v1';
@@ -194,6 +195,16 @@ export const store = {
     data.itemLinks = next;
     commit();
     return true;
+  },
+  /** 품목 이름 고치기 (오타 수정): 매입 기록·메뉴 재료·묶음의 같은 이름을 모두 바꿈 */
+  renameItem(oldName, newName) {
+    const r = renameItemInData(data, oldName, newName);
+    commit(); // 묶음만 바뀐 경우도 저장
+    return r;
+  },
+  /** 이름을 바꾸면 영향받는 곳 개수 */
+  renameCounts(oldName, opts) {
+    return renameCounts(data, oldName, opts);
   },
   /** 묶음에서 빼기 (대표 이름이 아닌 이름만) */
   unlinkItem(name) {

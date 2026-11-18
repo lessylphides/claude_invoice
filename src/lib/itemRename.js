@@ -47,3 +47,32 @@ export function renameItemInData(data, oldName, newName) {
   data.itemNotSame = [...new Set((data.itemNotSame || []).map((pk) => { const [a, b] = pk.split('|'); return pairKey(a === k ? nk : a, b === k ? nk : b); }).filter((pk) => { const [a, b] = pk.split('|'); return a !== b; }))];
   return out;
 }
+
+/**
+ * 대표 이름이 어느 매입 기록에도 없는 묶음 정리 (오타 이름을 고친 뒤 대표로 남은 경우, 대표 이름의 영수증을 지운 경우).
+ * 그 묶음에서 실제로 있는 가장 최근 이름을 대표로 삼고, 메뉴 재료의 옛 대표 이름도 그 이름으로 바꿈.
+ * @returns {boolean} 고친 게 있으면 true
+ */
+export function repairOrphanLinks(data) {
+  const links = data.itemLinks || {};
+  const canon = [...new Set(Object.values(links))];
+  if (!canon.length) return false;
+  const latest = new Map(); // 실제 이름 키 → {name, date}
+  for (const p of data.purchases)
+    for (const i of p.items) {
+      const k = normKey(i.name);
+      const cur = latest.get(k);
+      if (!cur || p.date > cur.date) latest.set(k, { name: i.name, date: p.date });
+    }
+  let changed = false;
+  for (const c of canon) {
+    const ck = normKey(c);
+    if (latest.has(ck)) continue;
+    let best = null;
+    for (const [k, v] of Object.entries(data.itemLinks)) if (normKey(v) === ck && latest.has(k) && (!best || latest.get(k).date > best.date)) best = latest.get(k);
+    if (!best) continue;
+    renameItemInData(data, c, best.name);
+    changed = true;
+  }
+  return changed;
+}

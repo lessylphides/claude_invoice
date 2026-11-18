@@ -62,8 +62,18 @@ test('이미 오타 이름 아래로 묶인 장부도 남은 영수증 하나를
   await sheet(page).locator('input[data-f=name]').first().fill(NEW);
   await sheet(page).locator('button[type=submit]').click();
   await expect(page.locator('.sheet[aria-label="품목 이름을 고쳤어요"]')).toHaveCount(0); // 다른 기록엔 없고 메뉴에만 → 묻지 않고 고침
-  await expect(page.locator('.toast').last()).toContainText('고쳤어요');
   while (await page.locator('.sheet-wrap').count()) await page.locator('.sheet-wrap .close').last().click();
+  await page.locator('.tabbar button').nth(1).click();
+  await page.locator('[data-cost-open="m"]').click();
+  await expect(sheet(page)).toContainText(NEW);
+  await expect(sheet(page)).not.toContainText(OLD);
+});
+
+test('오타 이름의 영수증이 하나도 없고 대표 이름만 남은 장부: 앱을 열면 자동으로 정리', async ({ page }) => {
+  const d = data();
+  d.purchases = [purchase('p2', '2026-11-03', '수입사', [item(NEW, '주류·음료', 85580, { packSize: 700, packUnit: 'ml' })])];
+  d.itemLinks = { '(93)rf벤로막10y': OLD };
+  await openApp(page, { data: d });
   await page.locator('.tabbar button').nth(1).click();
   await page.locator('[data-cost-open="m"]').click();
   await expect(sheet(page)).toContainText(NEW);

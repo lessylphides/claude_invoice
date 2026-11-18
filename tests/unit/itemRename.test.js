@@ -1,7 +1,9 @@
 // 품목 이름 고치기: 매입 기록·메뉴 재료·묶음의 같은 이름을 한 번에
 import { describe, it, expect } from 'vitest';
-import { renameItemInData, renameCounts } from '../../src/lib/itemRename.js';
+import { renameItemInData, renameCounts, repairOrphanLinks } from '../../src/lib/itemRename.js';
+import { migrate } from '../../src/lib/model.js';
 import { buildItemIndex } from '../../src/lib/itemIndex.js';
+import { normKey } from '../../src/lib/format.js';
 
 const item = (name, unitPrice = 85580) => ({ id: name + unitPrice, name, category: '주류·음료', qty: 1, unit: '', unitPrice, discount: 0, amount: unitPrice, packSize: 700, packUnit: 'ml' });
 const data = () => ({
@@ -11,7 +13,7 @@ const data = () => ({
   ],
   menus: [{ id: 'm', name: '벤로막 10', price: 18000, ingredients: [{ id: 'g', type: 'item', itemName: '(93)RF벨로막10Y', use: 30 }] }],
   // 저장할 때 '같은 품목'이라고 답해서 고친 이름이 오타 이름 아래로 묶인 상태
-  itemLinks: { [`(93)rf벤로막10y`]: '(93)RF벨로막10Y' },
+  itemLinks: { [normKey('(93)RF벤로막10Y')]: '(93)RF벨로막10Y' },
   itemNotSame: [],
 });
 
@@ -34,5 +36,27 @@ describe('품목 이름 고치기', () => {
     const d = data();
     expect(renameItemInData(d, '레몬', ' 레몬 ')).toEqual({ purchases: 0, items: 0, menus: 0 });
     expect(renameItemInData(d, '레몬', '')).toEqual({ purchases: 0, items: 0, menus: 0 });
+  });
+});
+
+describe('대표 이름이 사라진 묶음 정리', () => {
+  it('오타 대표 이름이 어느 영수증에도 없으면 실제 이름을 대표로, 메뉴 재료도 바꿈 (사장님 장부와 같은 상태)', () => {
+    const d = data();
+    d.purchases = [d.purchases[1]]; // 벨로막 영수증은 없고 고친 벤로막만 남음
+    expect(repairOrphanLinks(d)).toBe(true);
+    expect(d.itemLinks).toEqual({});
+    expect(d.menus[0].ingredients[0].itemName).toBe('(93)RF벤로막10Y');
+    expect(buildItemIndex(d.purchases, d.itemLinks).pickList()[0].name).toBe('(93)RF벤로막10Y');
+    expect(repairOrphanLinks(d)).toBe(false);
+  });
+  it('불러올 때(migrate) 자동으로 정리, 대표 이름이 있으면 그대로', () => {
+    const d = data();
+    d.purchases = [d.purchases[1]];
+    const m = migrate(JSON.parse(JSON.stringify(d)));
+    expect(m.menus[0].ingredients[0].itemName).toBe('(93)RF벤로막10Y');
+    const ok = data();
+    const before = JSON.stringify(ok.itemLinks);
+    repairOrphanLinks(ok);
+    expect(JSON.stringify(ok.itemLinks)).toBe(before);
   });
 });

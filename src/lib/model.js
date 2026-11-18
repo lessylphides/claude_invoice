@@ -21,6 +21,7 @@
 //              value: 잔 하나에 최소 남길 돈, bottle: 보틀 하나에 최소 남길 돈. 마지막 항목이 현재 값, 0 이면 설정 안 함
 // itemLinks = { 묶인이름키: '대표 이름' }, itemNotSame = ['키A|키B']  같은 품목 묶기 (lib/itemLinks.js)
 
+import { repairOrphanLinks } from './itemRename.js';
 import { isYmd, todayStr, uid } from './format.js';
 import { sanitizeLinks, sanitizeNotSame } from './itemLinks.js';
 
@@ -191,7 +192,14 @@ export function sanitizeCategories(list) {
  * 앞으로 형식이 바뀌면 여기에 단계별 변환을 추가합니다.
  * @param {{trusted?: boolean}} opts trusted=true: 이 앱이 저장한 데이터 (현재 형식이면 빠르게 통과)
  */
-export function migrate(raw, { trusted = false } = {}) {
+/** 저장된 데이터 정리 + 대표 이름이 사라진 품목 묶음 정리 */
+export function migrate(raw, opts) {
+  const d = migrateData(raw, opts);
+  repairOrphanLinks(d);
+  return d;
+}
+
+function migrateData(raw, { trusted = false } = {}) {
   const d = raw && typeof raw === 'object' ? raw : {};
   // 이 앱이 직접 저장한 현재 형식이면 품목 하나하나를 다시 정리하지 않음 (시작을 빠르게).
   // 백업 파일처럼 밖에서 들어온 데이터(trusted=false)는 항상 전부 검사.

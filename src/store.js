@@ -7,7 +7,7 @@ import { currentMinMargin } from './lib/cost.js';
 import { buildItemIndex } from './lib/itemIndex.js';
 import { applyCategoryEdit } from './lib/menuCategories.js';
 import { linkInto, unlink, pairKey, groupKey } from './lib/itemLinks.js';
-import { renameItemInData, renameCounts } from './lib/itemRename.js';
+import { renameItemInData, renameCounts, repairOrphanLinks } from './lib/itemRename.js';
 import * as persist from './persist.js';
 
 const SETTINGS_KEY = 'maeip.settings.v1';
@@ -102,6 +102,7 @@ function persistNow() {
 }
 
 function commit() {
+  repairOrphanLinks(data); // 영수증을 지우거나 고쳐서 묶음의 대표 이름이 사라졌으면 정리
   index = null;
   rev++;
   persistNow();

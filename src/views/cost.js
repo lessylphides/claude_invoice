@@ -4,7 +4,7 @@
 import { noticeDot } from './notices.js';
 import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
-import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus, glassPriceGuide, housePosition, housePrice, commonPour } from '../lib/cost.js';
+import { menuCost, priceForTarget, priceForMargin, judgeMenu, judgeBottle, bottleCost, bottleRefs, bottleRefList, summarizeMenus, glassPriceGuide, housePosition, housePrice, commonPour, commonPack } from '../lib/cost.js';
 import { filterMenus, groupRowsByCategory } from '../lib/menuCategories.js';
 import { view, setCostFilter } from '../state.js';
 import { unitSelectHTML } from '../ui/units.js';
@@ -550,11 +550,12 @@ function openMenuEditor(menu) {
                   return `<div class="ing-edit" data-idx="${idx}">
                    <div class="row-name"><button type="button" class="pick-btn ${g.itemName ? '' : 'empty'}" data-pick>${g.itemName ? esc(g.itemName) : '매입 품목 선택'}<span aria-hidden="true">▾</span></button><button type="button" class="icon-btn del" aria-label="재료 삭제">✕</button></div>
                    <div class="ing-row">
-                     <span>1개 용량</span><input data-f="packSize" type="number" inputmode="decimal" step="any" placeholder="${spec ? spec.packSize : '700'}" value="${g.packSize || ''}">
+                     <span>1개 용량</span><input data-f="packSize" type="number" inputmode="decimal" step="any" placeholder="${spec ? spec.packSize : '용량'}" value="${g.packSize || ''}">
                      ${unitSelectHTML('data-f="unit"', g.unit, spec?.packUnit ? `${spec.packUnit}` : '단위')}
                      <span>중</span><input data-f="use" type="number" inputmode="decimal" step="any" aria-label="한 잔에 쓰는 양" value="${g.use || ''}">
                      <span class="unit-echo">${esc(u)}</span>
                    </div>
+                   ${!spec && !g.packSize && g.itemName ? '<p class="small spec-note warn">이 품목은 매입 기록에 용량이 없어요. <b>1개 용량</b>(예: 700ml)을 넣어 주세요.</p>' : ''}
                    ${spec && !g.packSize ? `<p class="muted small spec-note">1개 용량은 매입 기록(${num(spec.packSize)}${esc(spec.packUnit)})을 사용합니다. 매입 기록에서 바꾸면 여기도 따라 바뀝니다.</p>` : ''}
                    <p class="ing-info muted small"></p>
                  </div>`;
@@ -624,17 +625,25 @@ function openMenuEditor(menu) {
           if (!name) return;
           const g = blankItemIng();
           applyItem(g, name);
-          // 한 잔 양: 같은 분류 메뉴들이 가장 많이 쓰는 양으로 미리 채움 (단위가 맞을 때만)
+          // 1개 용량(매입 기록에 없을 때)·한 잔 양: 같은 분류 메뉴들이 가장 많이 쓰는 값으로 미리 채움 (단위가 맞을 때만)
           const cat = form.elements.category?.value ?? m.category;
-          const pour = commonPour(store.menus, cat, specOf);
-          const unit = g.unit || specOf(name)?.packUnit || '';
-          const note = body.querySelector('.pour-note');
-          if (pour && (!unit || unit === pour.unit)) {
-            g.use = pour.use;
-            if (!unit) g.unit = pour.unit;
-            note.textContent = `한 잔 양은 ${cat} 메뉴에서 가장 많이 쓰는 ${num(pour.use)}${pour.unit}로 채웠어요. 다르면 고쳐 주세요.`;
-            note.hidden = false;
+          const filled = [];
+          const unitNow = () => g.unit || specOf(name)?.packUnit || '';
+          const pack = !specOf(name) && !g.packSize ? commonPack(store.menus, cat, specOf) : null;
+          if (pack && (!unitNow() || unitNow() === pack.unit)) {
+            g.packSize = pack.packSize;
+            if (!unitNow()) g.unit = pack.unit;
+            filled.push(`1개 용량 ${num(pack.packSize)}${pack.unit}`);
           }
+          const pour = commonPour(store.menus, cat, specOf);
+          if (pour && (!unitNow() || unitNow() === pour.unit)) {
+            g.use = pour.use;
+            if (!unitNow()) g.unit = pour.unit;
+            filled.push(`한 잔 ${num(pour.use)}${pour.unit}`);
+          }
+          const note = body.querySelector('.pour-note');
+          note.hidden = !filled.length;
+          if (filled.length) note.textContent = `${filled.join(' · ')}: ${cat} 메뉴에서 가장 많이 쓰는 값으로 채웠어요. 다르면 고쳐 주세요.`;
           m.ingredients.push(g);
           draw();
           if (!g.use) ingsEl.lastElementChild.querySelector('[data-f=use]')?.focus();

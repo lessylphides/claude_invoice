@@ -13,6 +13,7 @@ const data = () => ({
       item('아부나흐700ML', '주류·음료', 222740, { packSize: 700, packUnit: 'ml' }), // 30ml = 9,546원
       item('발베니700ML', '주류·음료', 161047, { packSize: 700, packUnit: 'ml' }), // 30ml = 6,902원
       item('부커스750ML', '주류·음료', 161700, { packSize: 750, packUnit: 'ml' }), // 30ml = 6,468원
+      item('(93)RF벤로막 10Y', '주류·음료', 85580), // 매입 기록에 용량 없음
     ]),
   ],
   menus: [
@@ -79,4 +80,22 @@ test('메뉴 수정: 열면 잔 원가·판매가가 바로 보이게 내려가 
   await sheet(page).getByRole('button', { name: /수정/ }).first().click();
   const s = page.locator('.sheet[aria-label="메뉴 수정"]');
   await expect(s.locator('input[name=price]')).toBeInViewport();
+});
+
+test('매입 기록에 용량이 없는 품목: 흐린 예시 숫자 대신 같은 분류에서 많이 쓰는 용량(700ml)을 실제로 채움', async ({ page }) => {
+  await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await openApp(page, { data: data(), tab: 'cost' });
+  await page.locator('[data-cost=add]').click();
+  const s = page.locator('.sheet[aria-label="메뉴 추가"]');
+  await s.locator('.cat-pick label', { hasText: '위스키' }).click();
+  await s.locator('[data-add=item]').click();
+  await page.locator('.sheet[aria-label="매입 품목 선택"]').getByText('(93)RF벤로막 10Y').click();
+  await expect(s.locator('input[data-f=packSize]')).toHaveValue('700');
+  await expect(s.locator('input[data-f=use]')).toHaveValue('30');
+  await expect(s.locator('.pour-note')).toContainText('1개 용량 700ml · 한 잔 30ml');
+  await expect(s.locator('.sum')).toContainText('3,668원'); // 85,580 × 30 ÷ 700
+  await expect(s.locator('.price-guide [data-fill-glass]').first()).toContainText('최소 가격');
+  // 지우면 숫자 예시가 아니라 '용량'으로 비어 보이고 안내가 나옴
+  await s.locator('input[data-f=packSize]').fill('');
+  await expect(s.locator('input[data-f=packSize]')).toHaveAttribute('placeholder', '용량');
 });

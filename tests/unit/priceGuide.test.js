@@ -50,3 +50,13 @@ describe('한 잔 양 미리 채우기', () => {
     expect(commonPour(menus, '')).toBeNull();
   });
 });
+
+import { commonPack } from '../../src/lib/cost.js';
+describe('1개 용량 미리 채우기', () => {
+  it('같은 분류에서 가장 많이 쓰는 용량 (메뉴에 적은 값, 없으면 매입 기록)', () => {
+    const specs = { a: { packSize: 700, packUnit: 'ml' }, b: { packSize: 700, packUnit: 'ml' }, c: { packSize: 750, packUnit: 'ml' } };
+    const menus = ['a', 'b', 'c'].map((n) => ({ category: '위스키', ingredients: [{ type: 'item', itemName: n, use: 30 }] }));
+    expect(commonPack(menus, '위스키', (n) => specs[n])).toEqual({ packSize: 700, unit: 'ml', count: 2 });
+    expect(commonPack(menus.slice(2), '위스키', (n) => specs[n])).toBeNull();
+  });
+});

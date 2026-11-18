@@ -227,3 +227,27 @@ export function commonPour(menus, category, specOf = () => null) {
   for (const [k, n] of count) if (!best || n > best.count) best = { use: Number(k.split('|')[0]), unit: k.split('|')[1], count: n };
   return best && best.count >= 2 ? best : null;
 }
+
+/**
+ * 같은 분류 메뉴들이 가장 많이 쓰는 1개 용량 {packSize, unit, count} (2개 이상일 때만)
+ * 메뉴에 직접 적은 용량, 없으면 매입 기록의 용량
+ */
+export function commonPack(menus, category, specOf = () => null) {
+  if (!category) return null;
+  const count = new Map();
+  for (const m of menus) {
+    if ((m.category || '') !== category) continue;
+    for (const g of m.ingredients || []) {
+      if (g.type !== 'item') continue;
+      const spec = specOf(g.itemName);
+      const size = Number(g.packSize) || spec?.packSize || 0;
+      const unit = g.unit || spec?.packUnit || '';
+      if (!(size > 0)) continue;
+      const k = `${size}|${unit}`;
+      count.set(k, (count.get(k) || 0) + 1);
+    }
+  }
+  let best = null;
+  for (const [k, n] of count) if (!best || n > best.count) best = { packSize: Number(k.split('|')[0]), unit: k.split('|')[1], count: n };
+  return best && best.count >= 2 ? best : null;
+}

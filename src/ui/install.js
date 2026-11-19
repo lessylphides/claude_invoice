@@ -9,7 +9,7 @@ const emit = () => listeners.forEach((f) => f());
 
 export function initInstall() {
   addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); // 크롬의 기본 띠 대신 앱 안 버튼으로
+    // 크롬의 기본 설치 창(주소창 아래 '코스트노트 설치')은 그대로 뜨게 두고, 앱 안 [설치] 버튼에서도 같은 창을 띄울 수 있게 받아 둠
     deferred = e;
     emit();
   });

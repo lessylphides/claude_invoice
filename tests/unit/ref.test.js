@@ -96,9 +96,9 @@ describe('운영 현황 집계', () => {
     kv.m.set('refuser:u3', JSON.stringify({ ref: 'blog' }));
     const rows = await refStats({ BILLING: kv }, new Set(['u2']));
     expect(rows).toEqual([
-      { ref: 'ig1', visits: 40, signups: 2, paying: 1 },
-      { ref: 'blog', visits: 0, signups: 1, paying: 0 },
-      { ref: 'ig2', visits: 10, signups: 0, paying: 0 },
+      { ref: 'ig1', visits: 40, opens: 0, signups: 2, paying: 1 },
+      { ref: 'blog', visits: 0, opens: 0, signups: 1, paying: 0 },
+      { ref: 'ig2', visits: 10, opens: 0, signups: 0, paying: 0 },
     ]);
   });
 });
@@ -148,5 +148,32 @@ describe('새 가입 알림 메일', () => {
   it('예전 회원·운영자 본인은 알리지 않음', async () => {
     expect(await run(base(), { created: '2026-10-01T00:00:00Z' })).toHaveLength(0);
     expect(await run(base(), { created: new Date(NOW).toISOString(), email: 'boss@x.com' })).toHaveLength(0);
+  });
+});
+
+import { countRef, isRealVisit, handleRefOpen } from '../../src/worker/ref.js';
+describe('사람 방문만, 하루 한 번', () => {
+  const req = (headers = {}) => new Request('https://costnote.co.kr/?ref=igad1', { headers: { 'user-agent': 'Mozilla/5.0 (iPhone) Instagram 350', 'cf-connecting-ip': '1.2.3.4', ...headers } });
+  it('로봇·미리 불러오기는 빼고, 같은 사람(같은 IP·브라우저)은 하루 한 번', async () => {
+    expect(isRealVisit(req({ 'user-agent': 'facebookexternalhit/1.1' }))).toBe(false);
+    expect(isRealVisit(req({ 'user-agent': 'meta-externalagent/1.1' }))).toBe(false);
+    expect(isRealVisit(req({ 'sec-purpose': 'prefetch' }))).toBe(false);
+    expect(isRealVisit(req({ purpose: 'prefetch' }))).toBe(false);
+    expect(isRealVisit(req())).toBe(true);
+    const env = { BILLING: memKV() };
+    expect(await countRef(env, req(), 'igad1', 'visit', NOW)).toBe(true);
+    expect(await countRef(env, req(), 'igad1', 'visit', NOW + 3600_000)).toBe(false); // 같은 날 같은 사람
+    expect(await countRef(env, req({ 'cf-connecting-ip': '5.6.7.8' }), 'igad1', 'visit', NOW)).toBe(true); // 다른 사람
+    expect(await countRef(env, req(), 'igad1', 'visit', NOW + 86400_000)).toBe(true); // 다음 날
+    expect(await countRef(env, req({ 'user-agent': 'facebookexternalhit/1.1' }), 'igad1', 'visit', NOW)).toBe(false);
+    expect(JSON.parse(env.BILLING.m.get('refvisit:igad1')).total).toBe(3);
+  });
+  it('앱 열기: POST /api/ref/open 본문의 꼬리표를 세고 운영 현황에 나옴', async () => {
+    const env = { BILLING: memKV() };
+    const r = await handleRefOpen(new Request('https://app.costnote.co.kr/api/ref/open', { method: 'POST', body: 'igad1', headers: { 'user-agent': 'Mozilla/5.0', 'cf-connecting-ip': '1.1.1.1' } }), env, { now: NOW });
+    expect(r.status).toBe(204);
+    await handleRefOpen(new Request('https://app.costnote.co.kr/api/ref/open', { method: 'POST', body: '<bad>' }), env, { now: NOW });
+    const rows = await refStats(env);
+    expect(rows).toEqual([{ ref: 'igad1', visits: 0, opens: 1, signups: 0, paying: 0 }]);
   });
 });

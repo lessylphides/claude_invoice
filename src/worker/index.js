@@ -9,7 +9,7 @@ import { handleLevel } from './levels.js';
 import { makeProvider } from './mcp/provider.js';
 import { handleAuthorize } from './mcp/authorize.js';
 import { handleAiChanges } from './mcp/changes.js';
-import { withLandingRef, handleRef } from './ref.js';
+import { withLandingRef, handleRef, handleRefOpen } from './ref.js';
 import { handleSupport } from './support.js';
 import { handleNotices } from './notices.js';
 import { runNudges } from './nudge.js';
@@ -51,6 +51,7 @@ const app = {
     if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
     if (url.pathname.startsWith('/api/ai-changes') || url.pathname.startsWith('/api/claude/')) return handleAiChanges(request, env);
     if (url.pathname === '/api/ref') return handleRef(request, env);
+    if (url.pathname === '/api/ref/open') return handleRefOpen(request, env);
     if (url.pathname === '/api/support') return handleSupport(request, env);
     if (url.pathname === '/api/notices' || url.pathname === '/api/admin/notices') return handleNotices(request, env);
     if (url.pathname === '/api/ocr') return handleOcr(request, env);

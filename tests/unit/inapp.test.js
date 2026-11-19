@@ -35,3 +35,40 @@ describe('앱 안 브라우저', () => {
     expect(decodeURIComponent(k)).toContain('nv=1');
   });
 });
+
+import { adHero, withBanner } from '../../src/worker/inappBanner.js';
+describe('광고로 온 사람 전용 첫 화면', () => {
+  const page = () => new Response('<body><section class="hero" aria-labelledby="hero-title">\n<div>\n<h1 id="hero-title">원래 제목</h1><a href="x">지금 써 보기</a>\n</div>\n<div class="phones">그림</div></section></body>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+  const req = (u) => new Request(u, { headers: { 'user-agent': 'Mozilla/5.0 (Macintosh)' } });
+  it('igad 꼬리표면 광고와 같은 문구 + 큰 시작 버튼(꼬리표 그대로), 앱 화면 그림은 그대로', async () => {
+    const u = 'https://costnote.co.kr/?ref=igad2';
+    const html = await (await withBanner(req(u), new URL(u), page())).text();
+    expect(html).toContain('얼마 받을지');
+    expect(html).toContain('ref=igad2');
+    expect(html).toContain('무료로 시작하기');
+    expect(html).not.toContain('원래 제목');
+    expect(html).toContain('<div class="phones">그림</div>');
+    const h1 = await (await withBanner(req('https://costnote.co.kr/?ref=igad1'), new URL('https://costnote.co.kr/?ref=igad1'), page())).text();
+    expect(h1).toContain('장부 정리 끝');
+  });
+  it('광고 꼬리표가 아니거나 이상한 값이면 원래 페이지', async () => {
+    for (const u of ['https://costnote.co.kr/?ref=ig', 'https://costnote.co.kr/', 'https://costnote.co.kr/?ref=igad%22%3E%3Cscript%3E']) {
+      const html = await (await withBanner(req(u), new URL(u), page())).text();
+      expect(html).toContain('원래 제목');
+    }
+    expect(adHero('ig1')).toBe('');
+  });
+});
+
+describe('광고로 온 사람은 앱 안 브라우저 띠 없이', () => {
+  it('인스타 앱 안에서 igad 로 오면 띠 없음, 일반 링크면 띠', async () => {
+    const page = () => new Response('<body><section class="hero">\n<div>\n<h1>원래</h1>\n</div>\n<div class="phones"></div></section></body>', { headers: { 'content-type': 'text/html' } });
+    const ig = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148 Instagram 350.0';
+    const r = (u) => new Request(u, { headers: { 'user-agent': ig } });
+    const ad = await (await withBanner(r('https://costnote.co.kr/?ref=igad1'), new URL('https://costnote.co.kr/?ref=igad1'), page())).text();
+    expect(ad).not.toContain('inapp-banner');
+    expect(ad).toContain('무료로 시작하기');
+    const plain = await (await withBanner(r('https://costnote.co.kr/?ref=ig'), new URL('https://costnote.co.kr/?ref=ig'), page())).text();
+    expect(plain).toContain('inapp-banner');
+  });
+});

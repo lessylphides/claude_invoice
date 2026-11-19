@@ -178,12 +178,12 @@ function render(body, s) {
           s.refs?.length
             ? s.refs
                 .map(
-                  (r) => `<div class="set-row"><span class="grow"><b>${esc(r.ref)}</b><small>방문 ${num(r.visits)}명 → 가입 ${num(r.signups)}명 → 구독 ${num(r.paying)}명</small></span><b>${r.visits ? `${Math.round((r.signups / r.visits) * 1000) / 10}%` : '-'}</b></div>`,
+                  (r) => `<div class="set-row"><span class="grow"><b>${esc(r.ref)}</b><small>방문 ${num(r.visits)}명 → 앱 열기 ${num(r.opens || 0)}명 → 가입 ${num(r.signups)}명 → 구독 ${num(r.paying)}명</small></span><b>${r.visits ? `${Math.round((r.signups / r.visits) * 1000) / 10}%` : '-'}</b></div>`,
                 )
                 .join('')
             : '<p class="set-pad muted small">아직 광고 링크로 들어온 방문이 없어요.</p>'
         }</div>
-        <p class="set-note">costnote.co.kr/?ref=ig1 처럼 꼬리표를 붙인 링크로 들어온 사람만 세요. 방문은 같은 브라우저 30일에 한 번, 오른쪽 %는 방문 대비 가입이에요. 꼬리표 없이 가입한 사람은 여기 없어요.</p>
+        <p class="set-note">costnote.co.kr/?ref=ig1 처럼 꼬리표를 붙인 링크로 들어온 사람만 세요. 방문·앱 열기는 같은 사람 하루 한 번만 세고 로봇·미리 불러오기는 빼요(11월 19일부터). 오른쪽 %는 방문 대비 가입이에요. 꼬리표 없이 가입한 사람은 여기 없어요.</p>
       </section>
       <section>
         <h3 class="set-title">공지사항</h3>

@@ -13,7 +13,13 @@ export function captureRef(loc = globalThis.location, doc = globalThis.document,
     const fromUrl = cleanRef(new URLSearchParams(loc?.search || '').get('ref'));
     const fromCookie = cleanRef((doc?.cookie || '').match(new RegExp(`(?:^|;\\s*)${REF_COOKIE}=([^;]+)`))?.[1]);
     const ref = fromUrl || fromCookie;
-    if (ref) ls.setItem(KEY, ref);
+    if (ref) {
+      ls.setItem(KEY, ref);
+      // 광고·소개 페이지에서 와서 앱을 처음 연 것 세기 (방문 → 앱 열기 → 가입 단계 확인용)
+      try {
+        globalThis.navigator?.sendBeacon?.('./api/ref/open', ref);
+      } catch {}
+    }
     return ref;
   } catch {
     return null;

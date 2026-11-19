@@ -14,11 +14,13 @@ import { takeBillingReturn } from './billing.js';
 import { levelAfterRender, openLevelSheet, scheduleClaim } from './views/level.js';
 import { captureRef, reportRef } from './lib/ref.js';
 import { preventZoom } from './ui/noZoom.js';
+import { initInstall, onInstallChange } from './ui/install.js';
 import { loadNotices, noticeState } from './lib/notices.js';
 import { openNotices } from './views/notices.js';
 
 captureRef(); // 광고 링크로 들어온 경우 가입 경로 꼬리표 기억
 preventZoom();
+initInstall(); // 안드로이드 크롬의 설치 창을 받아 둠 (앱 안 '홈 화면에 설치' 버튼용)
 const app = document.getElementById('app');
 
 function tabBar() {
@@ -141,6 +143,7 @@ app.addEventListener('touchend', (e) => {
 
 bindCaptureInputs();
 setRenderer(render);
+onInstallChange(() => render());
 render();
 ready.then(
   () => {

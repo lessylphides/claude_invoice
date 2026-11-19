@@ -20,6 +20,7 @@ const openClaudeConnect = () => import('./claude.js').then((m) => m.openClaudeCo
 const disconnectClaude = () => import('./claude.js').then((m) => m.disconnectClaude());
 const openSupport = () => import('./support.js').then((m) => m.openSupport());
 import { openNotices } from './notices.js';
+import { canOfferInstall, startInstall } from '../ui/install.js';
 import { noticeState } from '../lib/notices.js';
 import { APP_VERSION, RELEASED, FIRST_OFFICIAL, FIRST_RELEASED } from '../version.js';
 
@@ -159,6 +160,7 @@ export function openSettings() {
           <section>
             <h3 class="set-title">소식·도움</h3>
             <div class="set-card list">
+              ${canOfferInstall() ? '<button type="button" class="set-row" data-act="install"><span class="set-ic" aria-hidden="true">📲</span><span class="grow">홈 화면에 설치<small>주소창 없이 앱처럼 열기 · 오프라인에서도</small></span><span class="chev" aria-hidden="true">›</span></button>' : ''}
               <button type="button" class="set-row" data-act="notices"><span class="set-ic" aria-hidden="true">📢</span><span class="grow">공지사항<small>새 기능 · 고친 점 · 알림</small></span>${noticeState.unread ? `<span class="nt-count" aria-label="새 공지 ${noticeState.unread}개">${noticeState.unread}</span>` : ''}<span class="chev" aria-hidden="true">›</span></button>
               <button type="button" class="set-row" data-act="support"><span class="set-ic" aria-hidden="true">✉️</span><span class="grow">문의하기<small>궁금한 점 · 불편한 점 · 바라는 기능</small></span><span class="chev" aria-hidden="true">›</span></button>
             </div>
@@ -182,6 +184,7 @@ export function openSettings() {
       // 설정 위에 겹쳐 열기: 닫으면 설정으로 돌아옴
       body.querySelector('[data-act=admin]').addEventListener('click', () => openAdmin());
       body.querySelector('[data-act=notices]').addEventListener('click', () => openNotices());
+      body.querySelector('[data-act=install]')?.addEventListener('click', () => startInstall());
       body.querySelector('[data-act=support]').addEventListener('click', () => openSupport());
       body.querySelector('[data-act=claude]').addEventListener('click', () => openClaudeConnect());
       planBtn.addEventListener('click', () => {

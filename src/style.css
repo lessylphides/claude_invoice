@@ -837,3 +837,11 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .menu-editor .price-field input { font-size: 18px; font-weight: 700; }
 .pour-note { margin: 2px 2px 0; }
 .menu-editor .price-field input::placeholder { font-weight: 400; font-size: 15px; }
+
+/* 홈 화면에 설치 */
+.install-banner { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: var(--radius); padding: 10px 8px 10px 14px; margin: 0 0 12px; border: 1px solid var(--line); }
+.install-banner > span { font-size: 22px; }
+.install-banner p { margin: 0; flex: 1; font-size: 14px; line-height: 1.4; }
+.install-banner .icon-btn { width: 32px; height: 32px; font-size: 13px; color: var(--muted); }
+.install-guide p { margin: 0 0 12px; line-height: 1.6; }
+.install-guide ol { margin: 0 0 12px; padding-left: 22px; line-height: 1.8; font-size: 15px; }

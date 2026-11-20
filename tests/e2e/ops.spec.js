@@ -27,30 +27,37 @@ test('운영비: 넣으면 본전 매출, 비품 영수증을 투자로, 월 매
   const s = sheet(page);
   // 고정비 2개
   await s.locator('[data-add=fixed]').click();
-  await s.locator('[data-list=fixed] .ops-row').nth(0).locator('[data-f=name]').fill('월세');
-  await s.locator('[data-list=fixed] .ops-row').nth(0).locator('[data-f=amount]').fill('2500000');
+  await s.locator('[data-list=fixed] .ops-fix').nth(0).locator('[data-f=name]').fill('월세');
+  await s.locator('[data-list=fixed] .ops-fix').nth(0).locator('[data-f=amount]').fill('2500000');
   await s.locator('[data-add=fixed]').click();
-  await s.locator('[data-list=fixed] .ops-row').nth(1).locator('[data-f=name]').fill('인건비');
-  await s.locator('[data-list=fixed] .ops-row').nth(1).locator('[data-f=amount]').fill('6487500');
+  await s.locator('[data-list=fixed] .ops-fix').nth(1).locator('[data-f=name]').fill('인건비');
+  await s.locator('[data-list=fixed] .ops-fix').nth(1).locator('[data-f=amount]').fill('6487500');
   // 영수증의 하이볼잔(비품·집기) → 투자 항목 (24개월)
   await expect(s.locator('.ops-cands')).toContainText('하이볼잔 24개');
   await s.locator('[data-cand]').click();
   await expect(s.locator('[data-list=invests] [data-f=months]').first()).toHaveValue('24');
-  // 8,987,500 + 300,000/24(12,500) = 9,000,000 → 메뉴가 2개라 목표 원가율 25% → 본전 12,000,000 / 25일 = 480,000
+  // 고정 9,000,000 (인건비는 부가세 공제 없음) · 메뉴가 2개라 목표 원가율 25% · 수수료 2% · 카드 90% → 본전 13,023,540 / 25일
   await expect(s.locator('.ops-need')).toContainText('9,000,000원');
-  await expect(s.locator('.ops-be')).toContainText('한 달 12,000,000원');
-  await expect(s.locator('.ops-be')).toContainText('목표 원가율 기준');
+  await expect(s.locator('[data-list=fixed] .ops-fix').nth(1).locator('[data-f=vat]')).not.toBeChecked();
+  await expect(s.locator('[data-list=fixed] .ops-fix').nth(0).locator('[data-f=vat]')).toBeChecked();
+  await expect(s.locator('.ops-be')).toContainText('목표 원가율');
   await s.locator('input[name=workDays]').fill('25');
-  await expect(s.locator('.ops-be')).toContainText('하루 480,000원');
+  await expect(s.locator('.ops-be')).toContainText('한 달 13,023,540원');
+  await expect(s.locator('.ops-be')).toContainText('하루 520,942원');
+  await expect(s.locator('.ops-be-parts')).toContainText('507,184원'); // 부가세
+  // 월세도 공제 안 받는다고 하면 부가세가 늘어 본전도 올라감
+  await s.locator('[data-list=fixed] .ops-fix').nth(0).locator('[data-f=vat]').uncheck();
+  await expect(s.locator('.ops-be')).not.toContainText('한 달 13,023,540원');
+  await s.locator('[data-list=fixed] .ops-fix').nth(0).locator('[data-f=vat]').check();
   await expect(s.locator('input[name=monthlyGlasses]')).toHaveCount(0); // 잔 수 입력은 없음
   await expect(s.locator('.ops-cat')).toHaveCount(0); // 분류별 점검도 없음
   // 월 매출 (운영자): 본전보다 덜 팔았음
   await s.locator('[data-sales="2026-11"]').fill('10000000');
   await expect(s.locator('.ops-actual')).toContainText('2026년 11월');
-  await expect(s.locator('.ops-actual')).toContainText('본전 매출보다 2,000,000원 덜 팔았어요');
+  await expect(s.locator('.ops-actual')).toContainText('본전 매출보다 3,023,540원 덜 팔았어요');
   await s.locator('button[type=submit]').click();
   await expect(page.locator('.ops-line')).toContainText('9,000,000원');
-  await expect(page.locator('.ops-line')).toContainText('본전 매출 하루 480,000원');
+  await expect(page.locator('.ops-line')).toContainText('본전 매출 하루 520,942원');
   await page.reload();
   await expect(page.locator('.ops-line')).toContainText('9,000,000원');
   expect(errors).toEqual([]);

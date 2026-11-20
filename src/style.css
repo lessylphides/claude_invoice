@@ -933,3 +933,15 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .ops-be p { margin: 0 0 2px; }
 .ops-be .ops-sub { margin: 4px 0 0; }
 .ops-rows small.ok { color: var(--ok); } .ops-rows small.warn { color: var(--warn); }
+.ops-fix { display: flex; flex-direction: column; gap: 4px; }
+.ops-vat { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); padding-left: 2px; }
+.ops-vat small { color: var(--muted); }
+.ops-be-h { font-size: 15px; } .ops-be-h small { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.ops-be-parts { margin-top: 8px; }
+.ops-be-parts li b { font-size: 14px; color: var(--ink); }
+.ops-basis label small { color: var(--muted); font-size: 11.5px; }
+.ops .ops-vat { flex-direction: row; align-items: center; justify-content: flex-start; gap: 6px; }
+.ops .ops-vat input { width: auto; flex: 0 0 auto; margin: 0; }
+.ops-be-parts li .grow { flex: 1; }
+.ops-be-parts li b { white-space: nowrap; }
+.ops-exempt-hint:empty { display: none; }

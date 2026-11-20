@@ -1,6 +1,6 @@
 // 운영비 · 투자 회수: 월 회수액, 본전 매출, 실제 회수율, 투자 후보
 import { describe, it, expect } from 'vitest';
-import { averageCostRate, breakEven, sanitizeOps, investMonthly, investPlanned, opsSummary, actualRecovery, investCandidates, monthPurchaseCost } from '../../src/lib/ops.js';
+import { averageCostRate, breakEven, monthCosts, exemptShareFromLedger, sanitizeOps, investMonthly, investPlanned, opsSummary, actualRecovery, investCandidates, monthPurchaseCost } from '../../src/lib/ops.js';
 import { migrate } from '../../src/lib/model.js';
 import { buildItemIndex } from '../../src/lib/itemIndex.js';
 
@@ -74,11 +74,30 @@ describe('운영비 · 투자 회수', () => {
     const again = migrate({ ...d, purchases: [{ ...d.purchases[0], items: [{ ...d.purchases[0].items[0], category: '기타' }] }] });
     expect(again.purchases[0].items[0].category).toBe('기타');
   });
-  it('본전 매출 = 필요한 돈 ÷ (1 − 평균 원가율), 하루는 영업일로 나눔', () => {
-    expect(breakEven(9000000, 25, 26)).toEqual({ month: 12000000, day: 461539 });
-    expect(breakEven(0, 25)).toBeNull();
-    expect(breakEven(100, 100)).toBeNull();
+  it('본전 매출: 재료비 + 부가세(남긴 부분 × 10/110 − 카드 공제) + 수수료 + 고정 지출을 메우는 매출', () => {
+    const o = sanitizeOps({ fixed: [{ name: '월세', amount: 2500000 }, { name: '인건비', amount: 6487500 }], invests: [{ name: '잔', amount: 300000, months: 24, start: '2026-11' }], workDays: 25 });
+    expect(o.fixed.map((f) => f.vat)).toEqual([true, false]); // 인건비는 부가세 공제 없음 (이름으로 짐작)
+    expect(o).toMatchObject({ feeRate: 2, cardShare: 90, exemptShare: 0 });
+    const s = opsSummary(o, '2026-11');
+    expect(s).toMatchObject({ need: 9000000, vatBase: 2512500 });
+    const be = breakEven(s, 25, o);
+    expect(be).toMatchObject({ month: 13023540, day: 520942, fixed: 9000000 });
+    expect(be.material + be.vat + be.fee + be.fixed).toBeGreaterThanOrEqual(be.month - 2);
+    expect(be.material + be.vat + be.fee + be.fixed).toBeLessThanOrEqual(be.month);
+    // 사장님 예시: 매출 1,000만, 재료 192만(19.2%), 임대료 135만(공제) → 부가세 611,818 (카드 공제·수수료 없이)
+    expect(Math.round(monthCosts(10000000, { costRate: 19.2, need: 1350000, vatBase: 1350000, cardShare: 0, feeRate: 0 }).vat)).toBe(611818);
+    // 면세 재료가 많으면 공제가 줄어 부가세가 늘어남
+    expect(monthCosts(10000000, { costRate: 19.2, need: 0, vatBase: 0, exemptShare: 50 }).vat).toBeGreaterThan(monthCosts(10000000, { costRate: 19.2, need: 0, vatBase: 0 }).vat);
+    expect(breakEven({ need: 0, vatBase: 0 }, 25)).toBeNull();
     expect(averageCostRate([20, 30, null, 25], 25)).toEqual({ rate: 25, from: 'menus', count: 3 });
     expect(averageCostRate([10, null], 28)).toEqual({ rate: 28, from: 'target', count: 1 }); // 메뉴가 적으면 목표 원가율
+  });
+  it('장부로 면세 재료 비율 짐작 (최근 3달, 비품·광고 빼고)', () => {
+    const ps = [
+      { id: 'a', date: '2026-10-05', items: [{ id: '1', name: '레몬', category: '채소·과일', amount: 30000 }, { id: '2', name: '진', category: '주류·음료', amount: 70000 }, { id: '3', name: '잔', category: '비품·집기', amount: 500000 }] },
+      { id: 'b', date: '2026-06-01', items: [{ id: '4', name: '사과', category: '채소·과일', amount: 999999 }] },
+    ];
+    expect(exemptShareFromLedger(ps, '2026-11')).toBe(30);
+    expect(exemptShareFromLedger([], '2026-11')).toBeNull();
   });
 });

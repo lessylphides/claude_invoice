@@ -5,7 +5,7 @@
 import { esc, num, uid, todayStr } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
-import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, averageCostRate, breakEven, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
+import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, averageCostRate, breakEven, exemptShareFromLedger, guessVat, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
 import { menuCost } from '../lib/cost.js';
 import { openSalesImport, salesAnalysisHtml } from './salesImport.js';
 import { billing } from '../billing.js';
@@ -25,7 +25,7 @@ export const shopCostRate = () => averageCostRate(store.menus.map((m) => menuCos
 export function opsLine() {
   const o = store.ops;
   const s = opsSummary(o, thisMonth());
-  const be = breakEven(s.need, shopCostRate().rate, o.workDays);
+  const be = breakEven(s, shopCostRate().rate, o);
   const text = s.need
     ? `운영비: 한 달 <b>${won(s.need)}</b>${be ? ` · 본전 매출 하루 <b>${won(be.day)}</b>` : ''}`
     : '운영비·투자 회수: 아직 안 넣음 <span class="muted">(월세·인테리어·잔 등을 마진으로 회수하는 계산)</span>';
@@ -34,6 +34,7 @@ export function opsLine() {
 
 export function openOps() {
   let o = structuredClone(store.ops);
+  for (const f of o.fixed) f.vatSet = !!f.name; // 이미 넣어 둔 고정비의 부가세 공제 선택은 이름을 고쳐도 그대로
   const ym = thisMonth();
   openSheet({
     title: '운영비 · 투자 회수',
@@ -44,7 +45,7 @@ export function openOps() {
           <section class="set-card set-pad ops-sum" aria-live="polite"></section>
 
           <section>
-            <h3 class="set-title">고정비 <small>매달 나가는 돈</small></h3>
+            <h3 class="set-title">고정비 <small>매출과 상관없이 매달 나가는 돈</small></h3>
             <div class="set-card set-pad ops-list" data-list="fixed"></div>
             <button type="button" class="btn ghost small-btn" data-add="fixed">+ 고정비 추가</button>
           </section>
@@ -67,10 +68,14 @@ export function openOps() {
           </section>
 
           <section>
-            <h3 class="set-title">영업일</h3>
-            <div class="set-card set-pad ops-goal">
+            <h3 class="set-title">계산 기준 <small>매출에 따라 빠지는 돈</small></h3>
+            <div class="set-card set-pad ops-goal ops-basis">
               <label>한 달 영업일 (일)<input name="workDays" type="number" inputmode="numeric" min="1" max="31" value="${o.workDays || 26}"></label>
-              <p class="set-note">하루 본전 매출을 계산할 때만 써요.</p>
+              <label>카드·간편결제 수수료 (매출의 %)<input name="feeRate" type="number" inputmode="decimal" step="0.1" min="0" max="10" value="${o.feeRate ?? 2}"></label>
+              <label>매출 중 카드·간편결제 비율 (%)<input name="cardShare" type="number" inputmode="numeric" min="0" max="100" value="${o.cardShare ?? 90}"></label>
+              <label>재료 매입 중 면세 품목 비율 (%) <small>과일·채소·생고기 등 부가세 없는 것</small><input name="exemptShare" type="number" inputmode="numeric" min="0" max="100" value="${o.exemptShare ?? 0}"></label>
+              <p class="set-note ops-exempt-hint"></p>
+              <p class="set-note">일반과세자 기준이에요. 부가세는 <b>(매출 − 부가세 공제되는 매입·고정비) × 10/110</b>에서 카드 매출 공제(1.3%)를 뺀 추정이에요. 실제 신고액은 세무사 계산과 다를 수 있어요.</p>
             </div>
           </section>
 
@@ -98,13 +103,14 @@ export function openOps() {
         listEl('fixed').innerHTML = o.fixed.length
           ? o.fixed
               .map(
-                (f, i) => `<div class="ops-row" data-i="${i}" data-k="fixed">
+                (f, i) => `<div class="ops-fix" data-i="${i}" data-k="fixed"><div class="ops-row">
                   <input data-f="name" value="${esc(f.name)}" placeholder="이름 (예: 월세)" aria-label="고정비 이름">
                   <input data-f="amount" type="number" inputmode="numeric" value="${f.amount || ''}" placeholder="금액" aria-label="월 금액">
-                  <button type="button" class="icon-btn del" data-del aria-label="삭제">✕</button></div>`,
+                  <button type="button" class="icon-btn del" data-del aria-label="삭제">✕</button></div>
+                  <label class="ops-vat"><input type="checkbox" data-f="vat"${f.vat !== false ? ' checked' : ''}> 부가세 공제 받음 <small>(세금계산서·카드 결제)</small></label></div>`,
               )
               .join('')
-          : '<p class="muted small">월세, 인건비, 전기·가스·수도, 통신·카드 수수료 같은 것을 넣어요.</p>';
+          : '<p class="muted small">월세, 인건비(사장님 몫 포함), 전기·가스·수도, 통신·포스 이용료, 광고비, 세무사 비용 같은 것을 넣어요.</p>';
         listEl('invests').innerHTML = o.invests.length
           ? o.invests
               .map((v, i) => {
@@ -129,16 +135,25 @@ export function openOps() {
         const clean = sanitizeOps(o);
         const s = opsSummary(clean, ym);
         const cr = shopCostRate();
-        const be = breakEven(s.need, cr.rate, clean.workDays);
+        const be = breakEven(s, cr.rate, clean);
         body.querySelector('.ops-sum').innerHTML = `
-          <p class="ops-need"><span>한 달에 필요한 돈</span><b>${won(s.need)}</b></p>
+          <p class="ops-need"><span>매달 고정으로 나가는 돈</span><b>${won(s.need)}</b></p>
           <p class="ops-sub">고정비 ${won(s.fixed)} · 투자 회수 ${won(s.invest)}</p>
           ${
             be
-              ? `<div class="ops-per ops-be"><p>본전 매출 <b>한 달 ${won(be.month)}</b></p><p>하루 <b>${won(be.day)}</b> <small>(${clean.workDays}일 영업)</small></p>
-                 <p class="ops-sub">${won(s.need)} ÷ (1 − 평균 원가율 ${cr.rate}%) · ${cr.from === 'menus' ? `메뉴 ${cr.count}개 평균` : '메뉴가 적어서 목표 원가율 기준'}</p></div>`
+              ? `<div class="ops-per ops-be"><p class="ops-be-h">본전 매출 <small>최소 이만큼은 팔아야 해요</small></p>
+                 <p>한 달 <b>${won(be.month)}</b> · 하루 <b>${won(be.day)}</b> <small>(${clean.workDays}일 영업)</small></p>
+                 <ul class="ops-rows ops-be-parts">
+                   <li><span class="grow">재료비<small>평균 원가율 ${cr.rate}% · ${cr.from === 'menus' ? `메뉴 ${cr.count}개 평균` : '메뉴가 적어서 목표 원가율'}</small></span><b>${won(be.material)}</b></li>
+                   <li><span class="grow">부가세 (낼 것 추정)<small>남긴 부분에만 붙고 카드 매출 공제 뺌</small></span><b>${won(be.vat)}</b></li>
+                   <li><span class="grow">결제 수수료<small>매출의 ${clean.feeRate}%</small></span><b>${won(be.fee)}</b></li>
+                   <li><span class="grow">매달 고정으로 나가는 돈</span><b>${won(be.fixed)}</b></li>
+                 </ul></div>`
               : '<p class="ops-per"><small>고정비나 투자 항목을 넣으면 <b>본전 매출</b>(한 달·하루)을 계산해요.</small></p>'
           }`;
+        const ex = exemptShareFromLedger(store.purchases, ym);
+        const hint = body.querySelector('.ops-exempt-hint');
+        hint.innerHTML = ex != null && ex !== clean.exemptShare ? `장부 기준(최근 3달) 면세로 보이는 재료는 약 <b>${ex}%</b>예요. <button type="button" class="btn ghost small-btn" data-exempt="${ex}">${ex}%로</button>` : '';
         // 월 매출 → 실제
         const a = actualRecovery(clean, store.purchases);
         body.querySelector('.ops-actual').innerHTML = salesAnalysisHtml(clean, (m) => monthPurchaseCost(store.purchases, m)) + (a.rows.length
@@ -171,12 +186,19 @@ export function openOps() {
         const t = e.target;
         if (t.dataset.sales) {
           o.sales[t.dataset.sales] = Number(t.value) || 0;
-        } else if (t.name === 'workDays') {
-          o.workDays = Number(t.value) || 26;
+        } else if (['workDays', 'feeRate', 'cardShare', 'exemptShare'].includes(t.name)) {
+          o[t.name] = t.value === '' ? undefined : Number(t.value);
         } else if (t.dataset.f) {
           const row = t.closest('[data-k]');
           const item = o[row.dataset.k][Number(row.dataset.i)];
-          item[t.dataset.f] = ['name', 'start'].includes(t.dataset.f) ? t.value : Number(t.value) || 0;
+          item[t.dataset.f] = t.dataset.f === 'vat' ? t.checked : ['name', 'start'].includes(t.dataset.f) ? t.value : Number(t.value) || 0;
+          if (t.dataset.f === 'vat') item.vatSet = true;
+          // 고정비 이름을 쓰면 부가세 공제 여부를 짐작 (인건비·보험 등은 공제 없음). 직접 고른 뒤엔 그대로
+          if (row.dataset.k === 'fixed' && t.dataset.f === 'name' && !item.vatSet) {
+            item.vat = guessVat(t.value);
+            const cb = row.querySelector('[data-f=vat]');
+            if (cb) cb.checked = item.vat;
+          }
         }
         drawSummary();
       });
@@ -188,6 +210,13 @@ export function openOps() {
         const del = e.target.closest('[data-del]');
         const cand = e.target.closest('[data-cand]');
         const imp = e.target.closest('[data-import]');
+        const exBtn = e.target.closest('[data-exempt]');
+        if (exBtn) {
+          o.exemptShare = Number(exBtn.dataset.exempt);
+          form.elements.exemptShare.value = o.exemptShare;
+          drawSummary();
+          return;
+        }
         if (imp) {
           openSalesImport({
             links: o.salesLinks || {},

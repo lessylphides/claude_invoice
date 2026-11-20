@@ -845,3 +845,19 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .install-banner .icon-btn { width: 32px; height: 32px; font-size: 13px; color: var(--muted); }
 .install-guide p { margin: 0 0 12px; line-height: 1.6; }
 .install-guide ol { margin: 0 0 12px; padding-left: 22px; line-height: 1.8; font-size: 15px; }
+.ig-steps { list-style: none; padding: 0; margin: 4px 0 14px; display: flex; flex-direction: column; gap: 14px; }
+.ig-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.ig-steps li > div { flex: 1; min-width: 0; }
+.ig-steps li p { margin: 2px 0 8px; font-size: 15px; line-height: 1.5; }
+.ig-n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-fill, #2459c4); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 14px; }
+.ig-mock { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; font-size: 13px; color: var(--ink-2); }
+.ig-mock .hl { color: #fff; background: var(--accent-fill, #2459c4); border-radius: 8px; padding: 2px 8px; font-weight: 800; box-shadow: 0 0 0 3px rgba(255, 216, 77, .9); }
+.ig-bar { display: flex; align-items: center; gap: 8px; }
+.ig-pill { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 999px; padding: 6px 10px; min-width: 0; }
+.ig-pill i { flex: 1; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ig-list p { margin: 0; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.ig-list p:last-child { border-bottom: 0; }
+.ig-list p.hl { display: inline-block; margin: 4px 0; }
+.ig-add p { margin: 0; padding: 6px 4px; display: flex; justify-content: space-between; align-items: center; }
+.ig-toggle { width: 36px; height: 22px; border-radius: 999px; background: #34c759; position: relative; }
+.ig-toggle::after { content: ''; position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }

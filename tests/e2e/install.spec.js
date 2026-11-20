@@ -57,3 +57,21 @@ test('manifest: 안드로이드용(maskable) 아이콘', async ({ request }) => 
   expect(m.icons.filter((i) => i.purpose === 'maskable').map((i) => i.sizes)).toEqual(['192x192', '512x512']);
   expect((await request.get('/icon-maskable-512.png')).status()).toBe(200);
 });
+
+for (const [name, ua, expects] of [
+  ['아이폰 사파리 iOS 26', 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1', ['≡', '공유', '더 보기', '웹 앱으로 열기', '한 번 더 로그인']],
+  ['아이폰 사파리 iOS 18', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1', ['공유 버튼(□↑)', '홈 화면에 추가']],
+  ['아이폰 크롬', 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1', ['크롬 주소창', 'Safari']],
+]) {
+  test.describe(name, () => {
+    test.use({ userAgent: ua });
+    test(`${name}: 기기에 맞는 순서를 그림과 함께 안내`, async ({ page }) => {
+      await openApp(page, { data, local });
+      await page.locator('.install-banner [data-onboard=install]').click();
+      const s = sheet(page);
+      await expect(s.locator('.ig-steps li').first()).toBeVisible();
+      for (const t of expects) await expect(s).toContainText(t);
+      await expect(s).toContainText('애플 정책');
+    });
+  });
+}

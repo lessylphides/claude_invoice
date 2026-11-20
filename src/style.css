@@ -441,9 +441,9 @@ fieldset.cat-pick .chips { flex-wrap: wrap; overflow: visible; padding-bottom: 0
 .key-status code { font-family: ui-monospace, Menlo, monospace; background: var(--surface-2); padding: 2px 6px; border-radius: 6px; }
 
 /* 최소 마진 */
-.margin-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border-radius: 12px; padding: 8px 10px 8px 14px; margin: -2px 0 10px; }
-.margin-line p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
-.margin-line .btn { flex: none; }
+.margin-line , .ops-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border-radius: 12px; padding: 8px 10px 8px 14px; margin: -2px 0 10px; }
+.margin-line p , .ops-line p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.margin-line .btn , .ops-line .btn { flex: none; }
 .menu-card.by-margin { border-color: var(--ok); }
 .mc-badge { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--ok); background: var(--ok-soft); padding: 2px 8px; border-radius: 999px; }
 .stats .good b, .stats .good p, .stats .good small { color: var(--ok); }
@@ -861,3 +861,34 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .ig-add p { margin: 0; padding: 6px 4px; display: flex; justify-content: space-between; align-items: center; }
 .ig-toggle { width: 36px; height: 22px; border-radius: 999px; background: #34c759; position: relative; }
 .ig-toggle::after { content: ''; position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+
+/* 운영비 · 투자 회수 */
+.ops { display: flex; flex-direction: column; gap: 14px; }
+.ops .set-title small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 4px; }
+.ops-need { display: flex; justify-content: space-between; align-items: baseline; margin: 0; font-size: 15px; }
+.ops-need b { font-size: 24px; }
+.ops-sub { margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); }
+.ops-per { margin: 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 15px; }
+.ops-per b { color: var(--accent); font-size: 18px; }
+.ops-list { display: flex; flex-direction: column; gap: 10px; }
+.ops-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.ops-row input { flex: 1; min-width: 0; padding: 8px; font-size: 15px; }
+.ops-row input[type=month] { flex: 1.3; }
+.ops-row .ops-months { flex: 0 0 58px; }
+.ops-inv { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.ops-inv:last-child { border-bottom: 0; padding-bottom: 0; }
+.ops-prog { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.ops-prog i { flex: 1; height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.ops-prog i b { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.ops-prog small { color: var(--muted); white-space: nowrap; }
+.btn-row-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ops-cands { margin-top: 10px; }
+.ops-cands p { margin: 0 0 6px; }
+.ops-cands ul, .ops-rows { list-style: none; margin: 0; padding: 0; }
+.ops-cands li, .ops-rows li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.ops-cands li .grow, .ops-rows li .grow { display: flex; flex-direction: column; min-width: 0; }
+.ops-cands small, .ops-rows small { color: var(--muted); font-size: 12px; }
+.ops-goal { display: flex; flex-direction: column; gap: 10px; }
+.ops-goal label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.ops-cat b.ok { color: var(--ok); } .ops-cat b.warn, .ops-rows b.warn { color: var(--warn); } .ops-rows b.ok { color: var(--ok); }
+.ops-cat .btn { margin-left: 8px; }

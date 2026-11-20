@@ -8,6 +8,7 @@ import { buildItemIndex } from './lib/itemIndex.js';
 import { applyCategoryEdit } from './lib/menuCategories.js';
 import { linkInto, unlink, pairKey, groupKey } from './lib/itemLinks.js';
 import { renameItemInData, renameCounts, repairOrphanLinks } from './lib/itemRename.js';
+import { sanitizeOps } from './lib/ops.js';
 import * as persist from './persist.js';
 
 const SETTINGS_KEY = 'maeip.settings.v1';
@@ -196,6 +197,15 @@ export const store = {
     data.itemLinks = next;
     commit();
     return true;
+  },
+  // ── 운영비 · 투자 회수 ──
+  get ops() {
+    return data.ops;
+  },
+  /** patch 를 합쳐 저장 (목록은 통째로 바꿈) */
+  saveOps(patch) {
+    data.ops = sanitizeOps({ ...data.ops, ...patch });
+    commit();
   },
   /** 품목 이름 고치기 (오타 수정): 매입 기록·메뉴 재료·묶음의 같은 이름을 모두 바꿈 */
   renameItem(oldName, newName) {

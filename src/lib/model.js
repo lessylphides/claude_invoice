@@ -21,17 +21,18 @@
 //              value: 잔 하나에 최소 남길 돈, bottle: 보틀 하나에 최소 남길 돈. 마지막 항목이 현재 값, 0 이면 설정 안 함
 // itemLinks = { 묶인이름키: '대표 이름' }, itemNotSame = ['키A|키B']  같은 품목 묶기 (lib/itemLinks.js)
 
+import { sanitizeOps, INVEST_CATEGORIES } from './ops.js';
 import { repairOrphanLinks } from './itemRename.js';
 import { isYmd, todayStr, uid } from './format.js';
 import { sanitizeLinks, sanitizeNotSame } from './itemLinks.js';
 
-export const DATA_VERSION = 6; // 3: 메뉴 분류, 4: 분류별 최소 마진, 5: 같은 품목 묶기, 6: 보틀 판매가(menu.bottlePrice)·보틀 최소 마진
+export const DATA_VERSION = 7; // 3: 메뉴 분류, 4: 분류별 최소 마진, 5: 같은 품목 묶기, 6: 보틀 판매가(menu.bottlePrice)·보틀 최소 마진, 7: 운영비·투자 회수(ops)·투자 매입 분류
 
 export const DEFAULT_MENU_CATEGORIES = ['커피', '위스키', '칵테일', '맥주', '티', '디저트'];
 export const UNCATEGORIZED = '미분류';
 const RESERVED_MENU_CATEGORIES = ['전체', UNCATEGORIZED];
 
-export const DEFAULT_CATEGORIES = ['채소·과일', '육류', '수산물', '곡물·가공식품', '유제품·계란', '양념·소스', '주류·음료', '포장·소모품', '공산품·비품', '기타'];
+export const DEFAULT_CATEGORIES = ['채소·과일', '육류', '수산물', '곡물·가공식품', '유제품·계란', '양념·소스', '주류·음료', '포장·소모품', '공산품·비품', '비품·집기', '시설·장비', '기타'];
 
 // 용량 단위: 마시는 것은 ml, 무게는 g, 조각·낱개로 나눠 쓰는 것(케이크 7조각)은 개, 묶음 속 병(맥주 24병)은 병
 export const PACK_UNITS = ['ml', 'g', '개', '병'];
@@ -214,23 +215,28 @@ function migrateData(raw, { trusted = false } = {}) {
     d.itemLinks && typeof d.itemLinks === 'object' &&
     Array.isArray(d.itemNotSame) &&
     Array.isArray(d.costTarget?.history) &&
-    d.costTarget.history.length
+    d.costTarget.history.length &&
+    d.ops && typeof d.ops === 'object'
   )
     return d;
   const menus = list(d.menus).map(sanitizeMenu);
   // v2 이하: 메뉴 분류가 없으면 기본 분류로 시작. 메뉴에 적힌 분류가 목록에 없으면 목록 끝에 더함
   const menuCategories = sanitizeMenuCategories(Array.isArray(d.menuCategories) ? d.menuCategories : DEFAULT_MENU_CATEGORIES);
   for (const m of menus) if (m.category && !menuCategories.includes(m.category)) menuCategories.push(m.category);
+  // v7: 투자로 보는 매입 분류(비품·집기·시설·장비)를 기존 장부 분류 목록에도 더함 ('기타' 앞에, 한 번만)
+  let categories = sanitizeCategories(d.categories);
+  if (!(Number(d.version) >= 7)) for (const c of INVEST_CATEGORIES) if (!categories.includes(c)) categories.splice(Math.max(0, categories.indexOf('기타')), 0, c);
   return {
     version: DATA_VERSION,
     purchases: list(d.purchases).map(sanitizePurchase),
-    categories: sanitizeCategories(d.categories),
+    categories,
     menus,
     menuCategories,
     minMargins: sanitizeMinMargins(d.minMargins, menuCategories),
     itemLinks: sanitizeLinks(d.itemLinks),
     itemNotSame: sanitizeNotSame(d.itemNotSame),
     costTarget: sanitizeCostTarget(d.costTarget),
+    ops: sanitizeOps(d.ops),
   };
 }
 

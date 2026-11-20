@@ -1,6 +1,7 @@
 // 원가 탭: 메뉴별 1잔(1조각) 원가와 원가율
 // 매입 내역의 '가장 최근 매입 단가(할인 반영)'로 자동 계산하므로, 새 영수증이 들어오면 원가율도 바로 바뀝니다.
 
+import { opsLine, openOps } from './ops.js';
 import { noticeDot } from './notices.js';
 import { dotDate, esc, num, pct, pctShort, shortDate, uid, won } from '../lib/format.js';
 import { guessPack, UNCATEGORIZED } from '../lib/model.js';
@@ -104,6 +105,7 @@ export function renderCostTab() {
       <button class="btn ghost" data-cost="target">변경</button>
     </section>
     ${marginLine(filter)}
+    ${opsLine()}
 
     ${filterChips(filter)}
     ${body}
@@ -155,6 +157,7 @@ export function handleCostClick(e) {
   } else if (t.dataset.cost === 'target') openTargetSheet();
   else if (t.dataset.cost === 'edit-cats') openCategoryEditor();
   else if (t.dataset.cost === 'margins') openMarginSheet();
+  else if (t.dataset.cost === 'ops') openOps();
   return true;
 }
 

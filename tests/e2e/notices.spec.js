@@ -58,6 +58,6 @@ test('설정 맨 아래에 앱 버전과 최초 공식 버전 1.0.0', async ({ p
   await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
   await openApp(page, { data: {} });
   await page.locator('[data-act=settings]').first().click();
-  await expect(page.locator('.app-version')).toContainText('버전 1.6.0 · 2026.11.20');
+  await expect(page.locator('.app-version')).toContainText('버전 1.6.1 · 2026.11.20');
   await expect(page.locator('.app-version')).toContainText('최초 공식 버전 1.0.0 · 2026.11.14');
 });

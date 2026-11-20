@@ -13,7 +13,6 @@ const ops = () =>
       { name: '잔·집기', amount: 2000000, months: 24, start: '2026-11' },
       { name: '잔 깨짐 보충', ongoing: true, monthly: 120000 },
     ],
-    targetProfit: 3000000,
     monthlyGlasses: 1500,
   });
 
@@ -28,9 +27,10 @@ describe('운영비 · 투자 회수', () => {
   });
   it('한 달에 필요한 돈 ÷ 예상 판매 잔 수 = 잔당 최소 마진 (올림)', () => {
     const s = opsSummary(ops(), '2026-11');
-    expect(s).toMatchObject({ fixed: 6000000, invest: 625000 + 100000 + 83333 + 120000, profit: 3000000 });
-    expect(s.need).toBe(6000000 + 928333 + 3000000);
-    expect(s.perGlass).toBe(Math.ceil(s.need / 1500)); // 6,619원
+    expect(s).toMatchObject({ fixed: 6000000, invest: 625000 + 100000 + 83333 + 120000 });
+    expect(s.need).toBe(6000000 + 928333);
+    expect(sanitizeOps({ targetProfit: 5 })).not.toHaveProperty('targetProfit'); // 예전 값은 버림
+    expect(s.perGlass).toBe(Math.ceil(s.need / 1500)); // 4,619원
     expect(opsSummary(sanitizeOps({ fixed: [{ name: 'x', amount: 100 }] }), '2026-11').perGlass).toBeNull(); // 판매 잔 수 모름
   });
   it('월 매출을 넣으면 실제 남은 돈(매출 − 매입(투자 제외) − 고정비)으로 투자 회수율', () => {
@@ -53,7 +53,7 @@ describe('운영비 · 투자 회수', () => {
   });
   it('장부를 불러오면 ops 가 생기고, 비품·시설 매입은 메뉴 재료 목록에 안 나옴', () => {
     const d = migrate({ version: 6, purchases: [{ id: 'p', date: '2026-11-03', vendor: 'v', items: [{ id: 'a', name: '하이볼잔', category: '비품·집기', qty: 1, unitPrice: 300000, amount: 300000 }, { id: 'b', name: '레몬', category: '채소·과일', qty: 1, unitPrice: 900, amount: 900 }] }], categories: ['채소·과일', '기타'] });
-    expect(d.ops).toMatchObject({ fixed: [], invests: [], targetProfit: 0 });
+    expect(d.ops).toMatchObject({ fixed: [], invests: [], monthlyGlasses: 0 });
     expect(d.categories).toEqual(['채소·과일', '비품·집기', '시설·장비', '기타']);
     expect(buildItemIndex(d.purchases).pickList().map((x) => x.name)).toEqual(['레몬']);
   });

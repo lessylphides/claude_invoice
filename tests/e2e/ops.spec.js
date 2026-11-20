@@ -29,14 +29,13 @@ test('운영비: 넣으면 잔당 최소 마진, 비품 영수증을 투자로, 
   await s.locator('[data-list=fixed] .ops-row').nth(0).locator('[data-f=amount]').fill('2500000');
   await s.locator('[data-add=fixed]').click();
   await s.locator('[data-list=fixed] .ops-row').nth(1).locator('[data-f=name]').fill('인건비');
-  await s.locator('[data-list=fixed] .ops-row').nth(1).locator('[data-f=amount]').fill('3500000');
+  await s.locator('[data-list=fixed] .ops-row').nth(1).locator('[data-f=amount]').fill('6487500');
   // 영수증의 하이볼잔(비품·집기) → 투자 항목 (24개월)
   await expect(s.locator('.ops-cands')).toContainText('하이볼잔 24개');
   await s.locator('[data-cand]').click();
   await expect(s.locator('[data-list=invests] [data-f=months]').first()).toHaveValue('24');
-  await s.locator('input[name=targetProfit]').fill('2987500');
   await s.locator('input[name=monthlyGlasses]').fill('1000');
-  // 6,000,000 + 300,000/24(12,500) + 2,987,500 = 9,000,000 ÷ 1,000 = 9,000
+  // 8,987,500 + 300,000/24(12,500) = 9,000,000 ÷ 1,000 = 9,000
   await expect(s.locator('.ops-need')).toContainText('9,000,000원');
   await expect(s.locator('.ops-per')).toContainText('9,000원');
   await expect(s.locator('.ops-cat', { hasText: '위스키' })).toContainText('✓ 충분');

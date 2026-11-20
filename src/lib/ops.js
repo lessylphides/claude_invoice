@@ -1,7 +1,7 @@
 // 운영비 · 투자 회수: 한 잔의 원가가 아닌 '가게를 유지하는 돈'을 마진으로 회수하는 계산
 // - 고정비: 매달 나가는 돈 (월세·인건비·공과금…)
 // - 투자 항목: 한 번에 쓴 큰돈을 회수 개월로 나눠 월 비용으로 (인테리어·장비·잔·집기). '계속' 항목은 매달 같은 금액 (잔 깨짐 보충)
-// - 잔당 최소 마진 = (고정비 + 월 투자 회수 + 목표 이익) ÷ 한 달 예상 판매 잔 수
+// - 잔당 최소 마진 = (고정비 + 월 투자 회수) ÷ 한 달 예상 판매 잔 수
 // - 월 매출을 넣으면: 그달 실제 남은 돈 = 매출 − 매입(투자 분류 제외) − 고정비, 누적으로 투자금 실제 회수율
 import { uid, todayStr } from './format.js';
 
@@ -16,7 +16,7 @@ const str = (v, max = 60) => String(v ?? '').trim().slice(0, max);
 const isYm = (v) => typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 
 export function emptyOps() {
-  return { fixed: [], invests: [], targetProfit: 0, monthlyGlasses: 0, sales: {} };
+  return { fixed: [], invests: [], monthlyGlasses: 0, sales: {} };
 }
 
 export function sanitizeOps(raw) {
@@ -40,7 +40,6 @@ export function sanitizeOps(raw) {
         from: str(i.from, 80), // 어느 매입 품목에서 왔는지 (purchaseId:itemId)
       }))
       .filter((i) => i.name || i.amount || i.monthly),
-    targetProfit: money(o.targetProfit),
     monthlyGlasses: money(o.monthlyGlasses),
     sales,
   };
@@ -72,9 +71,9 @@ export function investPlanned(inv, ym) {
 export function opsSummary(ops, ym) {
   const fixed = ops.fixed.reduce((s, f) => s + f.amount, 0);
   const invest = ops.invests.reduce((s, i) => s + investMonthly(i, ym), 0);
-  const need = fixed + invest + ops.targetProfit;
+  const need = fixed + invest;
   const perGlass = ops.monthlyGlasses ? Math.ceil(need / ops.monthlyGlasses) : null;
-  return { fixed, invest, profit: ops.targetProfit, need, perGlass };
+  return { fixed, invest, need, perGlass };
 }
 
 /** 매입 합계 (투자 분류 품목은 빼고: 그건 투자 회수로 따로 셈) */

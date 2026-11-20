@@ -1,5 +1,5 @@
 // 원가 탭 → 운영비 · 투자 회수
-// 고정비·투자 항목·목표 이익·예상 판매 잔 수를 넣으면 '잔당 최소 마진'을 계산하고, 분류별 최소 마진이 충분한지 알려 줌
+// 고정비·투자 항목·예상 판매 잔 수를 넣으면 '잔당 최소 마진'을 계산하고, 분류별 최소 마진이 충분한지 알려 줌
 // 월 매출을 넣으면 실제 남은 돈과 투자금 실제 회수율도
 import { esc, num, uid, todayStr } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
@@ -59,9 +59,8 @@ export function openOps() {
           </section>
 
           <section>
-            <h3 class="set-title">목표와 판매량</h3>
+            <h3 class="set-title">판매량</h3>
             <div class="set-card set-pad ops-goal">
-              <label>한 달 목표 이익 (원)<input name="targetProfit" type="number" inputmode="numeric" value="${o.targetProfit || ''}" placeholder="예: 3000000"></label>
               <label>한 달 예상 판매 (잔·접시)<input name="monthlyGlasses" type="number" inputmode="numeric" value="${o.monthlyGlasses || ''}" placeholder="예: 1500"></label>
               <p class="set-note">판매량은 넉넉하지 않게(조금 적게) 잡는 게 안전해요. 손님이 적은 달에도 맞출 수 있게요.</p>
             </div>
@@ -124,7 +123,7 @@ export function openOps() {
         const s = opsSummary(clean, ym);
         body.querySelector('.ops-sum').innerHTML = `
           <p class="ops-need"><span>한 달에 필요한 돈</span><b>${won(s.need)}</b></p>
-          <p class="ops-sub">고정비 ${won(s.fixed)} · 투자 회수 ${won(s.invest)} · 목표 이익 ${won(s.profit)}</p>
+          <p class="ops-sub">고정비 ${won(s.fixed)} · 투자 회수 ${won(s.invest)}</p>
           <p class="ops-per">${s.perGlass ? `잔당 최소 마진 <b>${won(s.perGlass)}</b> <small>(${won(s.need)} ÷ ${num(clean.monthlyGlasses)}잔)</small>` : '<small>아래 <b>한 달 예상 판매</b>를 넣으면 잔당 최소 마진을 계산해요.</small>'}</p>`;
         // 분류별 최소 마진 점검 (가게 전체 평균과 비교)
         const cats = store.menuCategories.filter((c) => store.menus.some((m) => (m.category || '') === c));
@@ -161,7 +160,7 @@ export function openOps() {
         const t = e.target;
         if (t.dataset.sales) {
           o.sales[t.dataset.sales] = Number(t.value) || 0;
-        } else if (t.name === 'targetProfit' || t.name === 'monthlyGlasses') {
+        } else if (t.name === 'monthlyGlasses') {
           o[t.name] = Number(t.value) || 0;
         } else if (t.dataset.f) {
           const row = t.closest('[data-k]');

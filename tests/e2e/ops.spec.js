@@ -2,6 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { openApp, purchase, item, sheet } from './helpers.js';
 
+const ownerStatus = (owner) => ({ mode: 'test', owner, customerKey: 'cn_x', subscription: null, entitlement: { kind: owner ? 'owner' : 'legacy', day: 30, month: 300 }, usage: { day: 0, month: 0, total: 0, period: 0 } });
 const data = () => ({
   version: 6,
   categories: ['주류·음료', '기타'],
@@ -19,6 +20,7 @@ const data = () => ({
 
 test('운영비: 넣으면 잔당 최소 마진, 비품 영수증을 투자로, 부족한 분류 올리기, 저장 후 유지', async ({ page }) => {
   await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await page.route('**/api/billing**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(ownerStatus(true)) }));
   const errors = await openApp(page, { data: data(), tab: 'cost' });
   await expect(page.locator('.ops-line')).toContainText('아직 안 넣음');
   await page.locator('[data-cost=ops]').click();
@@ -61,4 +63,15 @@ test('비품·시설로 분류한 매입은 메뉴 재료 목록에 나오지 �
   const pick = page.locator('.sheet[aria-label="매입 품목 선택"]');
   await expect(pick).toContainText('발베니 12년 700ML');
   await expect(pick).not.toContainText('하이볼잔');
+});
+
+test('월 매출(판매 파일 불러오기)은 운영자에게만 보임', async ({ page }) => {
+  await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await page.route('**/api/billing**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(ownerStatus(false)) }));
+  await openApp(page, { data: data(), tab: 'cost' });
+  await page.locator('[data-cost=ops]').click();
+  await expect(sheet(page).locator('.ops-sum')).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(sheet(page).locator('.ops-sales')).toBeHidden();
+  await expect(sheet(page).locator('[data-import]')).toBeHidden();
 });

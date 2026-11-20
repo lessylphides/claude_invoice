@@ -6,6 +6,7 @@ import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
 import { openSalesImport, salesAnalysisHtml } from './salesImport.js';
+import { billing } from '../billing.js';
 
 const won = (n) => `${num(n)}원`;
 const thisMonth = () => todayStr().slice(0, 7);
@@ -69,8 +70,8 @@ export function openOps() {
 
           <section class="ops-check" aria-live="polite"></section>
 
-          <section>
-            <h3 class="set-title">월 매출 <small>넣으면 실제 남은 돈·회수율</small></h3>
+          <section class="ops-sales" hidden>
+            <h3 class="set-title">월 매출 <small>운영자 시험 기능 · 넣으면 실제 남은 돈·회수율</small></h3>
             <button type="button" class="btn ghost si-open" data-import>📄 포스·네이버 파일로 불러오기</button>
             <div class="set-card set-pad ops-goal">
               ${[ym, prevMonth(ym)]
@@ -157,6 +158,13 @@ export function openOps() {
 
       drawLists();
       drawSummary();
+      // 월 매출(판매 파일 불러오기)은 포스마다 형식이 달라 아직 운영자만 다듬는 중 → 운영자 계정에서만 보임
+      billing
+        .status()
+        .then((st) => {
+          if (st?.owner && body.isConnected) body.querySelector('.ops-sales').hidden = false;
+        })
+        .catch(() => {});
 
       form.addEventListener('input', (e) => {
         const t = e.target;

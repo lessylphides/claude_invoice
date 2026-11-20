@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { openApp, purchase, item, sheet } from './helpers.js';
 
 const fx = (n) => fileURLToPath(new URL(`../fixtures/${n}`, import.meta.url));
+const ownerStatus = (owner) => ({ mode: 'test', owner, customerKey: 'cn_x', subscription: null, entitlement: { kind: owner ? 'owner' : 'legacy', day: 30, month: 300 }, usage: { day: 0, month: 0, total: 0, period: 0 } });
 const data = () => ({
   version: 8,
   categories: ['주류·음료', '기타'],
@@ -19,6 +20,7 @@ const data = () => ({
 
 test('판매 파일: 비밀번호 열기 → 매출·수량·대조 → 메뉴 연결 → 저장 후 분석', async ({ page }) => {
   await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
+  await page.route('**/api/billing**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(ownerStatus(true)) }));
   const errors = await openApp(page, { data: data(), tab: 'cost' });
   await page.locator('[data-cost=ops]').click();
   await page.locator('[data-import]').click();

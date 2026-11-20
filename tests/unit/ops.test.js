@@ -1,6 +1,6 @@
-// 운영비 · 투자 회수: 월 회수액, 잔당 최소 마진, 실제 회수율, 투자 후보
+// 운영비 · 투자 회수: 월 회수액, 본전 매출, 실제 회수율, 투자 후보
 import { describe, it, expect } from 'vitest';
-import { sanitizeOps, investMonthly, investPlanned, opsSummary, actualRecovery, investCandidates, monthPurchaseCost } from '../../src/lib/ops.js';
+import { averageCostRate, breakEven, sanitizeOps, investMonthly, investPlanned, opsSummary, actualRecovery, investCandidates, monthPurchaseCost } from '../../src/lib/ops.js';
 import { migrate } from '../../src/lib/model.js';
 import { buildItemIndex } from '../../src/lib/itemIndex.js';
 
@@ -25,13 +25,14 @@ describe('운영비 · 투자 회수', () => {
     expect(investMonthly(o.invests[3], '2030-01')).toBe(120000);
     expect(investPlanned(o.invests[0], '2026-10')).toMatchObject({ done: 12, months: 48, ratio: 0.25 });
   });
-  it('한 달에 필요한 돈 ÷ 예상 판매 잔 수 = 잔당 최소 마진 (올림)', () => {
+  it('한 달에 필요한 돈 (고정비 + 투자 회수)', () => {
     const s = opsSummary(ops(), '2026-11');
     expect(s).toMatchObject({ fixed: 6000000, invest: 625000 + 100000 + 83333 + 120000 });
     expect(s.need).toBe(6000000 + 928333);
     expect(sanitizeOps({ targetProfit: 5 })).not.toHaveProperty('targetProfit'); // 예전 값은 버림
-    expect(s.perGlass).toBe(Math.ceil(s.need / 1500)); // 4,619원
-    expect(opsSummary(sanitizeOps({ fixed: [{ name: 'x', amount: 100 }] }), '2026-11').perGlass).toBeNull(); // 판매 잔 수 모름
+    expect(s).not.toHaveProperty('perGlass'); // 잔 수 평균은 안 씀
+    expect(sanitizeOps({ monthlyGlasses: 1500 }).monthlyGlasses).toBe(1500); // 예전 값은 보관
+    expect(sanitizeOps({}).workDays).toBe(26);
   });
   it('월 매출을 넣으면 실제 남은 돈(매출 − 매입(투자 제외) − 고정비)으로 투자 회수율', () => {
     const o = sanitizeOps({ ...ops(), sales: { '2026-10': 20000000, '2026-11': 8000000 } });
@@ -72,5 +73,12 @@ describe('운영비 · 투자 회수', () => {
     // 이미 v8 인 장부는 다시 옮기지 않음 (사장님이 기타로 되돌린 것 존중)
     const again = migrate({ ...d, purchases: [{ ...d.purchases[0], items: [{ ...d.purchases[0].items[0], category: '기타' }] }] });
     expect(again.purchases[0].items[0].category).toBe('기타');
+  });
+  it('본전 매출 = 필요한 돈 ÷ (1 − 평균 원가율), 하루는 영업일로 나눔', () => {
+    expect(breakEven(9000000, 25, 26)).toEqual({ month: 12000000, day: 461539 });
+    expect(breakEven(0, 25)).toBeNull();
+    expect(breakEven(100, 100)).toBeNull();
+    expect(averageCostRate([20, 30, null, 25], 25)).toEqual({ rate: 25, from: 'menus', count: 3 });
+    expect(averageCostRate([10, null], 28)).toEqual({ rate: 28, from: 'target', count: 1 }); // 메뉴가 적으면 목표 원가율
   });
 });

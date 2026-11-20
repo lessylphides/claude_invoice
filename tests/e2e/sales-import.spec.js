@@ -58,12 +58,10 @@ test('판매 파일: 비밀번호 열기 → 매출·수량·대조 → 메뉴 �
   const o = sheet(page);
   await expect(o.locator('.sheet')).toHaveAttribute('aria-label', '운영비 · 투자 회수');
   await expect(o.locator('.si-ana')).toContainText('2026년 10월 판매 분석');
-  await expect(o.locator('.si-ana')).toContainText('13잔');
+  await expect(o.locator('.si-ana')).toContainText('13개 판매');
   // 레시피 재료비: 하이볼 6 × 1,800 + 롱 블랙 5 × 600 = 13,800
   await expect(o.locator('.si-ana')).toContainText('13,800원');
   await expect(o.locator('.si-ana')).toContainText('원가 연결 안 된 인기 메뉴');
-  await o.locator('[data-useqty]').click();
-  await expect(o.locator('input[name=monthlyGlasses]')).toHaveValue('13');
   await o.locator('button[type=submit]').click();
   // 다시 열어도 기억 (연결도 저장됨)
   await page.reload();

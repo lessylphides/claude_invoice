@@ -250,20 +250,18 @@ export function openSalesImport({ links: savedLinks = {}, dayStart: savedDayStar
 }
 
 /** 운영비 화면에 보이는 판매 분석 (가장 최근에 불러온 달) */
-export function salesAnalysisHtml(ops, need, materialOf) {
+export function salesAnalysisHtml(ops, materialOf) {
   const yms = Object.keys(ops.salesMonths || {}).sort();
   const ym = yms.at(-1);
   if (!ym) return '';
   const m = ops.salesMonths[ym];
   const a = analyzeSales(m, ops.salesLinks || {}, menuInfo);
   const material = materialOf(ym);
-  const perActual = m.qty ? Math.ceil(need / m.qty) : null;
   const top = a.rows.filter((r) => r.kind !== 'bottle').slice(0, 5);
   return `<div class="set-card set-pad si-ana">
     <h4>${ymLabel(ym)} 판매 분석</h4>
     <ul class="ops-rows">
-      <li><span class="grow">실제 판매<small>파일에서 센 잔·접시 수</small></span><b>${num(m.qty)}잔</b></li>
-      ${perActual ? `<li><span class="grow">실제 판매 기준 잔당 최소 마진<small>${won(need)} ÷ ${num(m.qty)}잔</small></span><b>${won(perActual)}</b></li>` : ''}
+      <li><span class="grow">매출 (파일)<small>${num(m.qty)}개 판매</small></span><b>${won(m.sales)}</b></li>
       <li><span class="grow">레시피대로라면 쓴 재료비<small>메뉴와 연결된 ${num(a.linkedQty)}개 × 메뉴 원가</small></span><b>${won(a.theory)}</b></li>
       <li><span class="grow">그달 재료 매입<small>장부 기준 (비품·시설·광고 빼고)</small></span><b>${won(material)}</b></li>
     </ul>
@@ -278,6 +276,5 @@ export function salesAnalysisHtml(ops, need, materialOf) {
     }
     <p class="si-top"><b>많이 팔린 메뉴</b> ${top.map((r) => `${esc(r.name)} ${num(r.qty)}`).join(' · ')}</p>
     ${a.unlinkedTop.length ? `<p class="si-top"><b>원가 연결 안 된 인기 메뉴</b> ${a.unlinkedTop.slice(0, 5).map((r) => `${esc(r.name)} ${num(r.qty)}`).join(' · ')}</p>` : ''}
-    ${m.qty && m.qty !== ops.monthlyGlasses ? `<button type="button" class="btn ghost small-btn" data-useqty="${m.qty}">예상 판매를 실제 ${num(m.qty)}잔으로</button>` : ''}
   </div>`;
 }

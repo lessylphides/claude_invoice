@@ -1,10 +1,12 @@
 // 원가 탭 → 운영비 · 투자 회수
-// 고정비·투자 항목·예상 판매 잔 수를 넣으면 '잔당 최소 마진'을 계산하고, 분류별 최소 마진이 충분한지 알려 줌
-// 월 매출을 넣으면 실제 남은 돈과 투자금 실제 회수율도
+// 고정비·투자 항목을 넣으면 '본전 매출'(한 달·하루)을 계산: 필요한 돈 ÷ (1 − 평균 원가율)
+// 잔·접시 수가 아닌 돈으로 계산해 커피숍·바·식당 어디든 맞음
+// 월 매출(운영자만)을 넣으면 실제 남은 돈과 투자금 실제 회수율도
 import { esc, num, uid, todayStr } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
-import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
+import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, averageCostRate, breakEven, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
+import { menuCost } from '../lib/cost.js';
 import { openSalesImport, salesAnalysisHtml } from './salesImport.js';
 import { billing } from '../billing.js';
 
@@ -16,12 +18,16 @@ const prevMonth = (ym) => {
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
 };
 
+/** 가게 평균 원가율 (메뉴 3개 이상이면 메뉴 평균, 아니면 목표 원가율) */
+export const shopCostRate = () => averageCostRate(store.menus.map((m) => menuCost(m, store.index).rate), store.costTarget.value);
+
 /** 원가 탭에 보이는 한 줄 요약 */
 export function opsLine() {
   const o = store.ops;
   const s = opsSummary(o, thisMonth());
+  const be = breakEven(s.need, shopCostRate().rate, o.workDays);
   const text = s.need
-    ? `운영비: 한 달 <b>${won(s.need)}</b>${s.perGlass ? ` · 잔당 최소 <b>${won(s.perGlass)}</b>` : ''}`
+    ? `운영비: 한 달 <b>${won(s.need)}</b>${be ? ` · 본전 매출 하루 <b>${won(be.day)}</b>` : ''}`
     : '운영비·투자 회수: 아직 안 넣음 <span class="muted">(월세·인테리어·잔 등을 마진으로 회수하는 계산)</span>';
   return `<section class="ops-line"><p>${text}</p><button class="btn ghost small-btn" data-cost="ops">운영비</button></section>`;
 }
@@ -61,14 +67,12 @@ export function openOps() {
           </section>
 
           <section>
-            <h3 class="set-title">판매량</h3>
+            <h3 class="set-title">영업일</h3>
             <div class="set-card set-pad ops-goal">
-              <label>한 달 예상 판매 (잔·접시)<input name="monthlyGlasses" type="number" inputmode="numeric" value="${o.monthlyGlasses || ''}" placeholder="예: 1500"></label>
-              <p class="set-note">판매량은 넉넉하지 않게(조금 적게) 잡는 게 안전해요. 손님이 적은 달에도 맞출 수 있게요.</p>
+              <label>한 달 영업일 (일)<input name="workDays" type="number" inputmode="numeric" min="1" max="31" value="${o.workDays || 26}"></label>
+              <p class="set-note">하루 본전 매출을 계산할 때만 써요.</p>
             </div>
           </section>
-
-          <section class="ops-check" aria-live="polite"></section>
 
           <section class="ops-sales" hidden>
             <h3 class="set-title">월 매출 <small>운영자 시험 기능 · 넣으면 실제 남은 돈·회수율</small></h3>
@@ -124,32 +128,29 @@ export function openOps() {
       const drawSummary = () => {
         const clean = sanitizeOps(o);
         const s = opsSummary(clean, ym);
+        const cr = shopCostRate();
+        const be = breakEven(s.need, cr.rate, clean.workDays);
         body.querySelector('.ops-sum').innerHTML = `
           <p class="ops-need"><span>한 달에 필요한 돈</span><b>${won(s.need)}</b></p>
           <p class="ops-sub">고정비 ${won(s.fixed)} · 투자 회수 ${won(s.invest)}</p>
-          <p class="ops-per">${s.perGlass ? `잔당 최소 마진 <b>${won(s.perGlass)}</b> <small>(${won(s.need)} ÷ ${num(clean.monthlyGlasses)}잔)</small>` : '<small>아래 <b>한 달 예상 판매</b>를 넣으면 잔당 최소 마진을 계산해요.</small>'}</p>`;
-        // 분류별 최소 마진 점검 (가게 전체 평균과 비교)
-        const cats = store.menuCategories.filter((c) => store.menus.some((m) => (m.category || '') === c));
-        body.querySelector('.ops-check').innerHTML = s.perGlass && cats.length
-          ? `<h3 class="set-title">분류별 최소 마진 점검 <small>가게 평균 잔당 ${won(s.perGlass)}과 비교</small></h3>
-             <div class="set-card list">${cats
-               .map((c) => {
-                 const v = store.minMarginOf(c);
-                 const ok = v != null && v >= s.perGlass;
-                 return `<div class="set-row ops-cat"><span class="grow">${esc(c)}<small>${v != null ? `지금 최소 마진 ${won(v)}` : '최소 마진 없음'}</small></span>${
-                   ok ? '<b class="ok">✓ 충분</b>' : `<b class="warn">⚠ 부족</b><button type="button" class="btn ghost small-btn" data-raise="${esc(c)}">${num(s.perGlass)}원으로</button>`
-                 }</div>`;
-               })
-               .join('')}</div>
-             <p class="set-note">잔당 최소 마진은 <b>가게 전체 평균</b>이에요. 커피처럼 싼 메뉴는 조금 낮고 위스키처럼 비싼 메뉴가 더 남겨서 평균을 맞춰도 돼요. 올리면 메뉴 편집의 <b>잔 가격 추천</b>도 같이 올라가요.</p>`
-          : '';
+          ${
+            be
+              ? `<div class="ops-per ops-be"><p>본전 매출 <b>한 달 ${won(be.month)}</b></p><p>하루 <b>${won(be.day)}</b> <small>(${clean.workDays}일 영업)</small></p>
+                 <p class="ops-sub">${won(s.need)} ÷ (1 − 평균 원가율 ${cr.rate}%) · ${cr.from === 'menus' ? `메뉴 ${cr.count}개 평균` : '메뉴가 적어서 목표 원가율 기준'}</p></div>`
+              : '<p class="ops-per"><small>고정비나 투자 항목을 넣으면 <b>본전 매출</b>(한 달·하루)을 계산해요.</small></p>'
+          }`;
         // 월 매출 → 실제
         const a = actualRecovery(clean, store.purchases);
-        body.querySelector('.ops-actual').innerHTML = salesAnalysisHtml(clean, s.need, (m) => monthPurchaseCost(store.purchases, m)) + (a.rows.length
+        body.querySelector('.ops-actual').innerHTML = salesAnalysisHtml(clean, (m) => monthPurchaseCost(store.purchases, m)) + (a.rows.length
           ? `<div class="set-card set-pad"><ul class="ops-rows">${a.rows
               .slice(-6)
               .reverse()
-              .map((r) => `<li><span class="grow">${ymLabel(r.ym)}<small>매출 ${won(r.sales)} − 매입 ${won(r.purchase)} − 고정비 ${won(r.fixed)}${r.opex ? ` − 광고·운영비 ${won(r.opex)}` : ''}</small></span><b class="${r.left < 0 ? 'warn' : 'ok'}">${r.left < 0 ? '−' : ''}${won(Math.abs(r.left))}</b></li>`)
+              .map((r) => {
+                const gap = be ? r.sales - be.month : null;
+                return `<li><span class="grow">${ymLabel(r.ym)}<small>매출 ${won(r.sales)} − 매입 ${won(r.purchase)} − 고정비 ${won(r.fixed)}${r.opex ? ` − 광고·운영비 ${won(r.opex)}` : ''}</small>${
+                  gap != null ? `<small class="${gap < 0 ? 'warn' : 'ok'}">본전 매출보다 ${won(Math.abs(gap))} ${gap < 0 ? '덜' : '더'} 팔았어요</small>` : ''
+                }</span><b class="${r.left < 0 ? 'warn' : 'ok'}">${r.left < 0 ? '−' : ''}${won(Math.abs(r.left))}</b></li>`;
+              })
               .join('')}</ul>${
               a.total ? `<p class="ops-prog"><span>투자 실제 회수</span><i><b style="width:${Math.round((a.ratio || 0) * 100)}%"></b></i><small>${won(a.recovered)} / ${won(a.total)} · ${Math.round((a.ratio || 0) * 100)}%</small></p>` : ''
             }<p class="set-note">매입은 비품·시설·광고 분류를 뺀 재료 금액이에요(투자는 회수로, 광고는 운영비로 따로 셈). 남은 돈이 쌓이는 만큼 투자금이 실제로 회수돼요.</p></div>`
@@ -170,8 +171,8 @@ export function openOps() {
         const t = e.target;
         if (t.dataset.sales) {
           o.sales[t.dataset.sales] = Number(t.value) || 0;
-        } else if (t.name === 'monthlyGlasses') {
-          o[t.name] = Number(t.value) || 0;
+        } else if (t.name === 'workDays') {
+          o.workDays = Number(t.value) || 26;
         } else if (t.dataset.f) {
           const row = t.closest('[data-k]');
           const item = o[row.dataset.k][Number(row.dataset.i)];
@@ -186,9 +187,7 @@ export function openOps() {
         const add = e.target.closest('[data-add]');
         const del = e.target.closest('[data-del]');
         const cand = e.target.closest('[data-cand]');
-        const raise = e.target.closest('[data-raise]');
         const imp = e.target.closest('[data-import]');
-        const useQty = e.target.closest('[data-useqty]');
         if (imp) {
           openSalesImport({
             links: o.salesLinks || {},
@@ -206,14 +205,6 @@ export function openOps() {
               drawSummary();
             },
           });
-          return;
-        }
-        if (useQty) {
-          o.monthlyGlasses = Number(useQty.dataset.useqty);
-          const inp = form.elements.monthlyGlasses;
-          if (inp) inp.value = o.monthlyGlasses;
-          drawSummary();
-          toast('예상 판매를 실제 판매 수로 바꿨어요. 저장을 눌러 주세요.');
           return;
         }
         if (add) {
@@ -238,11 +229,6 @@ export function openOps() {
           drawLists();
           drawSummary();
           toast(`'${c.name}'을(를) 투자 항목에 넣었어요. 저장을 눌러 주세요.`);
-        } else if (raise) {
-          const s = opsSummary(sanitizeOps(o), ym);
-          store.setMinMargins({ [raise.dataset.raise]: s.perGlass });
-          toast(`${raise.dataset.raise} 최소 마진을 ${won(s.perGlass)}으로 올렸어요.`);
-          drawSummary();
         }
       });
       body.querySelector('.cancel').addEventListener('click', close);

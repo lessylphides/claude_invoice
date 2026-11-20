@@ -1,4 +1,4 @@
-// 운영비 · 투자 회수: 고정비·투자·목표 → 잔당 최소 마진, 영수증의 비품을 투자로, 최소 마진 올리기, 월 매출 → 실제
+// 운영비 · 투자 회수: 고정비·투자 → 본전 매출(한 달·하루), 영수증의 비품을 투자로, 월 매출 → 실제
 import { test, expect } from '@playwright/test';
 import { openApp, purchase, item, sheet } from './helpers.js';
 
@@ -18,7 +18,7 @@ const data = () => ({
   ],
 });
 
-test('운영비: 넣으면 잔당 최소 마진, 비품 영수증을 투자로, 부족한 분류 올리기, 저장 후 유지', async ({ page }) => {
+test('운영비: 넣으면 본전 매출, 비품 영수증을 투자로, 월 매출과 비교, 저장 후 유지', async ({ page }) => {
   await page.route('**/api/level**', (r) => r.fulfill({ contentType: 'application/json', body: '{"gifts":[]}' }));
   await page.route('**/api/billing**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(ownerStatus(true)) }));
   const errors = await openApp(page, { data: data(), tab: 'cost' });
@@ -36,20 +36,21 @@ test('운영비: 넣으면 잔당 최소 마진, 비품 영수증을 투자로, 
   await expect(s.locator('.ops-cands')).toContainText('하이볼잔 24개');
   await s.locator('[data-cand]').click();
   await expect(s.locator('[data-list=invests] [data-f=months]').first()).toHaveValue('24');
-  await s.locator('input[name=monthlyGlasses]').fill('1000');
-  // 8,987,500 + 300,000/24(12,500) = 9,000,000 ÷ 1,000 = 9,000
+  // 8,987,500 + 300,000/24(12,500) = 9,000,000 → 메뉴가 2개라 목표 원가율 25% → 본전 12,000,000 / 25일 = 480,000
   await expect(s.locator('.ops-need')).toContainText('9,000,000원');
-  await expect(s.locator('.ops-per')).toContainText('9,000원');
-  await expect(s.locator('.ops-cat', { hasText: '위스키' })).toContainText('✓ 충분');
-  await expect(s.locator('.ops-cat', { hasText: '커피' })).toContainText('⚠ 부족');
-  await s.locator('[data-raise=커피]').click();
-  await expect(s.locator('.ops-cat', { hasText: '커피' })).toContainText('✓ 충분');
-  // 월 매출
-  await s.locator('[data-sales="2026-11"]').fill('12000000');
+  await expect(s.locator('.ops-be')).toContainText('한 달 12,000,000원');
+  await expect(s.locator('.ops-be')).toContainText('목표 원가율 기준');
+  await s.locator('input[name=workDays]').fill('25');
+  await expect(s.locator('.ops-be')).toContainText('하루 480,000원');
+  await expect(s.locator('input[name=monthlyGlasses]')).toHaveCount(0); // 잔 수 입력은 없음
+  await expect(s.locator('.ops-cat')).toHaveCount(0); // 분류별 점검도 없음
+  // 월 매출 (운영자): 본전보다 덜 팔았음
+  await s.locator('[data-sales="2026-11"]').fill('10000000');
   await expect(s.locator('.ops-actual')).toContainText('2026년 11월');
+  await expect(s.locator('.ops-actual')).toContainText('본전 매출보다 2,000,000원 덜 팔았어요');
   await s.locator('button[type=submit]').click();
   await expect(page.locator('.ops-line')).toContainText('9,000,000원');
-  await expect(page.locator('.ops-line')).toContainText('잔당 최소 9,000원');
+  await expect(page.locator('.ops-line')).toContainText('본전 매출 하루 480,000원');
   await page.reload();
   await expect(page.locator('.ops-line')).toContainText('9,000,000원');
   expect(errors).toEqual([]);

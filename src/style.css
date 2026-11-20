@@ -930,3 +930,6 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 }
 /* 판매 연결 줄: '확인' 표시가 줄 전체로 늘어나지 않게 */
 .si-link .grow .tag { align-self: flex-start; }
+.ops-be p { margin: 0 0 2px; }
+.ops-be .ops-sub { margin: 4px 0 0; }
+.ops-rows small.ok { color: var(--ok); } .ops-rows small.warn { color: var(--warn); }

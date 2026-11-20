@@ -1,7 +1,7 @@
 // 운영비 · 투자 회수: 한 잔의 원가가 아닌 '가게를 유지하는 돈'을 마진으로 회수하는 계산
 // - 고정비: 매달 나가는 돈 (월세·인건비·공과금…)
 // - 투자 항목: 한 번에 쓴 큰돈을 회수 개월로 나눠 월 비용으로 (인테리어·장비·잔·집기). '계속' 항목은 매달 같은 금액 (잔 깨짐 보충)
-// - 잔당 최소 마진 = (고정비 + 월 투자 회수) ÷ 한 달 예상 판매 잔 수
+// - 본전 매출 = (고정비 + 월 투자 회수) ÷ (1 − 평균 원가율). 잔·접시 수가 아닌 돈으로 계산해 업종(커피·바·식당)과 상관없이 맞음
 // - 월 매출을 넣으면: 그달 실제 남은 돈 = 매출 − 매입(투자 분류 제외) − 고정비, 누적으로 투자금 실제 회수율
 import { uid, todayStr } from './format.js';
 
@@ -21,7 +21,7 @@ const str = (v, max = 60) => String(v ?? '').trim().slice(0, max);
 const isYm = (v) => typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 
 export function emptyOps() {
-  return { fixed: [], invests: [], monthlyGlasses: 0, sales: {}, salesMonths: {}, salesLinks: {}, dayStart: 6 };
+  return { fixed: [], invests: [], monthlyGlasses: 0, workDays: 26, sales: {}, salesMonths: {}, salesLinks: {}, dayStart: 6 };
 }
 
 export function sanitizeOps(raw) {
@@ -45,7 +45,8 @@ export function sanitizeOps(raw) {
         from: str(i.from, 80), // 어느 매입 품목에서 왔는지 (purchaseId:itemId)
       }))
       .filter((i) => i.name || i.amount || i.monthly),
-    monthlyGlasses: money(o.monthlyGlasses),
+    monthlyGlasses: money(o.monthlyGlasses), // 예전 '예상 판매 잔 수' (지금 화면에선 안 씀, 값은 보관)
+    workDays: Math.min(31, Math.max(1, Math.round(Number(o.workDays) || 26))),
     sales,
     salesMonths: sanitizeSalesMonths(o.salesMonths),
     salesLinks: sanitizeLinks(o.salesLinks),
@@ -113,8 +114,24 @@ export function opsSummary(ops, ym) {
   const fixed = ops.fixed.reduce((s, f) => s + f.amount, 0);
   const invest = ops.invests.reduce((s, i) => s + investMonthly(i, ym), 0);
   const need = fixed + invest;
-  const perGlass = ops.monthlyGlasses ? Math.ceil(need / ops.monthlyGlasses) : null;
-  return { fixed, invest, need, perGlass };
+  return { fixed, invest, need };
+}
+
+/**
+ * 가게 평균 원가율(%): 판매가·원가가 다 있는 메뉴들의 평균. 메뉴가 3개보다 적으면 목표 원가율
+ * @param {(number|null)[]} rates 메뉴별 원가율(%)
+ */
+export function averageCostRate(rates, target) {
+  const ok = rates.filter((r) => Number.isFinite(r) && r > 0 && r < 100);
+  if (ok.length < 3) return { rate: target, from: 'target', count: ok.length };
+  return { rate: Math.round((ok.reduce((t, r) => t + r, 0) / ok.length) * 10) / 10, from: 'menus', count: ok.length };
+}
+
+/** 본전 매출: 한 달에 필요한 돈을 마진으로 메우려면 팔아야 하는 매출 (한 달·하루) */
+export function breakEven(need, costRate, workDays = 26) {
+  if (!need || !(costRate < 100)) return null;
+  const month = Math.ceil(need / (1 - costRate / 100));
+  return { month, day: Math.ceil(month / Math.max(1, workDays)) };
 }
 
 /** 매입 합계 (투자·운영비 분류 품목은 빼고: 투자는 회수로, 운영비는 따로 셈) */

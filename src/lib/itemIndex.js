@@ -3,7 +3,7 @@
 
 import { netUnitPrice } from './model.js';
 import { groupKey, canonicalName } from './itemLinks.js';
-import { isInvestCategory } from './ops.js';
+import { isNonMaterialCategory } from './ops.js';
 
 const newestFirst = (a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt;
 
@@ -51,7 +51,7 @@ export function buildItemIndex(purchases, links = {}) {
       const out = [];
       for (const rows of byKey.values()) {
         const r = rows.find((x) => x.item.amount > 0);
-        if (r && isInvestCategory(r.item.category)) continue; // 잔·장비 같은 투자 매입은 메뉴 재료로 고르지 않음
+        if (r && isNonMaterialCategory(r.item.category)) continue; // 잔·장비(투자)·광고비(운영비) 매입은 메뉴 재료로 고르지 않음
         // 묶인 품목은 대표 이름으로 보여줌
         if (r) out.push({ name: canonicalName(links, r.name), category: r.item.category || '기타', price: r.price, date: r.date, createdAt: r.createdAt, spec: this.spec(r.name) });
       }

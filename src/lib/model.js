@@ -21,18 +21,18 @@
 //              value: 잔 하나에 최소 남길 돈, bottle: 보틀 하나에 최소 남길 돈. 마지막 항목이 현재 값, 0 이면 설정 안 함
 // itemLinks = { 묶인이름키: '대표 이름' }, itemNotSame = ['키A|키B']  같은 품목 묶기 (lib/itemLinks.js)
 
-import { sanitizeOps, INVEST_CATEGORIES } from './ops.js';
+import { sanitizeOps, INVEST_CATEGORIES, OPEX_CATEGORY } from './ops.js';
 import { repairOrphanLinks } from './itemRename.js';
 import { isYmd, todayStr, uid } from './format.js';
 import { sanitizeLinks, sanitizeNotSame } from './itemLinks.js';
 
-export const DATA_VERSION = 7; // 3: 메뉴 분류, 4: 분류별 최소 마진, 5: 같은 품목 묶기, 6: 보틀 판매가(menu.bottlePrice)·보틀 최소 마진, 7: 운영비·투자 회수(ops)·투자 매입 분류
+export const DATA_VERSION = 8; // 8: 광고·운영비 매입 분류 (광고비는 재료가 아닌 운영비), 3: 메뉴 분류, 4: 분류별 최소 마진, 5: 같은 품목 묶기, 6: 보틀 판매가(menu.bottlePrice)·보틀 최소 마진, 7: 운영비·투자 회수(ops)·투자 매입 분류
 
 export const DEFAULT_MENU_CATEGORIES = ['커피', '위스키', '칵테일', '맥주', '티', '디저트'];
 export const UNCATEGORIZED = '미분류';
 const RESERVED_MENU_CATEGORIES = ['전체', UNCATEGORIZED];
 
-export const DEFAULT_CATEGORIES = ['채소·과일', '육류', '수산물', '곡물·가공식품', '유제품·계란', '양념·소스', '주류·음료', '포장·소모품', '공산품·비품', '비품·집기', '시설·장비', '기타'];
+export const DEFAULT_CATEGORIES = ['채소·과일', '육류', '수산물', '곡물·가공식품', '유제품·계란', '양념·소스', '주류·음료', '포장·소모품', '공산품·비품', '비품·집기', '시설·장비', '광고·운영비', '기타'];
 
 // 용량 단위: 마시는 것은 ml, 무게는 g, 조각·낱개로 나눠 쓰는 것(케이크 7조각)은 개, 묶음 속 병(맥주 24병)은 병
 export const PACK_UNITS = ['ml', 'g', '개', '병'];
@@ -225,10 +225,17 @@ function migrateData(raw, { trusted = false } = {}) {
   for (const m of menus) if (m.category && !menuCategories.includes(m.category)) menuCategories.push(m.category);
   // v7: 투자로 보는 매입 분류(비품·집기·시설·장비)를 기존 장부 분류 목록에도 더함 ('기타' 앞에, 한 번만)
   let categories = sanitizeCategories(d.categories);
-  if (!(Number(d.version) >= 7)) for (const c of INVEST_CATEGORIES) if (!categories.includes(c)) categories.splice(Math.max(0, categories.indexOf('기타')), 0, c);
+  const addBeforeEtc = (c) => { if (!categories.includes(c)) categories.splice(Math.max(0, categories.indexOf('기타')), 0, c); };
+  if (!(Number(d.version) >= 7)) INVEST_CATEGORIES.forEach(addBeforeEtc);
+  // v8: 광고·운영비 분류를 더하고, '기타'로 적힌 광고비 매입은 그 분류로 옮김 (한 번만)
+  const purchases = list(d.purchases).map(sanitizePurchase);
+  if (!(Number(d.version) >= 8)) {
+    addBeforeEtc(OPEX_CATEGORY);
+    for (const p of purchases) for (const it of p.items) if (it.category === '기타' && /광고/.test(it.name)) it.category = OPEX_CATEGORY;
+  }
   return {
     version: DATA_VERSION,
-    purchases: list(d.purchases).map(sanitizePurchase),
+    purchases,
     categories,
     menus,
     menuCategories,

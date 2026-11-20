@@ -8,6 +8,11 @@ import { uid, todayStr } from './format.js';
 /** 투자(비품·시설)로 보는 매입 분류: 메뉴 재료 목록에는 나오지 않음 */
 export const INVEST_CATEGORIES = ['비품·집기', '시설·장비'];
 export const isInvestCategory = (c) => INVEST_CATEGORIES.includes(c);
+/** 재료가 아닌 운영 지출로 보는 매입 분류 (광고비 등): 메뉴 재료 목록에 안 나오고, 그달 운영비로 셈 */
+export const OPEX_CATEGORY = '광고·운영비';
+export const isOpexCategory = (c) => c === OPEX_CATEGORY;
+/** 메뉴 재료로 고르지 않는 매입 분류 */
+export const isNonMaterialCategory = (c) => isInvestCategory(c) || isOpexCategory(c);
 /** 분류별 기본 회수 개월 */
 export const DEFAULT_MONTHS = { '비품·집기': 24, '시설·장비': 48 };
 
@@ -76,18 +81,28 @@ export function opsSummary(ops, ym) {
   return { fixed, invest, need, perGlass };
 }
 
-/** 매입 합계 (투자 분류 품목은 빼고: 그건 투자 회수로 따로 셈) */
+/** 매입 합계 (투자·운영비 분류 품목은 빼고: 투자는 회수로, 운영비는 따로 셈) */
 export function monthPurchaseCost(purchases, ym) {
   let sum = 0;
   for (const p of purchases) {
     if (!p.date?.startsWith(ym)) continue;
-    for (const it of p.items) if (!isInvestCategory(it.category)) sum += Number(it.amount) || 0;
+    for (const it of p.items) if (!isNonMaterialCategory(it.category)) sum += Number(it.amount) || 0;
+  }
+  return sum;
+}
+
+/** 그달 운영비 매입 합계 (광고비 등) */
+export function monthOpexCost(purchases, ym) {
+  let sum = 0;
+  for (const p of purchases) {
+    if (!p.date?.startsWith(ym)) continue;
+    for (const it of p.items) if (isOpexCategory(it.category)) sum += Number(it.amount) || 0;
   }
   return sum;
 }
 
 /**
- * 월 매출을 넣은 달들의 실제 결과: 남은 돈 = 매출 − 매입(투자 분류 제외) − 고정비
+ * 월 매출을 넣은 달들의 실제 결과: 남은 돈 = 매출 − 매입(투자·운영비 분류 제외) − 고정비 − 그달 운영비 매입(광고비 등)
  * recovered: 투자 시작 이후 남은 돈(양수만)을 쌓은 것 → 투자 총액 대비 실제 회수율
  */
 export function actualRecovery(ops, purchases) {
@@ -95,7 +110,8 @@ export function actualRecovery(ops, purchases) {
   const months = Object.keys(ops.sales).sort();
   const rows = months.map((ym) => {
     const purchase = monthPurchaseCost(purchases, ym);
-    return { ym, sales: ops.sales[ym], purchase, fixed, left: ops.sales[ym] - purchase - fixed };
+    const opex = monthOpexCost(purchases, ym);
+    return { ym, sales: ops.sales[ym], purchase, fixed, opex, left: ops.sales[ym] - purchase - fixed - opex };
   });
   const total = ops.invests.filter((i) => !i.ongoing).reduce((s, i) => s + i.amount, 0);
   const first = ops.invests.filter((i) => !i.ongoing).map((i) => i.start).sort()[0];

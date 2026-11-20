@@ -146,7 +146,7 @@ export function openOps() {
           ? `<div class="set-card set-pad"><ul class="ops-rows">${a.rows
               .slice(-6)
               .reverse()
-              .map((r) => `<li><span class="grow">${ymLabel(r.ym)}<small>매출 ${won(r.sales)} − 매입 ${won(r.purchase)} − 고정비 ${won(r.fixed)}</small></span><b class="${r.left < 0 ? 'warn' : 'ok'}">${r.left < 0 ? '−' : ''}${won(Math.abs(r.left))}</b></li>`)
+              .map((r) => `<li><span class="grow">${ymLabel(r.ym)}<small>매출 ${won(r.sales)} − 매입 ${won(r.purchase)} − 고정비 ${won(r.fixed)}${r.opex ? ` − 광고·운영비 ${won(r.opex)}` : ''}</small></span><b class="${r.left < 0 ? 'warn' : 'ok'}">${r.left < 0 ? '−' : ''}${won(Math.abs(r.left))}</b></li>`)
               .join('')}</ul>${
               a.total ? `<p class="ops-prog"><span>투자 실제 회수</span><i><b style="width:${Math.round((a.ratio || 0) * 100)}%"></b></i><small>${won(a.recovered)} / ${won(a.total)} · ${Math.round((a.ratio || 0) * 100)}%</small></p>` : ''
             }<p class="set-note">매입은 비품·시설 분류를 뺀 금액이에요(그건 투자 회수로 따로 셈). 남은 돈이 쌓이는 만큼 투자금이 실제로 회수돼요.</p></div>`

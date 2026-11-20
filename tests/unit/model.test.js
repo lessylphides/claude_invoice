@@ -105,7 +105,7 @@ describe('저장 형식 변환 (migrate)', () => {
     const d = migrate(v1);
     expect(d.version).toBe(DATA_VERSION);
     expect(d.purchases[0].items[0]).toMatchObject({ amount: 39790, packSize: 0, packUnit: '' });
-    expect(d.categories).toEqual(['주류·음료', '비품·집기', '시설·장비', '기타']); // v7: 투자 매입 분류가 '기타' 앞에 더해짐
+    expect(d.categories).toEqual(['주류·음료', '비품·집기', '시설·장비', '광고·운영비', '기타']); // v7: 투자 매입 분류가 '기타' 앞에 더해짐
     expect(d.menus).toEqual([]);
   });
   it('밖에서 들어온 데이터는 현재 버전 표시가 있어도 전부 검사, 앱이 저장한 데이터만 빠르게 통과', () => {

@@ -54,7 +54,23 @@ describe('운영비 · 투자 회수', () => {
   it('장부를 불러오면 ops 가 생기고, 비품·시설 매입은 메뉴 재료 목록에 안 나옴', () => {
     const d = migrate({ version: 6, purchases: [{ id: 'p', date: '2026-11-03', vendor: 'v', items: [{ id: 'a', name: '하이볼잔', category: '비품·집기', qty: 1, unitPrice: 300000, amount: 300000 }, { id: 'b', name: '레몬', category: '채소·과일', qty: 1, unitPrice: 900, amount: 900 }] }], categories: ['채소·과일', '기타'] });
     expect(d.ops).toMatchObject({ fixed: [], invests: [], monthlyGlasses: 0 });
-    expect(d.categories).toEqual(['채소·과일', '비품·집기', '시설·장비', '기타']);
+    expect(d.categories).toEqual(['채소·과일', '비품·집기', '시설·장비', '광고·운영비', '기타']);
     expect(buildItemIndex(d.purchases).pickList().map((x) => x.name)).toEqual(['레몬']);
+  });
+  it('광고비: 기타로 적힌 광고 매입은 광고·운영비로 옮기고, 재료가 아닌 그달 운영비로 셈', () => {
+    const d = migrate({ version: 7, categories: ['주류·음료', '기타'], purchases: [
+      { id: 'p', date: '2026-10-31', vendor: '네이버', items: [{ id: 'a', name: '네이버 플레이스 광고', category: '기타', qty: 1, unitPrice: 1309875, amount: 1309875 }] },
+      { id: 'q', date: '2026-10-05', vendor: '도매', items: [{ id: 'b', name: '진', category: '주류·음료', qty: 1, unitPrice: 30000, amount: 30000 }, { id: 'c', name: '빨대', category: '기타', qty: 1, unitPrice: 5000, amount: 5000 }] },
+    ] });
+    expect(d.categories).toEqual(['주류·음료', '광고·운영비', '기타']);
+    expect(d.purchases[0].items[0].category).toBe('광고·운영비');
+    expect(d.purchases[1].items[1].category).toBe('기타'); // 광고 아닌 기타는 그대로
+    expect(buildItemIndex(d.purchases).pickList().map((x) => x.name).sort()).toEqual(['빨대', '진']);
+    expect(monthPurchaseCost(d.purchases, '2026-10')).toBe(35000);
+    const r = actualRecovery(sanitizeOps({ fixed: [{ name: '월세', amount: 1000000 }], sales: { '2026-10': 3000000 } }), d.purchases);
+    expect(r.rows[0]).toMatchObject({ purchase: 35000, opex: 1309875, left: 3000000 - 35000 - 1000000 - 1309875 });
+    // 이미 v8 인 장부는 다시 옮기지 않음 (사장님이 기타로 되돌린 것 존중)
+    const again = migrate({ ...d, purchases: [{ ...d.purchases[0], items: [{ ...d.purchases[0].items[0], category: '기타' }] }] });
+    expect(again.purchases[0].items[0].category).toBe('기타');
   });
 });

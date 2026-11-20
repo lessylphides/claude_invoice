@@ -4,7 +4,8 @@
 import { esc, num, uid, todayStr } from '../lib/format.js';
 import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
-import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
+import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
+import { openSalesImport, salesAnalysisHtml } from './salesImport.js';
 
 const won = (n) => `${num(n)}원`;
 const thisMonth = () => todayStr().slice(0, 7);
@@ -70,6 +71,7 @@ export function openOps() {
 
           <section>
             <h3 class="set-title">월 매출 <small>넣으면 실제 남은 돈·회수율</small></h3>
+            <button type="button" class="btn ghost si-open" data-import>📄 포스·네이버 파일로 불러오기</button>
             <div class="set-card set-pad ops-goal">
               ${[ym, prevMonth(ym)]
                 .map((m) => `<label>${ymLabel(m)} 매출 (원)<input data-sales="${m}" type="number" inputmode="numeric" value="${o.sales[m] || ''}" placeholder="포스·카드 매출 합계"></label>`)
@@ -142,15 +144,15 @@ export function openOps() {
           : '';
         // 월 매출 → 실제
         const a = actualRecovery(clean, store.purchases);
-        body.querySelector('.ops-actual').innerHTML = a.rows.length
+        body.querySelector('.ops-actual').innerHTML = salesAnalysisHtml(clean, s.need, (m) => monthPurchaseCost(store.purchases, m)) + (a.rows.length
           ? `<div class="set-card set-pad"><ul class="ops-rows">${a.rows
               .slice(-6)
               .reverse()
               .map((r) => `<li><span class="grow">${ymLabel(r.ym)}<small>매출 ${won(r.sales)} − 매입 ${won(r.purchase)} − 고정비 ${won(r.fixed)}${r.opex ? ` − 광고·운영비 ${won(r.opex)}` : ''}</small></span><b class="${r.left < 0 ? 'warn' : 'ok'}">${r.left < 0 ? '−' : ''}${won(Math.abs(r.left))}</b></li>`)
               .join('')}</ul>${
               a.total ? `<p class="ops-prog"><span>투자 실제 회수</span><i><b style="width:${Math.round((a.ratio || 0) * 100)}%"></b></i><small>${won(a.recovered)} / ${won(a.total)} · ${Math.round((a.ratio || 0) * 100)}%</small></p>` : ''
-            }<p class="set-note">매입은 비품·시설 분류를 뺀 금액이에요(그건 투자 회수로 따로 셈). 남은 돈이 쌓이는 만큼 투자금이 실제로 회수돼요.</p></div>`
-          : '';
+            }<p class="set-note">매입은 비품·시설·광고 분류를 뺀 재료 금액이에요(투자는 회수로, 광고는 운영비로 따로 셈). 남은 돈이 쌓이는 만큼 투자금이 실제로 회수돼요.</p></div>`
+          : '');
       };
 
       drawLists();
@@ -177,6 +179,35 @@ export function openOps() {
         const del = e.target.closest('[data-del]');
         const cand = e.target.closest('[data-cand]');
         const raise = e.target.closest('[data-raise]');
+        const imp = e.target.closest('[data-import]');
+        const useQty = e.target.closest('[data-useqty]');
+        if (imp) {
+          openSalesImport({
+            links: o.salesLinks || {},
+            dayStart: o.dayStart ?? 6,
+            onDone: ({ ym: m, month, links, dayStart }) => {
+              o.sales[m] = month.sales;
+              o.salesMonths = { ...(o.salesMonths || {}), [m]: month };
+              o.salesLinks = links;
+              o.dayStart = dayStart;
+              // 불러온 판매는 바로 저장 (운영비 화면의 다른 입력은 그대로 둠)
+              const cur = store.ops;
+              store.saveOps({ sales: { ...cur.sales, [m]: month.sales }, salesMonths: o.salesMonths, salesLinks: links, dayStart });
+              const inp = body.querySelector(`[data-sales="${m}"]`);
+              if (inp) inp.value = month.sales;
+              drawSummary();
+            },
+          });
+          return;
+        }
+        if (useQty) {
+          o.monthlyGlasses = Number(useQty.dataset.useqty);
+          const inp = form.elements.monthlyGlasses;
+          if (inp) inp.value = o.monthlyGlasses;
+          drawSummary();
+          toast('예상 판매를 실제 판매 수로 바꿨어요. 저장을 눌러 주세요.');
+          return;
+        }
         if (add) {
           const k = add.dataset.add;
           if (k === 'fixed') o.fixed.push({ id: uid(), name: '', amount: 0 });

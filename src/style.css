@@ -892,3 +892,34 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .ops-goal label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
 .ops-cat b.ok { color: var(--ok); } .ops-cat b.warn, .ops-rows b.warn { color: var(--warn); } .ops-rows b.ok { color: var(--ok); }
 .ops-cat .btn { margin-left: 8px; }
+
+/* 판매 파일 불러오기 */
+.si { display: flex; flex-direction: column; gap: 14px; }
+.si-lead { margin: 0 0 6px; font-size: 14px; }
+.si-how { margin: 0 0 10px; padding-left: 18px; font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
+.si-pick { display: inline-flex; cursor: pointer; }
+.si-files { list-style: none; margin: 10px 0 0; padding: 0; }
+.si-files li { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.si-files li .grow, .si-link .grow { display: flex; flex-direction: column; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.si-files small, .si-link small { color: var(--muted); font-size: 12px; }
+.si-files input { width: 96px; padding: 7px 8px; font-size: 15px; }
+.si-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.si-day select { padding: 6px 8px; font-size: 14px; }
+.si-sum h3 { margin: 0 0 8px; font-size: 16px; }
+.si-sum .warn { color: var(--warn); }
+.si-mis summary { cursor: pointer; font-size: 13px; color: var(--ink-2); padding: 4px 0; }
+.si-mis ul { list-style: none; margin: 0; padding: 0; }
+.si-mis li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.si-mis li .grow { display: flex; flex-direction: column; flex: 1; }
+.si-mis small { color: var(--muted); font-size: 12px; }
+.si-links { padding: 0 12px; }
+.si-link { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.si-link:first-child { border-top: 0; }
+.si-link select { flex: 0 0 44%; max-width: 44%; padding: 6px; font-size: 13px; }
+.si-link .tag, .si-sum .tag { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 1px 6px; }
+.si-link .tag.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.si-open { align-self: flex-start; margin-bottom: 8px; }
+.si-ana { margin-bottom: 10px; }
+.si-ana h4 { margin: 0 0 6px; font-size: 15px; }
+.si-top { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.si-ana .btn { margin-top: 8px; }

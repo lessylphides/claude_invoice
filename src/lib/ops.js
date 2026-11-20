@@ -21,7 +21,7 @@ const str = (v, max = 60) => String(v ?? '').trim().slice(0, max);
 const isYm = (v) => typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 
 export function emptyOps() {
-  return { fixed: [], invests: [], monthlyGlasses: 0, sales: {} };
+  return { fixed: [], invests: [], monthlyGlasses: 0, sales: {}, salesMonths: {}, salesLinks: {}, dayStart: 6 };
 }
 
 export function sanitizeOps(raw) {
@@ -47,7 +47,43 @@ export function sanitizeOps(raw) {
       .filter((i) => i.name || i.amount || i.monthly),
     monthlyGlasses: money(o.monthlyGlasses),
     sales,
+    salesMonths: sanitizeSalesMonths(o.salesMonths),
+    salesLinks: sanitizeLinks(o.salesLinks),
+    dayStart: Number.isInteger(o.dayStart) && o.dayStart >= 0 && o.dayStart <= 12 ? o.dayStart : 6,
   };
+}
+
+/** 판매 파일에서 불러온 달별 결과 (메뉴별 수량 등). 최근 24달만 */
+function sanitizeSalesMonths(raw) {
+  const out = {};
+  const src = raw && typeof raw === 'object' ? raw : {};
+  for (const ym of Object.keys(src).filter(isYm).sort().slice(-24)) {
+    const m = src[ym] && typeof src[ym] === 'object' ? src[ym] : {};
+    const n = (v) => Math.round(Number(v) || 0);
+    out[ym] = {
+      sales: money(m.sales),
+      naverTotal: money(m.naverTotal),
+      etcTotal: money(m.etcTotal),
+      qty: money(m.qty),
+      at: str(m.at, 30),
+      items: (Array.isArray(m.items) ? m.items : [])
+        .filter((x) => x && typeof x === 'object' && str(x.key, 80))
+        .slice(0, 400)
+        .map((x) => ({ key: str(x.key, 80), name: str(x.name, 80), qty: money(x.qty), pos: money(x.pos), naver: money(x.naver), unitPrice: money(x.unitPrice), kind: x.kind === 'bottle' ? 'bottle' : 'glass' })),
+      mismatch: (Array.isArray(m.mismatch) ? m.mismatch : [])
+        .filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.day))
+        .slice(0, 62)
+        .map((x) => ({ day: x.day, naver: n(x.naver), etc: n(x.etc), diff: n(x.diff) })),
+    };
+  }
+  return out;
+}
+
+/** 판매 이름(정리한 이름) → 메뉴 id ('' = 메뉴 아님/연결 안 함) */
+function sanitizeLinks(raw) {
+  const out = {};
+  for (const [k, v] of Object.entries(raw && typeof raw === 'object' ? raw : {}).slice(0, 2000)) if (str(k, 80)) out[str(k, 80)] = str(v, 60);
+  return out;
 }
 
 /** 'YYYY-MM' 두 달 사이 개월 수 (같은 달이면 0) */

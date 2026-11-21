@@ -284,12 +284,13 @@ export function salesAnalysisHtml(ops, materialOf) {
 export function guessMenuCategory(item, categories) {
   const has = (c) => categories.includes(c) && c;
   const pos = String(item.category || '').trim();
+  if (/레드 ?(에스프레소|라떼)|루이보스/.test(item.name) && has('티')) return '티'; // 포스에 커피로 묶여 있어도 루이보스 차
   if (pos && has(pos)) return pos;
   const n = item.name;
   const rules = [
     [/맥주|하이네켄|기네스|기린|라거|에일|ipa/i, '맥주'],
     [/와인|레드\.|화이트\.|로제|프로세코|샴페인|크레망|스파클링/, '와인'],
-    [/레드 ?에스프레소|루이보스/, '티'], // 루이보스를 에스프레소처럼 내린 차 (커피 아님)
+    [/레드 ?(에스프레소|라떼)|루이보스/, '티'], // 레드 에스프레소 = 루이보스를 에스프레소처럼 내린 차, 레드 라떼도 그걸로 만듦 (커피 아님)
     [/라떼|롱 ?블랙|에스프레소(?!.*(마티니|티라미))|아포가토|샤케라또|콘파냐|꼰파냐|도피오|스트라바짜토|커피|아메리카노/, '커피'],
     [/케이크|케잌|티라미|감자칩|플레터|과일|쿠키|초콜릿|디저트/, '디저트'],
     [/티$|티 |그레이|카모마일|캐모마일|루이보스|허브/, '티'],

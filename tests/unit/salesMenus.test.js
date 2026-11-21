@@ -13,6 +13,7 @@ describe('판매 이름 → 원가 탭 메뉴', () => {
     expect(g('아드벡 (아일라)')).toBe('위스키');
     expect(g('얼 그레이')).toBe('티');
     expect(g('레드 에스프레소', '티 & 음료')).toBe('티');
+    expect(g('DIVE 레드 라떼', '커피')).toBe('티'); // 루이보스 라떼
     expect(g('화이트. 루아르, 뮈스까데 크뤼')).toBe('와인');
     expect(g('핑크 솔트 감자칩')).toBe('디저트');
     expect(guessMenuCategory({ name: '하이네켄 생' }, ['커피'])).toBe('');

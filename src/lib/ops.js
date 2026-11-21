@@ -76,7 +76,7 @@ function sanitizeSalesMonths(raw) {
       items: (Array.isArray(m.items) ? m.items : [])
         .filter((x) => x && typeof x === 'object' && str(x.key, 80))
         .slice(0, 400)
-        .map((x) => ({ key: str(x.key, 80), name: str(x.name, 80), qty: money(x.qty), pos: money(x.pos), naver: money(x.naver), unitPrice: money(x.unitPrice), kind: x.kind === 'bottle' ? 'bottle' : 'glass' })),
+        .map((x) => ({ key: str(x.key, 80), name: str(x.name, 80), qty: money(x.qty), pos: money(x.pos), naver: money(x.naver), unitPrice: money(x.unitPrice), category: str(x.category, 40), kind: x.kind === 'bottle' ? 'bottle' : 'glass' })),
       mismatch: (Array.isArray(m.mismatch) ? m.mismatch : [])
         .filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.day))
         .slice(0, 62)

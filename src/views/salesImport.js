@@ -238,7 +238,7 @@ export function openSalesImport({ links: savedLinks = {}, dayStart: savedDayStar
           etcTotal: result.etcTotal,
           qty: result.qty,
           at: new Date().toISOString().slice(0, 16),
-          items: result.items.map(({ key, name, qty, pos, naver, unitPrice, kind }) => ({ key, name, qty, pos, naver, unitPrice, kind })),
+          items: result.items.map(({ key, name, qty, pos, naver, unitPrice, category, kind }) => ({ key, name, qty, pos, naver, unitPrice, category, kind })),
           mismatch: result.mismatch,
         };
         onDone({ ym: result.ym, month, links, dayStart });
@@ -276,5 +276,118 @@ export function salesAnalysisHtml(ops, materialOf) {
     }
     <p class="si-top"><b>많이 팔린 메뉴</b> ${top.map((r) => `${esc(r.name)} ${num(r.qty)}`).join(' · ')}</p>
     ${a.unlinkedTop.length ? `<p class="si-top"><b>원가 연결 안 된 인기 메뉴</b> ${a.unlinkedTop.slice(0, 5).map((r) => `${esc(r.name)} ${num(r.qty)}`).join(' · ')}</p>` : ''}
+    <button type="button" class="btn ghost small-btn" data-links="${ym}">메뉴 연결 고치기</button>
   </div>`;
+}
+
+/** 판매 분류(포스)·이름으로 앱 메뉴 분류 짐작 (앱에 있는 분류만) */
+export function guessMenuCategory(item, categories) {
+  const has = (c) => categories.includes(c) && c;
+  const pos = String(item.category || '').trim();
+  if (pos && has(pos)) return pos;
+  const n = item.name;
+  const rules = [
+    [/맥주|하이네켄|기네스|기린|라거|에일|ipa/i, '맥주'],
+    [/와인|레드\.|화이트\.|로제|프로세코|샴페인|크레망|스파클링/, '와인'],
+    [/라떼|롱 ?블랙|에스프레소(?!.*(마티니|티라미))|아포가토|샤케라또|콘파냐|꼰파냐|도피오|스트라바짜토|커피|아메리카노/, '커피'],
+    [/케이크|케잌|티라미|감자칩|플레터|과일|쿠키|초콜릿|디저트/, '디저트'],
+    [/티$|티 |그레이|카모마일|캐모마일|루이보스|허브/, '티'],
+    [/\(G\)|\d+Y\b|위스키|버번|스카치|싱글몰트|\(아일라\)|\(스페이사이드\)|\(하이랜드\)|\(켄터키/, '위스키'],
+    [/토닉|피즈|마티니|뮬|콜라다|네그로니|김렛|올드 ?패션|맨하탄|마가리타|다이키리|하이볼|스피리츠|칵테일|갓파더|러스티|깔루아|코스모|파우스트|페니실린/, '칵테일'],
+  ];
+  for (const [re, c] of rules) if (re.test(n) && has(c)) return c;
+  if (/칵테일/.test(pos) && has('칵테일')) return '칵테일';
+  if (/위스키/.test(pos) && has('위스키')) return '위스키';
+  if (/와인/.test(pos) && has('와인')) return '와인';
+  if (/커피/.test(pos) && has('커피')) return '커피';
+  return '';
+}
+
+/** 원가 탭에 넣을 후보: 네이버 주문에 있고 아직 메뉴와 연결 안 된 것 (증정·테스트는 기본 빼기) */
+export function menuCandidates(month, links) {
+  return month.items
+    .filter((it) => it.kind !== 'bottle' && it.naver > 0 && !links[it.key])
+    .map((it) => ({ ...it, pick: !/증정|테스트|서비스|무료/.test(it.name) }));
+}
+
+/**
+ * 운영비 → 판매 분석 → 메뉴 연결 고치기: 파일 없이 저장된 판매 이름으로 연결을 고치고,
+ * 원가 탭에 없는 네이버 메뉴를 한 번에 메뉴로 넣음 (재료는 나중에 → '매입 품목 없음' 표시)
+ */
+export function openSalesLinks({ month, ym, links: savedLinks = {}, onDone }) {
+  const links = { ...savedLinks };
+  openSheet({
+    title: '메뉴 연결 고치기',
+    render(body, close) {
+      const draw = () => {
+        const cands = menuCandidates(month, links);
+        const menus = [...store.menus].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+        const options = (sel) => `<option value="">— 메뉴 아님 / 나중에 —</option>${menus.map((m) => `<option value="${esc(m.id)}"${m.id === sel ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}`;
+        const linked = month.items.filter((it) => links[it.key]).length;
+        body.innerHTML = `
+          <div class="si">
+            <p class="set-note">${ymLabel(ym)}에 불러온 판매 이름이에요. 파일 없이 여기서 바로 고칠 수 있어요.</p>
+            ${
+              cands.length
+                ? `<section>
+              <h3 class="set-title">원가 탭에 없는 네이버 메뉴 <small>${cands.length}개</small></h3>
+              <div class="set-card list si-cands">${cands
+                .map(
+                  (c) => `<label class="si-cand"><input type="checkbox" data-cand="${esc(c.key)}"${c.pick ? ' checked' : ''}><span class="grow">${esc(c.name)}<small>${num(c.qty)}개${c.unitPrice ? ` · ${won(c.unitPrice)}` : ''}</small></span></label>`,
+                )
+                .join('')}</div>
+              <button type="button" class="btn primary si-addmenus" data-addmenus>선택한 메뉴 원가 탭에 넣기</button>
+              <p class="set-note">이름·판매가(파일에서 찾은 값)만 넣고, 재료는 나중에 메뉴를 열어 매입 품목을 고르면 돼요. 원가 탭에 <b>매입 품목 없음</b>으로 보여요.</p>
+            </section>`
+                : ''
+            }
+            <section>
+              <h3 class="set-title">메뉴 연결 <small>${linked} / ${month.items.length}개 연결됨</small></h3>
+              <div class="set-card list si-links">${month.items
+                .map(
+                  (it) => `<div class="si-link" data-key="${esc(it.key)}"><span class="grow">${esc(it.name)}${it.kind === 'bottle' ? ' <em class="tag">보틀</em>' : ''}<small>${num(it.qty)}${it.kind === 'bottle' ? '병' : '개'}</small></span><select aria-label="${esc(it.name)} 메뉴">${options(links[it.key] || '')}</select></div>`,
+                )
+                .join('')}</div>
+            </section>
+            <div class="actions">
+              <button type="button" class="btn ghost cancel">닫기</button>
+              <button type="button" class="btn primary" data-save>저장</button>
+            </div>
+          </div>`;
+      };
+      draw();
+      body.addEventListener('change', (e) => {
+        const row = e.target.closest('.si-link');
+        if (row) links[row.dataset.key] = e.target.value;
+      });
+      body.addEventListener('click', (e) => {
+        if (e.target.closest('.cancel')) return close();
+        if (e.target.closest('[data-save]')) {
+          onDone(links);
+          toast('메뉴 연결을 저장했어요.');
+          return close();
+        }
+        if (e.target.closest('[data-addmenus]')) {
+          const keys = [...body.querySelectorAll('[data-cand]:checked')].map((x) => x.dataset.cand);
+          const cands = menuCandidates(month, links).filter((c) => keys.includes(c.key));
+          if (!cands.length) return toast('넣을 메뉴를 골라 주세요.');
+          const made = [];
+          for (const c of cands) {
+            // 방금 넣은 메뉴와 같은 이름(예: 티라미수 · 티라미슈)이면 새로 만들지 않고 그 메뉴에 연결
+            const same = made.length ? suggestMenu(c.key, made, {}) : { menuId: '' };
+            if (same.menuId) {
+              links[c.key] = same.menuId;
+              continue;
+            }
+            const m = store.upsertMenu({ name: c.name, price: c.unitPrice || 0, category: guessMenuCategory(c, store.menuCategories), ingredients: [] });
+            made.push(m);
+            links[c.key] = m.id;
+          }
+          onDone(links); // 연결은 바로 저장 (메뉴는 이미 원가 탭에 들어감)
+          toast(`원가 탭에 메뉴 ${made.length}개를 넣었어요. 재료는 나중에 넣어 주세요.`);
+          draw();
+        }
+      });
+    },
+  });
 }

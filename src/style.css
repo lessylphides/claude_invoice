@@ -945,3 +945,11 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
 .ops-be-parts li .grow { flex: 1; }
 .ops-be-parts li b { white-space: nowrap; }
 .ops-exempt-hint:empty { display: none; }
+.mc-noing { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); vertical-align: middle; }
+.si-cands { padding: 0 12px; }
+.si-cand { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.si-cand:first-child { border-top: 0; }
+.si-cand input { width: 20px; height: 20px; flex: 0 0 auto; margin: 0; }
+.si-cand .grow { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.si-cand small { color: var(--muted); font-size: 12px; }
+.si-addmenus { margin-top: 10px; }

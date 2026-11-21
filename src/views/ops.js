@@ -7,7 +7,7 @@ import { openSheet, toast } from '../ui/sheet.js';
 import { store } from '../store.js';
 import { opsSummary, investMonthly, investPlanned, actualRecovery, investCandidates, monthPurchaseCost, averageCostRate, breakEven, exemptShareFromLedger, guessVat, DEFAULT_MONTHS, sanitizeOps } from '../lib/ops.js';
 import { menuCost } from '../lib/cost.js';
-import { openSalesImport, salesAnalysisHtml } from './salesImport.js';
+import { openSalesImport, openSalesLinks, salesAnalysisHtml } from './salesImport.js';
 import { billing } from '../billing.js';
 
 const won = (n) => `${num(n)}원`;
@@ -210,6 +210,21 @@ export function openOps() {
         const del = e.target.closest('[data-del]');
         const cand = e.target.closest('[data-cand]');
         const imp = e.target.closest('[data-import]');
+        const linksBtn = e.target.closest('[data-links]');
+        if (linksBtn) {
+          const m = linksBtn.dataset.links;
+          openSalesLinks({
+            ym: m,
+            month: sanitizeOps(o).salesMonths[m],
+            links: o.salesLinks || {},
+            onDone: (links) => {
+              o.salesLinks = links;
+              store.saveOps({ salesLinks: links });
+              drawSummary();
+            },
+          });
+          return;
+        }
         const exBtn = e.target.closest('[data-exempt]');
         if (exBtn) {
           o.exemptShare = Number(exBtn.dataset.exempt);

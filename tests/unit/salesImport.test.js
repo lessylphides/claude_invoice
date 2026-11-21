@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { decryptOffice, isCfb, WrongPassword } from '../../src/lib/officeCrypto.js';
 import { readXlsx } from '../../src/lib/xlsx.js';
-import { detectSalesFile, parseNaver, parsePayhere, combineSales, parseNaverOptions, normName, suggestMenu, businessDay, analyzeSales } from '../../src/lib/salesImport.js';
+import { detectSalesFile, parseNaver, parsePayhere, combineSales, parseNaverOptions, normName, suggestMenu, businessDay, analyzeSales, inferNaverPrices } from '../../src/lib/salesImport.js';
+import { menuCost } from '../../src/lib/cost.js';
 
 const file = (n) => new Uint8Array(fs.readFileSync(new URL(`../fixtures/${n}`, import.meta.url)));
 
@@ -67,5 +68,18 @@ describe('판매 파일 불러오기', () => {
     const a = analyzeSales({ items: [{ key: 'k1', name: '라떼', qty: 10 }, { key: 'k2', name: '맥주', qty: 5 }] }, { k1: 'a' }, () => ({ cost: 1000, price: 6000 }));
     expect(a).toMatchObject({ theory: 10000, marginSum: 50000, linkedQty: 10 });
     expect(a.unlinkedTop.map((r) => r.name)).toEqual(['맥주']);
+  });
+  it('네이버 주문으로 메뉴 가격 추정 (1개짜리 주문 → 나머지는 모르는 메뉴가 하나인 주문으로 풀기)', () => {
+    const p = inferNaverPrices([
+      { amount: 16000, items: [{ name: '하이볼', qty: 1 }] },
+      { amount: 38500, items: [{ name: '하이볼', qty: 2 }, { name: '롱 블랙', qty: 1 }] },
+      { amount: 20000, items: [{ name: '롱 블랙', qty: 2 }, { name: '바스크 치즈 케이크', qty: 1 }] },
+    ]);
+    expect(p.get(normName('하이볼'))).toBe(16000);
+    expect(p.get(normName('롱 블랙'))).toBe(6500); // 38,500 − 16,000×2
+    expect(p.get(normName('바스크 치즈 케이크'))).toBe(7000); // 20,000 − 6,500×2
+  });
+  it('재료가 없는 메뉴는 원가율 0% 가 아니라 계산 불가', () => {
+    expect(menuCost({ price: 9000, ingredients: [] }, { find: () => null }).rate).toBeNull();
   });
 });

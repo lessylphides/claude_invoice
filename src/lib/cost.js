@@ -25,7 +25,7 @@ export function ingredientCost(g, index) {
 
 /**
  * 메뉴 원가·원가율.
- * rate 는 판매가가 없거나 계산할 수 있는 재료가 하나도 없으면 null (0% 로 보이지 않게).
+ * rate 는 판매가가 없거나, 재료가 없거나, 계산할 수 있는 재료가 하나도 없으면 null (0% 로 보이지 않게).
  * 일부 재료만 빠졌으면(missing>0) 원가·원가율은 '최소값'입니다.
  */
 export function menuCost(menu, index) {
@@ -42,7 +42,8 @@ export function menuCost(menu, index) {
     return { g, ...r };
   });
   const price = Number(menu.price) || 0;
-  const nothing = parts.length > 0 && missing === parts.length;
+  // 재료가 하나도 없는 메뉴(판매 파일에서 이름만 넣은 것 등)는 원가를 모름 → 원가율 0% 로 보이지 않게
+  const nothing = parts.length === 0 || missing === parts.length;
   return { cost, prevCost, delta: cost - prevCost, rate: price && !nothing ? (cost / price) * 100 : null, missing, parts };
 }
 

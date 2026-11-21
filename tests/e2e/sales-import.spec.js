@@ -62,7 +62,23 @@ test('판매 파일: 비밀번호 열기 → 매출·수량·대조 → 메뉴 �
   // 레시피 재료비: 하이볼 6 × 1,800 + 롱 블랙 5 × 600 = 13,800
   await expect(o.locator('.si-ana')).toContainText('13,800원');
   await expect(o.locator('.si-ana')).toContainText('원가 연결 안 된 인기 메뉴');
+  // 메뉴 연결 고치기: 파일 없이 열고, 원가 탭에 없는 네이버 메뉴를 메뉴로 넣기
+  await o.locator('[data-links]').click();
+  const l = sheet(page);
+  await expect(l.locator('.sheet')).toHaveAttribute('aria-label', '메뉴 연결 고치기');
+  await expect(l.locator('.si-cands')).toContainText('DIVE 레몬필, 진&토닉');
+  await expect(l.locator('.si-cands')).toContainText('17,000원');
+  await expect(l.locator('.si-cands')).toContainText('바스크 치즈 케이크');
+  await l.locator('[data-addmenus]').click();
+  await expect(l.locator('.si-cands')).toHaveCount(0); // 다 넣어서 후보 없음
+  await expect(l.getByLabel('바스크 치즈 케이크 메뉴', { exact: true }).locator('option:checked')).toHaveText('바스크 치즈 케이크');
+  await l.locator('[data-save]').click();
   await o.locator('button[type=submit]').click();
+  // 원가 탭: 이름·판매가만 있는 메뉴, '매입 품목 없음' 표시, 원가율은 계산 불가
+  const card = page.locator('.menu-card', { hasText: '진&토닉' });
+  await expect(card).toContainText('매입 품목 없음');
+  await expect(card).toContainText('판매 17,000');
+  await expect(card).toContainText('계산 불가');
   // 다시 열어도 기억 (연결도 저장됨)
   await page.reload();
   await page.locator('[data-cost=ops]').click();

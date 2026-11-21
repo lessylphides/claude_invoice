@@ -122,7 +122,7 @@ function menuCard(m, c, j, jb, target, scale) {
   return `
     <button class="menu-card ${over ? 'over' : ''} ${!over && (j.status === 'margin' || jb?.status === 'margin') ? 'by-margin' : ''}" data-cost-open="${m.id}">
       <span class="mc-top">
-        <span class="mc-name">${over ? '⚠ ' : ''}${esc(m.name)}</span>
+        <span class="mc-name">${over ? '⚠ ' : ''}${esc(m.name)}${m.ingredients.length ? '' : ' <small class="mc-noing">매입 품목 없음</small>'}</span>
         <span class="mc-rate ${j.status === 'over' ? 'over' : ''}">${c.rate == null ? '<small>계산 불가</small>' : pct(c.rate)}</span>
       </span>
       <span class="mc-sub">

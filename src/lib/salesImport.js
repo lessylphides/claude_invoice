@@ -150,6 +150,31 @@ export function suggestMenu(key, menus, links = {}) {
   return { menuId: '', sure: false };
 }
 
+/** 네이버 주문에서 메뉴별 가격 추정: 메뉴 하나만 시킨 주문의 금액 ÷ 수량 중 가장 흔한 값, 그다음 모르는 메뉴가 하나뿐인 주문으로 풀기 */
+export function inferNaverPrices(orders) {
+  const seen = new Map();
+  const key = (n) => normName(n);
+  for (const o of orders) {
+    if (o.items.length !== 1 || !o.items[0].qty) continue;
+    const k = key(o.items[0].name);
+    const p = Math.round(o.amount / o.items[0].qty);
+    if (p <= 0) continue;
+    const m = seen.get(k) || new Map();
+    m.set(p, (m.get(p) || 0) + 1);
+    seen.set(k, m);
+  }
+  const out = new Map([...seen].map(([k, m]) => [k, [...m].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0]]));
+  for (let round = 0; round < 3; round++)
+    for (const o of orders) {
+      const unknown = o.items.filter((it) => !out.has(key(it.name)));
+      if (unknown.length !== 1) continue;
+      const rest = o.amount - o.items.filter((it) => out.has(key(it.name))).reduce((t, it) => t + out.get(key(it.name)) * it.qty, 0);
+      const p = rest / unknown[0].qty;
+      if (p > 0 && Number.isInteger(p) && p % 100 === 0) out.set(key(unknown[0].name), p);
+    }
+  return out;
+}
+
 const ymOf = (d) => (d ? d.slice(0, 7) : null);
 
 /**
@@ -171,10 +196,11 @@ export function combineSales({ payhere, naver }, ym) {
   const add = (name, qty, from, unitPrice = 0, category = '') => {
     const k = name;
     const bottle = /bottle|보틀/i.test(category + ' ' + name);
-    const cur = byName.get(k) || { name, qty: 0, pos: 0, naver: 0, unitPrice: 0, kind: bottle ? 'bottle' : 'glass' };
+    const cur = byName.get(k) || { name, qty: 0, pos: 0, naver: 0, unitPrice: 0, category: '', kind: bottle ? 'bottle' : 'glass' };
     cur.qty += qty;
     cur[from] += qty;
     if (unitPrice) cur.unitPrice = unitPrice;
+    if (category && !cur.category) cur.category = category;
     byName.set(k, cur);
   };
   for (const it of payhere?.items ?? []) add(it.name, it.qty, 'pos', it.unitPrice, it.category);
@@ -189,8 +215,12 @@ export function combineSales({ payhere, naver }, ym) {
       cur.pos += it.pos;
       cur.naver += it.naver;
       cur.unitPrice ||= it.unitPrice;
+      cur.category ||= it.category;
     } else merged.set(k, { ...it, key: k });
   }
+  // 네이버 주문만 있는 메뉴의 가격: 메뉴 1개짜리 주문 금액에서 (가장 흔한 값). 포스 단가가 있으면 그걸 씀
+  const naverPrice = inferNaverPrices(ords);
+  for (const it of merged.values()) if (!it.unitPrice && naverPrice.has(it.key)) it.unitPrice = naverPrice.get(it.key);
   const items = [...merged.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
   const glassQty = items.filter((i) => i.kind !== 'bottle').reduce((t, i) => t + i.qty, 0);
   // 날짜별 대조: 페이히어 기타 결제 vs 네이버 주문 (1만 원 넘게 다른 날)

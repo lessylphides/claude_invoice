@@ -8,11 +8,11 @@ describe('판매 이름 → 원가 탭 메뉴', () => {
   it('분류 짐작 (앱에 있는 분류만)', () => {
     const g = (name, category = '') => guessMenuCategory({ name, category }, cats);
     expect(g('하이네켄 생', '티 & 음료')).toBe('맥주');
-    expect(g('DIVE 레드 라떼')).toBe('커피');
     expect(g('DIVE 에스프레소 티라미수')).toBe('디저트');
     expect(g('DIVE 리얼 에스프레소 마티니', '칵테일')).toBe('칵테일');
     expect(g('아드벡 (아일라)')).toBe('위스키');
     expect(g('얼 그레이')).toBe('티');
+    expect(g('레드 에스프레소', '티 & 음료')).toBe('티');
     expect(g('화이트. 루아르, 뮈스까데 크뤼')).toBe('와인');
     expect(g('핑크 솔트 감자칩')).toBe('디저트');
     expect(guessMenuCategory({ name: '하이네켄 생' }, ['커피'])).toBe('');
